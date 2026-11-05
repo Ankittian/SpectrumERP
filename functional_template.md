@@ -6,6 +6,22 @@ FUNCTIONAL DOCUMENTATION TEMPLATE — GENERIC (applies to every form)
 HOW TO USE THIS TEMPLATE (instructions for the AI author — delete all
 HTML comments from the final document)
 
+0. Target Traversal and Output File Naming
+   - Systematically traverse the contents of the target WinForm folder
+     before drafting documentation. Inspect all bundled components:
+     * Form/ (UI code, designer files .Designer.cs/.vb, event handlers,
+       validations, toolbar bindings, dialogs).
+     * DataLayer/ (DT/DA/DAO classes, parameter mappings, SP calls).
+     * StoredProcedures/ (SQL scripts, tables read/written, checks).
+     * Embedded user controls, helper classes, child grids.
+     * CONTENTS.md or manifest files if present.
+   - Generate functional documentation separately for each WinForm.
+   - Save the completed document inside a dedicated directory named
+     "functional documentations" (e.g. SpectrumERP/functional documentations/)
+     using the exact file naming convention:
+     Functional_Doc_<winform name>.md
+     (Example: functional documentations/Functional_Doc_fMaterialGroup.md).
+
 1. Source of truth
    - Read the form bundle before writing: designer file (controls, labels,
      grids, mandatory-field lists), form code (event handlers, validations,
@@ -23,6 +39,8 @@ HTML comments from the final document)
      like a defect, state it plainly in Section 13.
 
 2. Placeholders
+   - {{WinFormName}}  technical name of the WinForm / folder (e.g. fMaterialGroup).
+                      Output file: functional documentations/Functional_Doc_{{WinFormName}}.md
    - {{ScreenName}}   business name of the screen (e.g. from the window
                       caption), WITHOUT the word "Screen".
    - {{Entity}}       the business object the screen maintains (singular).
@@ -345,3 +363,13 @@ because …)". -->
 - **MSG-01:** {{Trigger}}; *"{{Exact message text}}"*; {{user action}} (BR-xx).
 - **MSG-02:** {{Trigger}}; *"{{Exact message text}}"*; {{user action}} (BR-xx).
 
+## 13. Limitations, Defects and Open Questions
+*This section documents observed contradictions, defects, operational constraints, and technical ambiguities identified in the {{ScreenName}} screen.*
+
+<!-- [REPEAT] One block per limitation, defect, contradiction between UI and
+backend, or unhandled edge-case. Use the standard three labels.
+If no issues are found, include a single entry stating standard operation. -->
+### {{Issue or Limitation Title}}
+**What it is:** {{Description of the defect, discrepancy, or operational limitation.}}
+**When it applies:** {{Circumstances or data conditions under which this issue manifests.}}
+**Business outcome:** {{Business impact, operational risk, or recommended resolution.}}
