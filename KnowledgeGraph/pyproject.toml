@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spectrum-kg"
+version = "0.1.0"
+description = "Knowledge graph (Neo4j GraphRAG) + agentic MCP server for the SpectrumERP codebase"
+requires-python = ">=3.11"
+dependencies = [
+    "neo4j>=5.20",
+    "neo4j-graphrag>=1.5",
+    "voyageai>=0.3",
+    "sentence-transformers>=3.0",
+    "transformers>=4.51",
+    "sqlglot>=25",
+    "pyyaml>=6",
+    "pydantic>=2.6",
+    "python-dotenv>=1.0",
+    "mcp>=1.2",
+    "typer>=0.12",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+kg = "spectrum_kg.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["live: needs a reachable Neo4j (and Voyage) configured in .env"]

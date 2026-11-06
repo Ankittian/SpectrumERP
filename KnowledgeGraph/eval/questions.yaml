@@ -1,0 +1,41 @@
+# Agentic RAG evaluation. Ask each question to an MCP client connected to spectrum-kg (e.g. Claude Code).
+# The client must find its own route with the generic tools; `must_reach` lists node ids a correct answer
+# has to visit / cite. Review the tool-call trace for wasted hops (target: <= 8 tool calls per question).
+questions:
+  - q: What happens technically when a user saves a Unit in Unit Master?
+    audience: technical
+    must_reach: [method:fUnitMaster.SaveMain, sp:masterdata.mmumsave, sp:masterdata.mmumsaveunitconversiondetail,
+                 sp:masterdata.mmumsavesubgroupunitdetail, table:masterdata.munitmaster]
+  - q: Which forms are affected if I change the structure of mSubGroupUnitDetail, and is there any conflict?
+    audience: technical
+    must_reach: [table:masterdata.msubgroupunitdetail, form:fUnitMaster, form:fMaterialSubGroupMaster,
+                 rule:subgroup-unit-links-shared]
+  - q: How does QC deduction relate to Material Sub Group?
+    audience: functional
+    must_reach: [concept:qc-deduction, concept:qc-parameter, concept:material-sub-group, rule:subgroup-inherits-group-qc,
+                 usercontrol:QCGroup]
+  - q: Explain the Material Master setup process and which screens exist today.
+    audience: functional
+    must_reach: [process:material-master-setup, form:fUnitMaster, form:fMaterialGroup, form:fMaterialSubGroupMaster]
+  - q: Where is the "Unit Name" field on Unit Master saved?
+    audience: technical
+    must_reach: [control:fUnitMaster.utxtUnitName, dtprop:DTUnitMaster.UnitName, damethod:DAUnitMaster.Save,
+                 sp:masterdata.mmumsave, column:masterdata.munitmaster.unitname]
+  - q: How is an item's FullCode built and which procedures rewrite it?
+    audience: both
+    must_reach: [rule:item-fullcode-composition, sp:masterdata.mmigsave, sp:masterdata.msgmsavemain,
+                 column:masterdata.mitemmaster.fullcode]
+  - q: In the PO flow, which master data from the sub group is used and which steps are still to be built?
+    audience: functional
+    must_reach: [process:procure-to-pay, form:fMaterialSubGroupMaster, form:fPurchaseOrder, rule:approved-vendor-restriction]
+  - q: Which SP parameters are never sent by the data layer?
+    audience: technical
+    must_reach: [sp:masterdata.mmigsave, sp:masterdata.msgmsavemain, sp:masterdata.mmumsave,
+                 rule:master-auto-authorization]
+  - q: What does the GST Detail tab of the sub group form do and where do the GST rates come from?
+    audience: both
+    must_reach: [control:fMaterialSubGroupMaster.ucmbHSNSACCode, method:fMaterialSubGroupMaster.ucmbHSNSACCode_ValueChanged,
+                 table:GlobalData.hsnsaccode, rule:gst-from-hsn]
+  - q: Which procedures and tables does the QC Group control read?
+    audience: technical
+    must_reach: [usercontrol:QCGroup, sp:masterdata.qcfillvalues, table:masterdata.mqcparameters]

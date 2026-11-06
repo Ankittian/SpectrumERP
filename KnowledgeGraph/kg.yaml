@@ -1,0 +1,28 @@
+# Build configuration for the SpectrumERP knowledge graph.
+# Paths are relative to this file.
+
+# Folders that hold the form bundles (phase-0 + phase-1 combined). Bundle names must be unique across roots.
+source_roots:
+  - ../graphs-by-phase/phase-0/phase-0
+  - ../graphs-by-phase/phase-1/phase-1
+bundles: auto                   # auto = every top-level folder containing CONTENTS.md, Form/ or StoredProcedures/
+exclude: [KnowledgeGraph, .venv, .git, .vs, .claude]
+
+domain_dir: domain              # curated functional docs (modules, concepts, processes, rules, forms)
+cache_dir: .cache               # Roslyn facts + embedding cache (git-ignored)
+roslyn_extractor: tools/bin/RoslynExtractor/RoslynExtractor.exe
+roslyn_project: tools/RoslynExtractor/RoslynExtractor.csproj
+
+sql:
+  default_schema: masterdata    # schema assumed for unqualified table names
+  error_log_tables: [masterdata.mErrorLog]   # writes to these (in CATCH blocks) are not business writes
+
+datalayer:
+  # Methods on the base helper that execute a stored procedure; first argument is the SP name/DAO constant.
+  exec_methods: [ExecuteProc, ExecuteQuery, ExecuteNonQuery, ExecuteDataset, ExecuteScalar]
+  param_add_methods: [Add]      # dicPara.Add(DAO.@Param, DT.Prop)
+
+ui:
+  mandatory_methods: [CompulsaryField, CompulsoryField]
+  form_base_types: [Form, System.Windows.Forms.Form]
+  usercontrol_base_types: [UserControl, System.Windows.Forms.UserControl]

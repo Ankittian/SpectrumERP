@@ -1,0 +1,5 @@
+.env
+.cache/
+tools/bin/
+*.egg-info/
+kg-graph.html
