@@ -1,0 +1,451 @@
+# KG gap log - SOURCE OF TRUTH. Edit this file, never KG_GAP_LOG.md / kg_gaps.csv (generated).
+#   python kg-gaps/gaps.py check     validate schema, ids and gap references
+#   python kg-gaps/gaps.py render    check, then write KG_GAP_LOG.md and kg_gaps.csv
+#
+# gaps[]: id (G-nnn, unique), title, status, layer, type, found, found_by, question, nodes[], evidence, fix
+#   status: open | in-progress | fixed | noted        layer: A extraction | B functional (YAML) | C cross-layer links | D doc quality
+#   type:   missing-node | missing-edge | wrong-edge | missing-doc | stale | ambiguous | answer-quality
+#   fixed:  also set `fixed: <date>` and `build: <kg build id or date>`
+#   nodes:  KG node ids affected. form:/concept:/rule:/process:/module: ids are checked against domain/*.yaml;
+#           sp:/table:/column:/method: ids are format-checked only (live check needs Neo4j).
+# form_map[]: one block per form (module, manages, uses, processes, rules[], gaps[]).
+#   rules[]: key, type, implemented_by[] (full node ids), governs[] (process keys), gaps[] (optional)
+
+gaps:
+- id: G-001
+  title: Lot-stock SPs called by Purchase Bill authorization are not in the graph
+  status: open
+  layer: A
+  type: missing-node
+  found: 2026-11-06
+  found_by: Claude (Sonnet 5.5) + user
+  question: How does lot rate change in purchase bill?
+  nodes:
+  - sp:finance.pbpbauthorize
+  - sp:finance.fifiauthorize
+  - sp:inventory.igrnauthorize
+  - sp:inventory.invlotmaterialtransaction
+  - sp:inventory.invlotbilltaxtransaction
+  - sp:inventory.invlotbillmapcalculation
+  evidence: >
+    sp:finance.pbpbauthorize code EXECs Inventory.InvLotMaterialTransaction, Inventory.InvLotBillTaxTransaction,
+    Inventory.InvLotBillMapCalculation (and masterdata.TDSTCSThreholdStatus). None exists as a node, and pbpbauthorize has no
+    outgoing CALLS_SP. The three SPs appear only inside the code text of pbpbauthorize, fifiauthorize and igrnauthorize.
+    Impact: the lot rate math (ItemRate/DiffRate/VRate/LRate/DiffInLRate on InvLotSummary/InvLotBillDetail) for GRN-based
+    bills cannot be answered from the KG.
+  fix: >
+    The extractor loads only SPs bundled per form (source_files phase-1/.../fPurchaseBill/StoredProcedures). Add a transitive SP
+    closure step: parse each SP's EXEC targets and pull any missing SP into the graph from the DB scripts folder with a bundle
+    tag such as shared-inventory-lot. Re-run `kg build` and check pbpbauthorize -CALLS_SP-> returns the 4 SPs.
+
+- id: G-002
+  title: Lot tables have almost no writer SPs; lot rate column lineage is incomplete
+  status: open
+  layer: A
+  type: missing-edge
+  found: 2026-11-06
+  found_by: Claude
+  question: How does lot rate change in purchase bill?
+  nodes:
+  - table:inventory.invlotsummary
+  - table:inventory.invlotdetail
+  - table:inventory.invlotbilldetail
+  - table:inventory.invlottaxdetail
+  - column:inventory.invlotdetail.lrate
+  - column:inventory.invlotbilldetail.vrate
+  - column:inventory.invlotbilldetail.diffinlrate
+  evidence: >
+    Writers found: InvLotSummary <- igrnauthorize, fifiauthorize, pbpbauthorize; InvLotBillDetail <- vouchersavefortransaction,
+    fifiauthorize (not pbpbauthorize); InvLotTaxDetail <- fifiauthorize only. For PBPB the writes happen inside the missing SPs
+    (G-001). column:inventory.invlotdetail.lrate is written only by fifiauthorize, so it looks as if only the freight invoice
+    changes the landed rate. Impact analysis and field lineage on lot columns are misleading.
+  fix: >
+    Resolved by G-001. Then verify WRITES on the 4 lot tables include the three lot SPs and USES_COLUMN shows ops=[write]
+    for lrate, vrate, diffinlrate, itemrate.
+
+- id: G-003
+  title: No Freight Invoice form, concept, or process step
+  status: open
+  layer: B
+  type: missing-node
+  found: 2026-11-06
+  found_by: Claude
+  question: How does lot rate change in purchase bill?
+  nodes:
+  - sp:finance.fifiauthorize
+  - table:finance.freightinvoicemain
+  - rule:shared-write-finance-freightinvoicemain
+  evidence: >
+    Name search over Form/BusinessConcept/BusinessProcess for freight, lot, landed, invoice, stock valu returns nothing.
+    sp:finance.fifiauthorize (tag FIFI, tables Finance.FreightInvoiceMain/Detail) changes lot rates and is called from
+    igrnauthorize and ilpusave. The rule shared-write-finance-freightinvoicemain exists but no form owns the concept.
+  fix: >
+    Add the freight invoice form YAML (domain/forms/<form>.yaml; find the form from Finance.FreightInvoiceMain writers via
+    USES_TABLE), add concept:freight-invoice, and attach it to the P2P / payment-flow process.
+
+- id: G-004
+  title: No concepts for stock lot / landed rate / valuation rate
+  status: open
+  layer: B
+  type: missing-node
+  found: 2026-11-06
+  found_by: Claude
+  question: How does lot rate change in purchase bill?
+  nodes:
+  - form:fPurchaseBill
+  - concept:purchase-bill
+  evidence: >
+    62 concepts exist, none for Stock Lot, Landed Rate (LRate), Valuation Rate (VRate), Rate difference (DiffRate) or PO rate
+    validation. fPurchaseBill MANAGES only concept:purchase-bill and USES_CONCEPT lists 28 concepts, none about lots or rates.
+    Functional-layer search for "lot rate" hits only rules and columns; PERSISTED_IN cannot map the lot tables.
+  fix: >
+    Add concepts stock-lot, landed-rate, valuation-rate (synonyms LRate, VRate, MAP rate, lot rate) to domain/concepts.yaml,
+    RELATED_TO goods-receipt-note, purchase-bill, purchase-order, and PERSISTED_IN the Inventory.InvLot* tables. Link the
+    rules in G-005 to them via applies_to.
+
+- id: G-005
+  title: Lot-rate rule text is thin and IMPLEMENTED_BY is incomplete
+  status: open
+  layer: B
+  type: missing-doc
+  found: 2026-11-06
+  found_by: Claude
+  question: How does lot rate change in purchase bill?
+  nodes:
+  - rule:purchase-bill-stock-on-authorization
+  - rule:purchase-bill-voucher-vs-lot-and-po-rate
+  - rule:purchase-bill-authorization-limit
+  - sp:finance.pbpbauthorize
+  - sp:customize.iskconporatevalidation
+  evidence: >
+    (1) stock-on-authorization says rate = basic amount / billed quantity. Code (PBPBAuthorize) also divides by ChallanQty when
+    QtybasedOn=1 else Qty, rounds to 2 decimals (decimal(12,2)), and only does this for PBSourceDocumentNo=1 AND IsUpdateStock=1.
+    (2) It is IMPLEMENTED_BY only pbpbauthorize; the lot SPs (G-001) are not linked.
+    (3) The GRN/SIN path (percentage split by ReceivedQty x (MAPRate or VRate), then InvLotBillTaxTransaction and
+    InvLotBillMapCalculation) is one sentence.
+    (4) voucher-vs-lot-and-po-rate mentions "client rule 118"; the code gates on POMain.IsPORateValidationRequired = 1 and
+    FreightTypeNo = 1 (To Pay) in schema Customize, and rule number 118 is not traceable in the code that was read.
+    (5) The PO-rate cap formula (ItemRate + sum DiffRate other doc + sum DiffRate this doc > POItemDetail.Rate) is not in any
+    rule text.
+    (6) Verify purchase-bill-authorization-limit describes the PO LRate comparison (form 202, POAmendmentItemLRate.LRate,
+    LimitFrom/LimitTo).
+  fix: >
+    Rewrite these rule descriptions in domain/rules.yaml with the formulas and conditions; add implemented_by for the lot SPs
+    after G-001; confirm what "rule 118" means with a domain owner.
+
+- id: G-006
+  title: Freight-driven rate change has no rule
+  status: open
+  layer: B
+  type: missing-doc
+  found: 2026-11-06
+  found_by: Claude
+  question: How does lot rate change in purchase bill?
+  nodes:
+  - sp:finance.fifiauthorize
+  - process:payment-flow
+  evidence: >
+    FIFIAuthorize allocates freight to lots by value, sets DiffRate, VRate, DiffInLRate and does InvLotSummary.VRate += DiffRate,
+    LRate += DiffInLRate. @SetRateZero=0 zeroes all rate changes when the PO is "Against DO" (PORefDocumentTypeNo=9).
+    No BusinessRule describes this.
+  fix: >
+    Add rules freight-invoice-lot-rate-allocation and against-do-po-no-rate-change; applies_to the freight form (G-003) and the
+    concepts (G-004); implemented_by sp:finance.fifiauthorize; governs payment-flow.
+
+- id: G-007
+  title: Most Purchase Bill rules do not GOVERN any process
+  status: open
+  layer: B
+  type: missing-edge
+  found: 2026-11-06
+  found_by: Claude
+  question: How does lot rate change in purchase bill?
+  nodes:
+  - form:fPurchaseBill
+  - process:payment-flow
+  - process:gst-tax-determination
+  evidence: >
+    Of 119 rules that APPLY_TO form:fPurchaseBill, among the purchase-bill-* rules only stock-on-authorization,
+    update-stock-and-dropshipment and voucher-vs-lot-and-po-rate have a GOVERNS edge (to gst-tax-determination and
+    payment-flow). The rest have none, so top-down navigation (Process -> rules) misses almost all bill rules.
+  fix: >
+    Set processes: for each purchase-bill rule in the rule YAML (usually payment-flow; GST ones also gst-tax-determination).
+    Script it: default every rule whose only applies_to form is fPurchaseBill to payment-flow, then review GST rules by hand.
+
+- id: G-008
+  title: fPurchaseBill is not a step of procure-to-pay
+  status: open
+  layer: B
+  type: missing-edge
+  found: 2026-11-06
+  found_by: Claude
+  question: How does lot rate change in purchase bill?
+  nodes:
+  - form:fPurchaseBill
+  - process:procure-to-pay
+  - process:payment-flow
+  evidence: >
+    process:procure-to-pay has no HAS_STEP to form:fPurchaseBill; the form is a step only of gst-tax-determination and
+    payment-flow. The module is FI while the PO flow lives in MM.
+  fix: >
+    Decide whether the bill belongs in P2P (probably yes, the step after GRN). If yes, add the step to
+    domain/processes/procure-to-pay.yaml; if no, document the hand-off (LEADS_TO) to payment-flow.
+
+- id: G-009
+  title: Rules with no implementation link
+  status: open
+  layer: C
+  type: missing-edge
+  found: 2026-11-06
+  found_by: Claude
+  question: How does lot rate change in purchase bill?
+  nodes:
+  - rule:three-way-match
+  - rule:purchase-bill-client-custom-validations
+  - sp:finance.pbpbvalidate
+  - sp:inventory.ilpuvalidation
+  evidence: >
+    three-way-match (bill vs PO vs receipt) and purchase-bill-client-custom-validations have IMPLEMENTED_BY = []. The three-way
+    check is probably in Finance.PBPBValidate or Inventory.ILPUValidation; not verified.
+  fix: >
+    Read those SPs and add implemented_by, or mark the rule status not-implemented if it is a policy only.
+
+- id: G-010
+  title: Over-broad IMPLEMENTED_BY on generic rules
+  status: open
+  layer: C
+  type: wrong-edge
+  found: 2026-11-06
+  found_by: Claude
+  question: How does lot rate change in purchase bill?
+  nodes:
+  - rule:unique-master-names
+  - rule:authorized-document-lock
+  - rule:document-numbering
+  evidence: >
+    unique-master-names links about 60 methods/SPs and authorized-document-lock about 75; document-numbering also GOVERNS 7
+    processes. They show up for every form (e.g. fPurchaseBill) and drown out form-specific rules.
+  fix: >
+    Keep them as global rules but do not APPLIES_TO each form, or add a scope: global property so search and expand can filter
+    them out.
+
+- id: G-011
+  title: Wrong statement in the first answer (self-correction)
+  status: noted
+  layer: D
+  type: answer-quality
+  found: 2026-11-06
+  found_by: Claude
+  question: How does lot rate change in purchase bill?
+  nodes:
+  - sp:finance.fifiauthorize
+  - rule:purchase-bill-voucher-vs-lot-and-po-rate
+  evidence: >
+    The first answer said the rule's IMPLEMENTED_BY pointed at fifiauthorize. It did not (it points to fPurchaseBill.Save,
+    IskconPORateValidation, VoucherVsLotValidation). fifiauthorize surfaced from a USES_COLUMN query on lrate/vrate/diffinlrate
+    and was mislabeled as the bill flow; it is the freight invoice.
+  fix: >
+    Lesson, no KG change: USES_COLUMN hits with no form link are misleading when the real writer SPs are absent (G-001/G-002).
+    Review flashcards about rate/lot against the SP code.
+
+- id: G-012
+  title: GRN grid columns are not nodes; "Received Qty." editability cannot be found by search
+  status: open
+  layer: A
+  type: missing-node
+  found: 2026-11-06
+  found_by: Claude (Sonnet 5.5) + user
+  question: Where is the Received Qty. column of the GRN form editable (especially when GRN is created against gate entry)?
+  nodes:
+  - form:fGRN
+  - control:fGRN.ugdItemDetails
+  - method:fGRN.GRNAgainst
+  - method:fGRN.ugdItemDetails_InitializeLayout
+  - method:fGRN.ugdItemDetails_BeforeCellActivate
+  evidence: >
+    Searching "GRN form received quantity editable gate entry" returned no node for the Received Qty. column. Grid columns exist
+    only as string keys inside fGRN.vb (e.g. Band.Columns("Received Qty.")); Control nodes stop at the grid (ugdItemDetails,
+    ugdGateEntryDetails). The search surfaced only the BR-46 rule text, which names Challan Qty., so Claude concluded no
+    "Received Qty." column existed (see G-014). The real behaviour: nothing in GRNAgainst or ugdItemDetails_InitializeLayout sets
+    Received Qty. to NoEdit, so it is editable for every source including Gate Entry; only BeforeCellActivate locks it
+    (bIsInspectionDone). The lot grid ugdLotDetail locks it the same way. Editing it drives Accepted Qty. = Received - Rejected
+    - FOC, Amount, Excess Qty., and ValidateItemDetail balance/tolerance checks.
+  fix: >
+    Extractor: emit a GridColumn node (id like gridcol:fGRN.ugdItemDetails.Received Qty.) for each Band.Columns("<key>") reference,
+    with edges HAS_COLUMN from the grid Control and SETS_ACTIVATION / READS / WRITES from the FormMethods, carrying the
+    activation value (AllowEdit/NoEdit/ActivateOnly/Hidden) and the guarding condition (source document, inspection state).
+    Interim: add a domain rule for column editability (see G-013). Verify with search("Received Qty. editable") returning it.
+
+- id: G-013
+  title: GRN source-dependent-fields rule omits Received Qty. and the dispatch-challan and inspection exceptions
+  status: open
+  layer: B
+  type: missing-doc
+  found: 2026-11-06
+  found_by: Claude (Sonnet 5.5) + user
+  question: Where is the Received Qty. column of the GRN form editable (especially when GRN is created against gate entry)?
+  nodes:
+  - rule:material-receipt-note-source-dependent-fields
+  - form:fGRN
+  evidence: >
+    Rule text (Functional_Doc_fGRN.md BR-46) says "Challan Qty. is not editable for Gate Entry". Code (GRNAgainst, gate-entry branch)
+    sets Challan Qty. NoEdit but flips it to AllowEdit when a selected gate entry has GateEntrySourceNo=5 (dispatch challan).
+    The rule never mentions Received Qty., which is the editable quantity for gate-entry GRNs, nor Accepted Qty. (editable only
+    when btGRNQtyValidateOn=2 or the item has IsMultiRateInGRN), nor the post-inspection lock in ugdItemDetails_BeforeCellActivate.
+    IMPLEMENTED_BY lists only GRNAgainst and ugdItemDetails_AfterCellUpdate; InitializeLayout, InitializeRow and BeforeCellActivate
+    (where the activation is actually decided) are not linked.
+  fix: >
+    Rewrite the rule in domain/rules.yaml with a per-source table of Challan/Received/Accepted Qty. activation, the
+    GateEntrySourceNo=5 exception, btGRNQtyValidateOn and IsMultiRateInGRN conditions and the inspection lock. Add implemented_by
+    for method:fGRN.ugdItemDetails_InitializeLayout, ugdItemDetails_InitializeRow, ugdItemDetails_BeforeCellActivate. Consider a
+    separate rule grn-received-qty-editability so it ranks for this question.
+
+- id: G-014
+  title: First answers wrongly said the GRN grid has no Received Qty. column (self-correction)
+  status: noted
+  layer: D
+  type: answer-quality
+  found: 2026-11-06
+  found_by: Claude (Sonnet 5.5)
+  question: Where is the Received Qty. column of the GRN form editable (especially when GRN is created against gate entry)?
+  nodes:
+  - form:fGRN
+  - method:fGRN.GRNAgainst
+  evidence: >
+    The first answer treated the KG as complete: it said the grid had no column literally keyed "Received Qty." and answered for
+    Challan/Accepted Qty. instead. The user pointed out the column exists; direct reading of fGRN.vb confirmed it (lines 269, 1276,
+    2234, 4537, 6700). Partly a KG gap (G-012) and partly a method error: a graph search that returns nothing for a column name is
+    not proof the column is absent, and the search/get_node reads were never checked against the source. The KG server also dropped
+    mid-session, so the confirming read was done on the source file.
+  fix: >
+    Lesson, no KG change: for "is column X editable" questions, grep the form source for the column key
+    (Band.Columns("X")) and check every handler that sets CellActivation (GRNAgainst, InitializeLayout, BeforeCellActivate)
+    before answering; tell the user when a graph miss may be an extraction gap.
+
+form_map:
+- form: fPurchaseBill
+  title: Purchase Bill
+  module: FI
+  status: active
+  generated: 2026-11-06
+  manages: [purchase-bill]
+  uses: [company, material-item, unit-of-measure, vendor, make, warehouse, bin, gst-category, hsn-sac-code,
+         account-determination-rule, account-group, accounting-voucher, chapter-heading, chart-of-accounts, currency,
+         currency-exchange-rate, document-receipt, finance-book, gate-entry, goods-receipt-note, item-technical-grade,
+         ledger-account, material-issue, payment-plan, purchase-order, tdc-account-rule, tdc-charge, tdc-group, vendor-location]
+  processes: [gst-tax-determination, payment-flow]
+  total_rules_applying: 119
+  sps_called:
+  - sp:finance.pbpbsave
+  - sp:finance.pbpbvalidate
+  - sp:finance.pbpbauthorize
+  - sp:finance.pbpbdelete
+  - sp:finance.pbpbloaddata
+  - sp:finance.pbpbsearchdata
+  - sp:finance.pbpbfillvalues
+  - sp:finance.pbpbfillvaluesdependent
+  - sp:finance.pbpbfillvaluespowise
+  - sp:finance.pbpbsaveitemdetail
+  - sp:finance.pbpbsaveitemserialdetail
+  - sp:finance.pbpbsaveitemtaxdetail
+  - sp:finance.pbpbsaveadvancedetail
+  - sp:finance.pbpbsavenotesdetail
+  - sp:finance.pbpbsavesummary
+  - sp:finance.pbpbsavetaxconcessionformdetail
+  - sp:finance.pbpbwarehousedetail
+  - sp:customize.iskconporatevalidation
+  - sp:inventory.vouchervslotvalidation
+  - sp:inventory.ilpuvalidation
+  - sp:finance.paymentschedulesave
+  - sp:finance.vouchersavefortransaction
+  - sp:finance.vouchersavestatuory
+  - sp:finance.accountopening
+  - sp:finance.ieipsave
+  - sp:finance.ieipsaveitemdetail
+  - sp:finance.ieipsaveitemtaxdetail
+  - sp:finance.ieipsavepostingsummary
+  - sp:finance.ieipvalidate
+  - sp:globaldata.itemtypecheck
+  - sp:globaldata.vendorlocationselect
+  - sp:masterdata.itemaccountdetail
+  - sp:odtdispatchchallan.procedurename
+  rules:
+  - {key: purchase-bill-stock-on-authorization, type: calculation, implemented_by: ['sp:finance.pbpbauthorize'], governs: [gst-tax-determination, payment-flow], gaps: [G-001, G-005]}
+  - {key: purchase-bill-voucher-vs-lot-and-po-rate, type: calculation, implemented_by: ['method:fPurchaseBill.Save', 'sp:inventory.vouchervslotvalidation', 'sp:customize.iskconporatevalidation'], governs: [gst-tax-determination, payment-flow], gaps: [G-005]}
+  - {key: purchase-bill-update-stock-and-dropshipment, type: default, implemented_by: ['method:fPurchaseBill.ucmbSourceDocument_ValueChanged', 'method:fPurchaseBill.uchkDropShipment_CheckedChanged'], governs: [gst-tax-determination, payment-flow]}
+  - {key: purchase-bill-authorization-limit, type: validation, implemented_by: ['sp:finance.pbpbauthorize'], governs: [], gaps: [G-005, G-007]}
+  - {key: purchase-bill-double-billing-on-authorization, type: workflow, implemented_by: ['sp:finance.pbpbauthorize'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-voucher-presence, type: calculation, implemented_by: ['sp:finance.pbpbauthorize'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-purchase-voucher, type: calculation, implemented_by: ['method:fPurchaseBill.CreateVoucher'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-qty-basis, type: calculation, implemented_by: ['method:fPurchaseBill.ValidateItemDetail', 'method:fPurchaseBill.ugdItemDetail_AfterCellUpdate', 'method:fPurchaseBill.CalculateTaxes'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-entry-mode-by-source, type: calculation, implemented_by: ['method:fPurchaseBill.ugdItemDetail_AfterCellUpdate', 'method:fPurchaseBill.ReadOnlyColumn'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-unit-conversion, type: calculation, implemented_by: ['method:fPurchaseBill.uoptUnitType_ValueChanged'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-net-amount, type: calculation, implemented_by: ['method:fPurchaseBill.ValidateGeneralDetail'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-bill-amount-warning, type: calculation, implemented_by: ['method:fPurchaseBill.ValidateGeneralDetail'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-bill-tax-summary, type: calculation, implemented_by: ['method:fPurchaseBill.SaveSummary'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-item-lines, type: validation, implemented_by: ['method:fPurchaseBill.ValidateItemDetail', 'method:fPurchaseBill.SaveItemDetail'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-at-least-one-receipt-and-item-per-receipt, type: validation, implemented_by: ['method:fPurchaseBill.ValidateGRNDetails', 'sp:inventory.ilpuvalidation'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-eligible-receipts, type: workflow, implemented_by: ['sp:finance.pbpbfillvaluesdependent'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-billable-lines, type: default, implemented_by: ['sp:finance.pbpbfillvaluesdependent'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-gst-applicability, type: control, implemented_by: ['sp:finance.pbpbfillvaluesdependent'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-advance-and-recurring-agreement-pos, type: control, implemented_by: ['sp:finance.pbpbvalidate'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-advance-list, type: calculation, implemented_by: ['method:fPurchaseBill.AdvanceAutoFill', 'method:fPurchaseBill.AdvanceBinding', 'method:fPurchaseBill.AdvanceDetailHightLightRows'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-advance-save, type: calculation, implemented_by: ['method:fPurchaseBill.Save', 'method:fPurchaseBill.SaveAdvanceDetail'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-adjusting-limits, type: calculation, implemented_by: ['method:fPurchaseBill.ValidateAdvanceDetail', 'method:fPurchaseBill.ugdAdvanceDetail_BeforeCellUpdate', 'method:fPurchaseBill.CalculateTotalAdvance'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-adjust-advance-default, type: default, implemented_by: ['method:fPurchaseBill.FillValues', 'method:fPurchaseBill.ValidateForm'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-advance-adjustment-voucher, type: validation, implemented_by: ['method:fPurchaseBill.ValidateForm', 'method:fPurchaseBill.Save', 'method:fPurchaseBill.createVoucherAdvance'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-imprest-balance, type: calculation, implemented_by: ['method:fPurchaseBill.GetAccountBalance', 'method:fPurchaseBill.ValidateAdvanceDetail'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-imprest-pairing, type: calculation, implemented_by: ['method:fPurchaseBill.ValidateAdvanceDetail'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-payment-mode, type: validation, implemented_by: ['method:fPurchaseBill.ValidateGeneralDetail', 'method:fPurchaseBill.LoadGRNdetail'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-payment-schedule-calculation, type: calculation, implemented_by: ['method:fPurchaseBill.PaymentSchedule'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-schedule-checks, type: calculation, implemented_by: ['method:fPurchaseBill.ValidatePaymentSchdule'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-schedule-save, type: control, implemented_by: ['method:fPurchaseBill.Save', 'method:fPurchaseBill.SavePaymentSchedule'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-cash-counter, type: workflow, implemented_by: ['sp:finance.pbpbsave'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-document-receipt-single-use, type: control, implemented_by: ['sp:finance.pbpbsave'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-gst-category, type: calculation, implemented_by: ['method:fPurchaseBill.ValidateItemDetail'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-gst-exempted, type: calculation, implemented_by: ['method:fPurchaseBill.ValidateForm', 'method:fPurchaseBill.ucmbVendorLocation_ValueChanged'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-hsn-on-authorization, type: default, implemented_by: ['method:fPurchaseBill.ValidateItemDetail', 'method:fPurchaseBill.ugdItemDetail_AfterCellUpdate'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-intra-and-inter-state-gst, type: calculation, implemented_by: ['method:fPurchaseBill.ValidateForm'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-tax-validation, type: validation, implemented_by: ['method:fPurchaseBill.ValidateForm'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-tax-rule-exclusivity, type: calculation, implemented_by: ['method:fPurchaseBill.ValidateGeneralDetail', 'method:fPurchaseBill.ValidateItemDetail', 'method:fPurchaseBill.ucmbServiceTaxAbatementRule_ValueChanged'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-tax-rule-save, type: calculation, implemented_by: ['method:fPurchaseBill.Save', 'method:fPurchaseBill.SaveItemDetail'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-foreign-vendor-taxable-value, type: calculation, implemented_by: ['method:fPurchaseBill.ValidateItemDetail', 'method:fPurchaseBill.ucmbVendorLocation_ValueChanged'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-unregistered-vendor-gst, type: workflow, implemented_by: ['method:fPurchaseBill.ValidateItemDetail'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-service-tax-rule-client-rule, type: calculation, implemented_by: ['method:fPurchaseBill.ValidateGeneralDetail'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-tds-tcs, type: validation, implemented_by: ['method:fPurchaseBill.ValidateTDSTCS', 'sp:masterdata.checkvalidationfortdstcs'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-e-way-bill-check-for-direct, type: calculation, implemented_by: ['method:fPurchaseBill.ValidateGeneralDetail', 'method:fPurchaseBill.ucmbSourceDocument_ValueChanged'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-e-way-bill-date, type: control, implemented_by: ['method:fPurchaseBill.ValidateGeneralDetail'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-invoice-date, type: validation, implemented_by: ['method:fPurchaseBill.ValidateGeneralDetail', 'method:fPurchaseBill.ucmbVendorBillNo_TextChanged'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-vendor-bill-date, type: control, implemented_by: ['method:fPurchaseBill.ValidateGeneralDetail'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-vendor-bill-no, type: validation, implemented_by: ['method:fPurchaseBill.FillValues', 'method:fPurchaseBill.ValidateGeneralDetail', 'sp:finance.pbpbfillvaluesdependent'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-receipt-date, type: control, implemented_by: ['method:fPurchaseBill.ValidateGRNDetails'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-expiry-date, type: control, implemented_by: ['method:fPurchaseBill.ValidateItemDetail'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-currency, type: validation, implemented_by: ['method:fPurchaseBill.ValidateGeneralDetail'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-single-currency, type: calculation, implemented_by: ['method:fPurchaseBill.ValidateGRNDetails', 'method:fPurchaseBill.ugdGRNDetails_AfterCellUpdate'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-capital-items, type: control, implemented_by: ['method:fPurchaseBill.ValidateItemDetail', 'sp:globaldata.itemtypecheck'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-warehouse-for-direct, type: workflow, implemented_by: ['method:fPurchaseBill.ValidateItemDetail', 'method:fPurchaseBill.ugdItemDetail_AfterCellUpdate'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-legacy-excise-posting, type: validation, implemented_by: ['method:fPurchaseBill.LoadGRNdetail', 'method:fPurchaseBill.Save', 'method:fPurchaseBill.ValidateInExcisePostingDetails'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-location-master-completeness-on-authorization, type: workflow, implemented_by: ['method:fPurchaseBill.ValidateGeneralDetail'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-authorization-posting-view, type: validation, implemented_by: ['method:fPurchaseBill.ValidateForm', 'method:fPurchaseBill.FinancePostingVisibility'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-maintenance-rebuild, type: control, implemented_by: ['method:fPurchaseBill.fPurchaseBill_KeyUp'], governs: [], gaps: [G-007]}
+  - {key: purchase-bill-client-custom-validations, type: validation, implemented_by: [], governs: [], gaps: [G-007, G-009]}
+  - {key: three-way-match, type: control, implemented_by: [], governs: [], gaps: [G-009]}
+  global_rules_applying: [unique-master-names, authorized-document-lock, detail-replacement-on-save, document-numbering,
+                          inactive-flag-handling, mandatory-document-fields, transaction-delete-rules]
+  global_rules_gaps: [G-010]
+  shared_write_rules_note: ~45 auto-generated shared-write-* integrity rules (one per shared table, e.g. shared-write-inventory-invlotsummary).
+
+refresh_queries:
+  form_overview: |
+    MATCH (m:Module)-[:HAS_FORM]->(f:Form {id:$form})
+    OPTIONAL MATCH (f)-[:MANAGES]->(cm:BusinessConcept)
+    OPTIONAL MATCH (f)-[:USES_CONCEPT]->(cu:BusinessConcept)
+    OPTIONAL MATCH (p:BusinessProcess)-[:HAS_STEP]->(f)
+    RETURN m.code, f.title, collect(DISTINCT cm.id) AS manages, collect(DISTINCT cu.id) AS uses, collect(DISTINCT p.id) AS processes
+  form_rules: |
+    MATCH (r:BusinessRule)-[:APPLIES_TO]->(f:Form {id:$form})
+    OPTIONAL MATCH (r)-[:IMPLEMENTED_BY]->(i)
+    OPTIONAL MATCH (r)-[:GOVERNS]->(p:BusinessProcess)
+    RETURN r.id, r.rule_type, collect(DISTINCT i.id) AS impl, collect(DISTINCT p.id) AS procs
+  missing_sp_check: |
+    MATCH (s:StoredProcedure) WHERE s.code CONTAINS $spName RETURN s.id
