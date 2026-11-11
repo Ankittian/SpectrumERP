@@ -1,0 +1,200 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Spectrum KG Map</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: four tinted layer bands (functional, bridge, code, data) in one SVG, then a worked id chain and an id table. */
+:root{
+  --bg:#f3f5f7; --surface:#ffffff; --fg:#14202b; --muted:#5b6b7a; --line:#c5cdd6;
+  --f:#2a6b5a; --b:#8a5a12; --c:#37599e; --d:#8c3a52;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f161d; --surface:#17212b; --fg:#e6edf3; --muted:#93a4b4; --line:#31404e;
+  --f:#5fc2a6; --b:#e0a64f; --c:#7ba3e8; --d:#e08aa6; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f161d; --surface:#17212b; --fg:#e6edf3; --muted:#93a4b4; --line:#31404e;
+  --f:#5fc2a6; --b:#e0a64f; --c:#7ba3e8; --d:#e08aa6; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:15px;line-height:1.55;
+  padding-block:28px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+main{max-width:1000px;margin:0 auto;display:flex;flex-direction:column;gap:32px}
+h1{font-size:clamp(1.6rem,4vw,2.1rem);line-height:1.15;margin:0 0 8px;font-weight:600;text-wrap:balance}
+h2{font-size:1.1rem;margin:0 0 10px;font-weight:600}
+p{margin:0;max-width:65ch;color:var(--muted)}
+.stats{display:flex;flex-wrap:wrap;gap:6px 22px;margin-top:14px;font-family:var(--mono);font-size:12.5px;color:var(--muted)}
+.stats b{color:var(--fg);font-weight:500}
+figure{margin:0}
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+svg{display:block;min-width:760px;width:100%;height:auto}
+figcaption{margin-top:8px;font-size:13px;color:var(--muted);max-width:75ch}
+/* svg parts */
+.band-f{fill:color-mix(in srgb,var(--f) 9%,var(--surface))}
+.band-b{fill:color-mix(in srgb,var(--b) 9%,var(--surface))}
+.band-c{fill:color-mix(in srgb,var(--c) 9%,var(--surface))}
+.band-d{fill:color-mix(in srgb,var(--d) 9%,var(--surface))}
+.bl{font:600 10.5px var(--sans);letter-spacing:.08em;text-transform:uppercase}
+.bl.f{fill:var(--f)}.bl.b{fill:var(--b)}.bl.c{fill:var(--c)}.bl.d{fill:var(--d)}
+.n{fill:var(--surface);stroke-width:1.5}
+.n.f{stroke:var(--f)}.n.b{stroke:var(--b)}.n.c{stroke:var(--c)}.n.d{stroke:var(--d)}
+.nt{font:600 12.5px var(--sans);fill:var(--fg)}
+.ni{font:400 10.5px var(--mono);fill:var(--fg)}
+.nc{font:400 10.5px var(--sans);fill:var(--muted)}
+.ed{stroke:var(--fg);stroke-width:1.25;fill:none;opacity:.75}
+.ed.dash{stroke-dasharray:4 3}
+.ah{fill:var(--fg);opacity:.75}
+.el{font:500 10px var(--sans);fill:var(--fg)}
+.note{fill:none;stroke:var(--muted);stroke-dasharray:4 3;stroke-width:1}
+.nm{font:400 10.5px var(--mono);fill:var(--muted)}
+/* chain + table */
+pre{margin:0;padding:14px 16px;font:400 12.5px/1.65 var(--mono);color:var(--fg);overflow-x:auto;
+  background:var(--surface);border:1px solid var(--line);border-radius:6px}
+pre .k{color:var(--muted)}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:600}
+tr:last-child td{border-bottom:0}
+td.id{font-family:var(--mono);font-size:12.5px;white-space:nowrap}
+td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:8px}
+</style>
+
+<main>
+<header>
+  <h1>Spectrum KG Map</h1>
+  <p>How the SpectrumERP knowledge graph is wired, from business rules down to table columns, with the id pattern each node type uses.</p>
+  <div class="stats"><span><b>20,178</b> searchable nodes</span><span><b>56</b> forms</span><span><b>847</b> stored procedures</span><span><b>1,150</b> tables</span><span><b>840</b> business rules</span></div>
+</header>
+
+<figure>
+  <div class="scroll">
+  <svg viewBox="0 0 950 590" role="img" aria-label="Four layers of the Spectrum knowledge graph. Functional nodes (module, process, concept, rule) link to forms; forms reach methods, controls and data-layer classes; data-access methods execute stored procedures that read and write tables and columns.">
+    <defs>
+      <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker>
+    </defs>
+
+    <!-- bands -->
+    <rect class="band-f" x="8" y="10" width="934" height="136" rx="6"/>
+    <rect class="band-b" x="8" y="154" width="934" height="100" rx="6"/>
+    <rect class="band-c" x="8" y="262" width="934" height="176" rx="6"/>
+    <rect class="band-d" x="8" y="446" width="934" height="134" rx="6"/>
+    <text class="bl f" x="22" y="30">Functional · curated</text>
+    <text class="bl b" x="22" y="172">Bridge</text>
+    <text class="bl c" x="22" y="280">Code · extracted</text>
+    <text class="bl d" x="22" y="464">Data</text>
+
+    <!-- FUNCTIONAL row y=58 -->
+    <g><rect class="n f" x="30" y="58" width="170" height="56" rx="4"/>
+      <text class="nt" x="40" y="76">Module</text><text class="ni" x="40" y="92">module:&lt;code&gt;</text><text class="nc" x="40" y="106">4</text></g>
+    <g><rect class="n f" x="270" y="58" width="170" height="56" rx="4"/>
+      <text class="nt" x="280" y="76">BusinessProcess</text><text class="ni" x="280" y="92">process:&lt;key&gt;</text><text class="nc" x="280" y="106">10</text></g>
+    <g><rect class="n f" x="510" y="58" width="170" height="56" rx="4"/>
+      <text class="nt" x="520" y="76">BusinessConcept</text><text class="ni" x="520" y="92">concept:&lt;key&gt;</text><text class="nc" x="520" y="106">62</text></g>
+    <g><rect class="n f" x="750" y="58" width="170" height="70" rx="4"/>
+      <text class="nt" x="760" y="76">BusinessRule</text><text class="ni" x="760" y="92">rule:&lt;key&gt;</text><text class="nc" x="760" y="106">840</text>
+      <text class="nc" x="760" y="120">IMPLEMENTED_BY → SP, method, table</text></g>
+
+    <line class="ed" x1="200" y1="86" x2="270" y2="86" marker-end="url(#ar)"/><text class="el" x="204" y="80">HAS_PROCESS</text>
+    <line class="ed" x1="440" y1="86" x2="510" y2="86" marker-end="url(#ar)"/><text class="el" x="452" y="80">INVOLVES</text>
+    <line class="ed" x1="750" y1="86" x2="680" y2="86" marker-end="url(#ar)"/><text class="el" x="686" y="80">APPLIES_TO</text>
+    <path class="ed" d="M835,58 L835,40 L355,40 L355,58" marker-end="url(#ar)"/><text class="el" x="560" y="35">GOVERNS (rule → process)</text>
+
+    <!-- BRIDGE row y=180 -->
+    <rect class="note" x="30" y="174" width="170" height="68" rx="4"/>
+    <text class="nc" x="40" y="190">Derived shortcuts</text>
+    <text class="nm" x="40" y="206">CALLS_SP  Form→SP</text>
+    <text class="nm" x="40" y="219">USES_TABLE  Form→Table</text>
+    <text class="nm" x="40" y="232">SHARES_TABLE  Form↔Form</text>
+    <g><rect class="n b" x="510" y="180" width="170" height="56" rx="4"/>
+      <text class="nt" x="520" y="198">Form</text><text class="ni" x="520" y="214">form:&lt;Form&gt;</text><text class="nc" x="520" y="228">56</text></g>
+    <g><rect class="n b" x="750" y="180" width="170" height="56" rx="4"/>
+      <text class="nt" x="760" y="198">UserControl</text><text class="ni" x="760" y="214">usercontrol:&lt;Ctl&gt;</text><text class="nc" x="760" y="228">22</text></g>
+    <path class="ed" d="M330,114 L330,208 L510,208" marker-end="url(#ar)"/><text class="el" x="338" y="203">HAS_STEP (process → form)</text>
+    <line class="ed" x1="595" y1="180" x2="595" y2="114" marker-end="url(#ar)"/><text class="el" x="603" y="150">MANAGES / USES_CONCEPT</text>
+    <line class="ed" x1="680" y1="208" x2="750" y2="208" marker-end="url(#ar)"/><text class="el" x="698" y="202">EMBEDS</text>
+
+    <!-- CODE row1 y=290, row2 y=370 -->
+    <g><rect class="n c" x="270" y="290" width="170" height="56" rx="4"/>
+      <text class="nt" x="280" y="308">Control</text><text class="ni" x="280" y="324">control:&lt;Owner&gt;.&lt;ctl&gt;</text><text class="nc" x="280" y="338">2,599</text></g>
+    <g><rect class="n c" x="510" y="290" width="170" height="56" rx="4"/>
+      <text class="nt" x="520" y="308">FormMethod</text><text class="ni" x="520" y="324">method:&lt;Owner&gt;.&lt;Method&gt;</text><text class="nc" x="520" y="338">2,782 · CALLS other methods</text></g>
+    <g><rect class="n c" x="750" y="290" width="170" height="56" rx="4"/>
+      <text class="nt" x="760" y="308">DTMethod</text><text class="ni" x="760" y="324">dtmethod:&lt;DT&gt;.&lt;M&gt;</text><text class="nc" x="760" y="338">850</text></g>
+    <g><rect class="n c" x="270" y="370" width="170" height="56" rx="4"/>
+      <text class="nt" x="280" y="388">DTProperty</text><text class="ni" x="280" y="404">dtprop:&lt;DT&gt;.&lt;Prop&gt;</text><text class="nc" x="280" y="418">2,513</text></g>
+    <g><rect class="n c" x="750" y="370" width="170" height="56" rx="4"/>
+      <text class="nt" x="760" y="388">DAMethod</text><text class="ni" x="760" y="404">damethod:&lt;DA&gt;.&lt;M&gt;</text><text class="nc" x="760" y="418">849</text></g>
+
+    <path class="ed" d="M545,236 L545,272 L355,272 L355,290" marker-end="url(#ar)"/><text class="el" x="400" y="267">HAS_CONTROL</text>
+    <line class="ed" x1="595" y1="236" x2="595" y2="290" marker-end="url(#ar)"/><text class="el" x="603" y="268">HAS_METHOD</text>
+    <line class="ed" x1="510" y1="318" x2="440" y2="318" marker-end="url(#ar)"/><text class="el" x="456" y="312">HANDLES</text>
+    <line class="ed" x1="680" y1="318" x2="750" y2="318" marker-end="url(#ar)"/><text class="el" x="694" y="312">INVOKES</text>
+    <line class="ed" x1="355" y1="346" x2="355" y2="370" marker-end="url(#ar)"/><text class="el" x="363" y="362">BINDS_TO</text>
+    <line class="ed" x1="835" y1="346" x2="835" y2="370" marker-end="url(#ar)"/><text class="el" x="843" y="362">DELEGATES_TO</text>
+    <line class="ed" x1="750" y1="398" x2="440" y2="398" marker-end="url(#ar)"/><text class="el" x="560" y="392">PASSES {param}</text>
+
+    <!-- DATA row y=480 -->
+    <g><rect class="n d" x="750" y="480" width="170" height="56" rx="4"/>
+      <text class="nt" x="760" y="498">StoredProcedure</text><text class="ni" x="760" y="514">sp:&lt;schema.proc&gt;</text><text class="nc" x="760" y="528">847</text></g>
+    <g><rect class="n d" x="510" y="480" width="170" height="56" rx="4"/>
+      <text class="nt" x="520" y="498">Table</text><text class="ni" x="520" y="514">table:&lt;schema.table&gt;</text><text class="nc" x="520" y="528">1,150</text></g>
+    <g><rect class="n d" x="270" y="480" width="170" height="56" rx="4"/>
+      <text class="nt" x="280" y="498">Column</text><text class="ni" x="280" y="514">column:&lt;s.table&gt;.&lt;col&gt;</text><text class="nc" x="280" y="528">7,418</text></g>
+    <rect class="note" x="30" y="480" width="170" height="56" rx="4"/>
+    <text class="nc" x="40" y="498">SP to SP and dynamic SQL</text>
+    <text class="nm" x="40" y="514">sp→sp  CALLS_SP</text>
+    <text class="nm" x="40" y="528">sp→table  DYNAMIC_EXEC</text>
+
+    <line class="ed" x1="835" y1="426" x2="835" y2="480" marker-end="url(#ar)"/><text class="el" x="843" y="458">EXECUTES</text>
+    <line class="ed" x1="750" y1="508" x2="680" y2="508" marker-end="url(#ar)"/><text class="el" x="697" y="494">READS</text><text class="el" x="692" y="504">WRITES</text>
+    <line class="ed" x1="510" y1="508" x2="440" y2="508" marker-end="url(#ar)"/><text class="el" x="448" y="502">HAS_COLUMN</text>
+    <path class="ed" d="M835,536 L835,562 L355,562 L355,536" marker-end="url(#ar)"/><text class="el" x="520" y="557">USES_COLUMN</text>
+  </svg>
+  </div>
+  <figcaption>Read top to bottom: a rule applies to a form, the form's methods call the data layer, a data-access method executes one stored procedure, and that procedure reads and writes tables and columns. Dashed boxes are derived or secondary links.</figcaption>
+</figure>
+
+<section>
+  <h2>One chain with real ids</h2>
+  <pre><span class="k">Purchase Order unit dropdown</span>
+form:fPurchaseOrder
+ ├─ HAS_CONTROL ▸ control:fPurchaseOrder.ucmbPOUnit
+ │                  ◂ HANDLES  method:fPurchaseOrder.ucmbPOUnit_ValueChanged
+ ├─ HAS_METHOD  ▸ method:fPurchaseOrder.FillValues
+ │                  └ INVOKES      ▸ dtmethod:DTPurchaseOrder.FillValues
+ │                     └ DELEGATES_TO ▸ damethod:DAPurchaseOrder.FillValues
+ │                        └ EXECUTES     ▸ sp:purchase.pmpofillvalues
+ │                           └ READS        ▸ table:masterdata.mitemunitconversiondetail
+ └─ rule:purchase-order-unit-conversion-popup ─ APPLIES_TO ▸ form:fPurchaseOrder
+
+<span class="k">Item Master UOM grid</span>
+form:fItemMaster ─ HAS_CONTROL ▸ control:fItemMaster.ugdUOMConversionFactor
+rule:item-master-uom-conversion-rules ─ APPLIES_TO ▸ form:fItemMaster
+concept:unit-of-measure ─ PERSISTED_IN ▸ table:masterdata.munitmaster</pre>
+</section>
+
+<section>
+  <h2>Id patterns and counts</h2>
+  <div class="tw"><table>
+    <thead><tr><th>Layer</th><th>Label</th><th>Id pattern</th><th style="text-align:right">Count</th></tr></thead>
+    <tbody>
+      <tr><td><span class="sw" style="background:var(--f)"></span>Functional</td><td>Module</td><td class="id">module:&lt;code&gt;</td><td class="num">4</td></tr>
+      <tr><td><span class="sw" style="background:var(--f)"></span>Functional</td><td>BusinessProcess</td><td class="id">process:&lt;key&gt;</td><td class="num">10</td></tr>
+      <tr><td><span class="sw" style="background:var(--f)"></span>Functional</td><td>BusinessConcept</td><td class="id">concept:&lt;key&gt;</td><td class="num">62</td></tr>
+      <tr><td><span class="sw" style="background:var(--f)"></span>Functional</td><td>BusinessRule</td><td class="id">rule:&lt;key&gt;</td><td class="num">840</td></tr>
+      <tr><td><span class="sw" style="background:var(--b)"></span>Bridge</td><td>Form</td><td class="id">form:&lt;Form&gt;</td><td class="num">56</td></tr>
+      <tr><td><span class="sw" style="background:var(--b)"></span>Bridge</td><td>UserControl</td><td class="id">usercontrol:&lt;Ctl&gt;</td><td class="num">22</td></tr>
+      <tr><td><span class="sw" style="background:var(--c)"></span>Code</td><td>FormMethod</td><td class="id">method:&lt;Owner&gt;.&lt;Method&gt;</td><td class="num">2,782</td></tr>
+      <tr><td><span class="sw" style="background:var(--c)"></span>Code</td><td>Control</td><td class="id">control:&lt;Owner&gt;.&lt;ctl&gt;</td><td class="num">2,599</td></tr>
+      <tr><td><span class="sw" style="background:var(--c)"></span>Code</td><td>DTClass · DTProperty · DTMethod</td><td class="id">dtclass: · dtprop: · dtmethod:</td><td class="num">88 · 2,513 · 850</td></tr>
+      <tr><td><span class="sw" style="background:var(--c)"></span>Code</td><td>DAClass · DAMethod</td><td class="id">daclass: · damethod:</td><td class="num">88 · 849</td></tr>
+      <tr><td><span class="sw" style="background:var(--d)"></span>Data</td><td>StoredProcedure</td><td class="id">sp:&lt;schema.proc&gt; (lowercase)</td><td class="num">847</td></tr>
+      <tr><td><span class="sw" style="background:var(--d)"></span>Data</td><td>Table</td><td class="id">table:&lt;schema.table&gt; (lowercase)</td><td class="num">1,150</td></tr>
+      <tr><td><span class="sw" style="background:var(--d)"></span>Data</td><td>Column</td><td class="id">column:&lt;schema.table&gt;.&lt;col&gt;</td><td class="num">7,418</td></tr>
+    </tbody>
+  </table></div>
+</section>
+</main>
+
+</body></html>
