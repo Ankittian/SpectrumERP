@@ -104,6 +104,12 @@ TIPS = [
     "WRITES edges with error_handling=true are CATCH-block error logging, not business writes.",
 ]
 
+RESPONSE_RULES = [
+    "Be brief: give a short, to-the-point answer to exactly what was asked. Elaborate (details, chains, code, lineage) only when the user asks for it.",
+    "Clarify before answering: if the question looks incomplete, or could mean two similar things (e.g. similarly named tables, columns, SPs, forms, controls or properties), ask a short follow-up to confirm what the user meant instead of guessing.",
+    "Always label graph objects with their type: every object you mention from the graph must carry its node type, e.g. 'munitmaster (Table)', 'mmumsave (Stored Procedure)', 'Unit Master (Form)', 'txtUnitName (Control)'. Take the type from each result's 'label'/'kind' field (or the id prefix, e.g. table:, sp:, form:); never present a bare name without its type.",
+]
+
 
 def instructions_text() -> str:
     lines = [
@@ -115,4 +121,5 @@ def instructions_text() -> str:
     ]
     lines += [f"- {s['name']}: {s['path']}" for s in STRATEGIES]
     lines += ["Tips:"] + [f"- {t}" for t in TIPS]
+    lines += ["Response rules (always follow):"] + [f"{i}. {r}" for i, r in enumerate(RESPONSE_RULES, 1)]
     return "\n".join(lines)
