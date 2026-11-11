@@ -1,6 +1,6 @@
-"""Merge the curated functional layers of phase-0 and phase-1 into ./domain (union by key).
+"""Merge the curated functional layers of every phase-N (phase-0, phase-1, phase-2, ...) into ./domain (union by key).
 
-Phase-1 wins for scalar text (it was written with more forms in view); list fields are unioned;
+The later phase wins for scalar text (it was written with more forms in view); list fields are unioned;
 process steps are interleaved in a hand-set logical order and renumbered.
 Usage: python scripts/merge_phase_domains.py
 """
@@ -13,8 +13,6 @@ import yaml
 
 HERE = Path(__file__).resolve().parents[1]
 P = HERE.parent / "graphs-by-phase"
-D0 = P / "phase-0/phase-0/KnowledgeGraph/domain"
-D1 = P / "phase-1/phase-1/KnowledgeGraph/domain"
 OUT = HERE / "domain"
 
 # Logical step order for processes that gain forms from both phases (forms not listed keep source order after).
@@ -67,7 +65,7 @@ def merge_item(base: dict, other: dict) -> dict:
 
 
 def merge_keyed(a: list[dict], b: list[dict], key: str) -> list[dict]:
-    """a = phase-0, b = phase-1 (wins)."""
+    """a = earlier phases, b = later phase (wins)."""
     items = {x[key]: x for x in a}
     for x in b:
         items[x[key]] = merge_item(x, items[x[key]]) if x[key] in items else x
@@ -84,20 +82,47 @@ def merge_process(p0: dict, p1: dict) -> dict:
     return m
 
 
+def phase_domains() -> list[Path]:
+    """graphs-by-phase/phase-N/phase-N/KnowledgeGraph/domain for every phase found, ordered by N (later phases win)."""
+    def n(p: Path) -> int:
+        digits = "".join(c for c in p.name if c.isdigit())
+        return int(digits) if digits else -1
+    found = [d for d in sorted(P.glob("phase-*"), key=n) if (d / d.name / "KnowledgeGraph" / "domain").is_dir()]
+    return [d / d.name / "KnowledgeGraph" / "domain" for d in found]
+
+
 def main() -> None:
+    domains = phase_domains()
+    if not domains:
+        raise SystemExit(f"no phase domains found under {P}")
     for sub in ("forms", "processes"):
         shutil.rmtree(OUT / sub, ignore_errors=True)
-    dump(OUT / "modules.yaml", {"modules": merge_keyed(load(D0 / "modules.yaml")["modules"], load(D1 / "modules.yaml")["modules"], "code")})
+    (OUT / "forms").mkdir(parents=True, exist_ok=True)
+
+    def fold(read, key: str | None = None):
+        acc = None
+        for d in domains:
+            cur = read(d)
+            if cur is None:
+                continue
+            acc = cur if acc is None else merge_keyed(acc, cur, key)
+        return acc
+
+    dump(OUT / "modules.yaml", {"modules": fold(lambda d: load(d / "modules.yaml")["modules"], "code")})
     for name in ("concepts", "rules"):
-        dump(OUT / f"{name}.yaml", {name: merge_keyed(load(D0 / f"{name}.yaml")[name], load(D1 / f"{name}.yaml")[name], "key")})
-    names = {p.name for p in (D0 / "processes").glob("*.yaml")} | {p.name for p in (D1 / "processes").glob("*.yaml")}
-    for n in sorted(names):
-        p0, p1 = D0 / "processes" / n, D1 / "processes" / n
-        dump(OUT / "processes" / n, merge_process(load(p0), load(p1)) if p0.exists() and p1.exists() else load(p1 if p1.exists() else p0))
-    for p in sorted(set((D0 / "forms").glob("*.yaml")) | set((D1 / "forms").glob("*.yaml")), key=lambda x: x.name):
-        src = D1 / "forms" / p.name if (D1 / "forms" / p.name).exists() else D0 / "forms" / p.name   # phase-1 wins
-        shutil.copy(src, OUT / "forms" / p.name) if (OUT / "forms").exists() else (OUT / "forms").mkdir() or shutil.copy(src, OUT / "forms" / p.name)
-    print("merged ->", OUT)
+        dump(OUT / f"{name}.yaml", {name: fold(lambda d, name=name: load(d / f"{name}.yaml")[name], "key")})
+    names = sorted({p.name for d in domains for p in (d / "processes").glob("*.yaml")})
+    for n in names:
+        acc = None
+        for d in domains:
+            if (d / "processes" / n).exists():
+                cur = load(d / "processes" / n)
+                acc = cur if acc is None else merge_process(acc, cur)
+        dump(OUT / "processes" / n, acc)
+    for name in sorted({p.name for d in domains for p in (d / "forms").glob("*.yaml")}):
+        src = [d / "forms" / name for d in domains if (d / "forms" / name).exists()][-1]   # latest phase wins
+        shutil.copy(src, OUT / "forms" / name)
+    print(f"merged {len(domains)} phase domains ->", OUT)
 
 
 if __name__ == "__main__":
