@@ -36,9 +36,11 @@ def build(
 ):
     """Extract code + SQL, apply curated domain docs, embed with Voyage AI and load into Neo4j."""
     settings = load_settings()
-    g, report = build_graph(settings)
+    g, report = build_graph(settings, docs="apply" if dry_run else "sync")
     _report(report)
     typer.echo(json.dumps(g.stats(), indent=1))
+    if report.docs:
+        typer.echo(f"embedding docs ({settings.docs_dir.name}/): {report.docs.summary()}")
     if report.errors and strict:
         typer.secho("aborting: fix the errors above (or pass --no-strict)", fg="red")
         raise typer.Exit(1)
@@ -87,7 +89,7 @@ def embed_step(
     settings = load_settings()
     if budget is None:
         budget = 10**12 if settings.embedding_provider == "local" else 450_000
-    g, report = build_graph(settings)
+    g, report = build_graph(settings, docs="sync")
     for e in report.errors:
         typer.secho(f"  error: {e}", fg="red")
     if report.errors:
@@ -134,6 +136,108 @@ def embed_step(
     typer.echo(f"REMAINING {left}")
     if left == 0:
         typer.secho("COMPLETE: every node has a vector", fg="green")
+
+
+docs_app = typer.Typer(add_completion=False, help="Local, editable copy of every node's embedding text")
+app.add_typer(docs_app, name="docs")
+
+
+def _show(ids: list[str], title: str, limit: int = 15) -> None:
+    if ids:
+        typer.echo(f"{title} ({len(ids)}):")
+        for i in ids[:limit]:
+            typer.echo(f"  {i}")
+        if len(ids) > limit:
+            typer.echo(f"  ... +{len(ids) - limit} more")
+
+
+@docs_app.command("sync")
+def docs_sync(prune: bool = typer.Option(False, "--prune", help="Delete files of nodes that left the graph (never edited ones).")):
+    """Write/refresh embedding_docs/ from the current graph (all phases).
+
+    Backfills nodes ingested earlier, adds nodes of new phases, refreshes files you did not edit, and never overwrites
+    a file you edited."""
+    settings = load_settings()
+    g, report = build_graph(settings, docs="sync", prune_docs=prune)
+    for e in report.errors:
+        typer.secho(f"  error: {e}", fg="red")
+    r = report.docs
+    typer.echo(f"{len(g.nodes)} nodes, phases: {', '.join(dict.fromkeys(settings.phases.values()))}")
+    typer.echo(f"{settings.docs_dir}: {r.summary()}")
+    _show(r.drifted, "edited files whose generated text has since changed (review: kg docs diff <id>)")
+    _show(r.orphaned, "files of nodes no longer in the graph (kg docs sync --prune)")
+    typer.echo("Re-embed after editing: kg build  (or kg embed-step)")
+
+
+@docs_app.command("status")
+def docs_status():
+    """Compare embedding_docs/ with the current graph without writing anything."""
+    settings = load_settings()
+    g, report = build_graph(settings, docs="apply")
+    r = report.docs
+    typer.echo(f"{len(g.nodes)} nodes. Would write: new {len(r.new)}, refreshed {len(r.refreshed)}; "
+               f"unchanged {r.unchanged}; edited {len(r.edited)} (drifted {len(r.drifted)}); orphaned {len(r.orphaned)}")
+    _show(r.new, "new (no file yet)", 5)
+    _show(r.edited, "hand-edited")
+    _show(r.drifted, "drifted")
+
+
+def _resolve(g, query: str) -> str:
+    if query in g.nodes:
+        return query
+    hits = [i for i in g.nodes if i.lower() == query.lower()] or [i for i in g.nodes if i.lower().endswith(":" + query.lower())]
+    if len(hits) != 1:
+        typer.secho(f"{query!r}: {'no match' if not hits else 'ambiguous: ' + ', '.join(hits[:8])}", fg="red")
+        raise typer.Exit(1)
+    return hits[0]
+
+
+@docs_app.command("diff")
+def docs_diff(node: str = typer.Argument(..., help="Node id (form:fUnitMaster) or bare name")):
+    """Show the file on disk versus what the graph would generate now."""
+    import difflib
+    from .embedding_docs import EmbeddingDocs, normalize
+    settings = load_settings()
+    g, report = build_graph(settings, docs="off")
+    nid = _resolve(g, node)
+    store = EmbeddingDocs(settings.docs_dir)
+    entry = store.manifest.get(nid)
+    cur = store.read(entry["file"]) if entry else None
+    if cur is None:
+        typer.echo(f"{nid}: no file yet (run kg docs sync)")
+        return
+    d = list(difflib.unified_diff(normalize(cur).splitlines(), normalize(report.generated[nid]).splitlines(),
+                                  "file (embedded)", "generated now", lineterm=""))
+    typer.echo("\n".join(d) or f"{nid}: file equals the generated text")
+
+
+@docs_app.command("reset")
+def docs_reset(nodes: Optional[list[str]] = typer.Argument(None, help="Node ids / names"),
+               all_edited: bool = typer.Option(False, "--all", help="Reset every hand-edited file")):
+    """Discard hand edits: overwrite the file(s) with the text the graph generates."""
+    from .embedding_docs import EmbeddingDocs
+    settings = load_settings()
+    g, report = build_graph(settings, docs="apply")
+    store = EmbeddingDocs(settings.docs_dir)
+    targets = report.docs.edited if all_edited else [_resolve(g, n) for n in nodes or []]
+    if not targets:
+        typer.echo("nothing to reset (give node ids or --all)")
+        return
+    for nid in targets:
+        store.reset(nid, report.generated[nid])
+    typer.echo(f"reset {len(targets)} file(s); run kg build to re-embed")
+
+
+@app.command()
+def phases():
+    """List the discovered phases and the form bundles in each."""
+    from .extract.bundle import discover_bundles
+    settings = load_settings()
+    by: dict[str, list[str]] = {}
+    for b in discover_bundles(settings):
+        by.setdefault(settings.phase_of(b.root), []).append(b.name)
+    for name, bundles in by.items():
+        typer.echo(f"{name}: {len(bundles)} bundles")
 
 
 @app.command()
