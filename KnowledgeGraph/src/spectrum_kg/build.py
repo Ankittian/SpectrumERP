@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from . import domain, link
 from .config import Settings
 from .embed import enrich
+from .embedding_docs import EmbeddingDocs, SyncReport, node_phases
 from .load import documented_types_check
 from .extract.bundle import discover_bundles
 from .extract.code import build_code_graph, collect_types
@@ -22,9 +23,15 @@ class BuildReport:
     bundles: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+    docs: SyncReport | None = None                              # embedding-text files vs the graph (see embedding_docs.py)
+    generated: dict[str, str] = field(default_factory=dict)     # id -> text the builder generated (before hand edits)
 
 
-def build_graph(settings: Settings, with_domain: bool = True) -> tuple[Graph, BuildReport]:
+def build_graph(settings: Settings, with_domain: bool = True, docs: str = "apply",
+                prune_docs: bool = False) -> tuple[Graph, BuildReport]:
+    """docs: "off"   - use the generated embedding text as is;
+            "apply" - read-only: nodes whose file in embedding_docs/ was hand-edited embed the edited text;
+            "sync"  - like apply, and also write new/refreshed files + manifest (what `kg build` / `kg docs sync` do)."""
     g = Graph()
     report = BuildReport()
     bundles = discover_bundles(settings)
@@ -77,6 +84,13 @@ def build_graph(settings: Settings, with_domain: bool = True) -> tuple[Graph, Bu
         report.warnings.append(f"dropped dangling edge {e.src} -{e.type}-> {e.dst}")
         del g.edges[e.key]
     enrich(g)
+    report.generated = {i: n.props["text"] for i, n in g.nodes.items()}
+    if docs != "off":
+        store = EmbeddingDocs(settings.docs_dir)
+        report.docs, overrides = store.plan(g, report.generated, node_phases(g, settings),
+                                            write=docs == "sync", prune=prune_docs)
+        for nid, text in overrides.items():
+            g.nodes[nid].props["text"] = text
     report.warnings += documented_types_check(g)
     return g, report
 
