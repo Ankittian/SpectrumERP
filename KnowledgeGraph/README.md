@@ -59,9 +59,65 @@ claude mcp add spectrum-kg -- cmd /c D:\SpectrumERP\KnowledgeGraph\run-mcp.cmd
 `hop_hints` = for each relationship type: direction, count and neighbour labels, so the client can decide the
 next hop without fetching neighbours. Traversal strategies are listed by `describe_graph`.
 
+## Adding a phase (2, 3, 4, ...) and the editable embedding-text store
+
+Every node has a local text file holding exactly what gets embedded: `embedding_docs/<Label>/<name>.txt`
+(`embedding_docs/manifest.json` records what the builder last wrote; do not edit it). Run all commands from
+`KnowledgeGraph\` (shown with the venv path; skip the prefix if the venv is activated).
+
+### Add a new phase
+
+1. Put the phase in the same layout as the existing ones:
+   `graphs-by-phase\phase-N\phase-N\<FormBundle>\...` and `graphs-by-phase\phase-N\phase-N\KnowledgeGraph\domain\...`.
+   Nothing in the code or `kg.yaml` changes; `phase_globs` picks it up. Bundle names must be unique across phases.
+2. Run, in order:
+
+```powershell
+.\.venv\Scripts\kg phases                              # 1. check phase-N is listed with its bundle count
+.\.venv\Scripts\python scripts\merge_phase_domains.py  # 2. re-merge the curated domain layer (later phase wins on text)
+.\.venv\Scripts\kg validate                            # 3. optional: build in memory, show warnings/errors
+.\.venv\Scripts\kg docs sync                           # 4. write files for the new nodes, refresh untouched old ones
+.\.venv\Scripts\kg build                               # 5. load into Neo4j; embeds only new or changed text
+```
+
+On the Voyage free tier use `kg build --embed-budget 0` then `kg embed-step` (see the next section) instead of step 5.
+
+### Edit an embedding text
+
+1. Open the file, e.g. `embedding_docs\Form\fUnitMaster.txt`, and change the text. Keep it plain text; line endings
+   and trailing blanks don't matter. Don't rename or move the file.
+2. Run `kg build` (or `kg embed-step`). Your version is embedded and used for fulltext search. Only edited nodes get
+   new vectors.
+3. An edited file is never overwritten by later syncs. Untouched files are refreshed when a new phase changes a node's
+   generated text (e.g. a table used by more forms).
+
+### Command reference
+
+| Command | What it does |
+|---|---|
+| `kg phases` | Lists the discovered phases and how many form bundles each has. |
+| `kg docs sync` | Builds the graph (all phases) and writes `embedding_docs\`: creates missing files (new nodes, or the first backfill of already-ingested ones), refreshes files you never edited, keeps edited ones. Prints counts: new / refreshed / unchanged / edited (drifted) / orphaned. |
+| `kg docs sync --prune` | Same, and also deletes files of nodes that are no longer in the graph. Edited files are kept. |
+| `kg docs status` | Dry run of the above: shows what would change and which files are hand-edited or drifted. Writes nothing. |
+| `kg docs diff <node>` | Shows your file vs. the text the graph would generate now. `<node>` is an id (`form:fUnitMaster`, `sp:masterdata.mmumsave`) or a unique bare name (`fUnitMaster`). Use it on *drifted* nodes after adding a phase. |
+| `kg docs reset <node> [<node> ...]` | Discards your edit: overwrites the file with the generated text. |
+| `kg docs reset --all` | Same for every hand-edited file. |
+| `kg build` | Syncs `embedding_docs\`, then loads the graph into Neo4j and embeds nodes whose text is new or changed. |
+| `kg build --dry-run out.json` | Writes the graph to JSON; applies your edits but does not write any `embedding_docs\` file. |
+| `kg embed-step` | One resumable embedding slice (also syncs the docs first). Use after editing when you build with `--embed-budget 0`. |
+
+After `kg docs reset` run `kg build` (or `kg embed-step`) so the stored vector matches the restored text.
+
+**Drifted** = you edited a file and the graph now generates different text than when you edited it (typically after a new
+phase). Your edit still wins; compare with `kg docs diff` and merge by hand if the new context matters, or
+`kg docs reset` to take the generated text.
+
+Notes: the root `.gitignore` currently ignores `embedding_docs/`; remove that line to version your edits.
+Re-run `kg docs sync` any time; it is idempotent.
+
 ## Combined Phase 0 + Phase 1 graph and the Voyage free tier
 
-`kg.yaml` lists two `source_roots` (`graphs-by-phase/phase-0/phase-0` and `.../phase-1/phase-1`), so one build covers all
+`kg.yaml` discovers every `graphs-by-phase/phase-*/phase-*` folder (`phase_globs`), so one build covers all
 56 forms plus their 22 user controls (about 20K nodes, 85K relationships; fits Aura Free's 200K / 400K limits).
 `domain/` is the union of both phases' curated layers, produced by `scripts/merge_phase_domains.py` (phase-1 wins on
 scalar text, lists are unioned, process steps are interleaved and renumbered). Re-run it if a phase's domain changes.
