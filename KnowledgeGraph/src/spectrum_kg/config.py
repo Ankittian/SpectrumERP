@@ -30,6 +30,10 @@ class Settings:
     def datalayer(self) -> dict[str, Any]: return self.raw.get("datalayer", {})
     @property
     def ui(self) -> dict[str, Any]: return self.raw.get("ui", {})
+    @property
+    def nested_sp_dirs(self) -> list[Path]:
+        """Folders of nested SPs (no form bundle) stored as embedding-text .txt files with a `Code:` section."""
+        return [(self.project_dir / d).resolve() for d in self.raw.get("nested_sp_dirs") or []]
 
     # --- environment (.env) ---
     @property

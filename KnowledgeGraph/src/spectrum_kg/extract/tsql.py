@@ -116,7 +116,27 @@ def split_name(raw: str, default_schema: str) -> tuple[str, str]:
 
 
 def parse_sp_file(path: Path, default_schema: str = "dbo") -> StoredProc:
+    return parse_sp_text(path.read_text(encoding="utf-8-sig"), path, default_schema)
+
+
+CODE_MARKER_RE = re.compile(r"(?m)^Code:[ \t]*$")
+
+
+def parse_sp_embedding_text(path: Path, default_schema: str = "dbo") -> StoredProc:
+    """Parse an SP rendered as embedding text (summary/facts header, then a `Code:` line followed by the SQL).
+
+    Used for nested procedures (called only from other SPs) that have no .sql file in any form bundle.
+    Only the SQL after `Code:` is used; the header is regenerated from the parsed SQL like any other SP.
+    """
     text = path.read_text(encoding="utf-8-sig").replace("\r\n", "\n")
+    m = CODE_MARKER_RE.search(text)
+    if not m:
+        raise ValueError(f"no 'Code:' section in {path}")
+    return parse_sp_text(text[m.end():], path, default_schema)
+
+
+def parse_sp_text(text: str, path: Path, default_schema: str = "dbo") -> StoredProc:
+    text = text.replace("\r\n", "\n")
     m = CREATE_RE.search(text)
     if not m:
         raise ValueError(f"no CREATE PROCEDURE in {path}")

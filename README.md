@@ -71,6 +71,11 @@ everywhere in this guide.**
 
 The launcher scripts expect the virtual environment to be at `KnowledgeGraph\.venv`, so create it exactly there.
 
+> **Always create `.venv` on the machine that uses it — never copy it from someone else.** A virtual environment
+> stores absolute paths (to the Python install and to `src\`), so a copied one fails with
+> `No Python at '...'` or `No module named 'spectrum_kg'`. If you received a `.venv` folder, delete it and run the
+> commands below. When sharing the folder, leave out `.venv`, `.cache` and `__pycache__`.
+
 **Windows (PowerShell):**
 
 ```powershell
@@ -450,6 +455,11 @@ SpectrumERP\
 
 These paths are configured in `KnowledgeGraph/kg.yaml` (`source_roots`).
 
+**Nested stored procedures** (SPs called only from other SPs, so they are not in any form bundle) live in
+`embedding_text/` (in git), one `<schema>.<name>.txt` per SP, configured as `nested_sp_dirs` in `kg.yaml`. Only the SQL
+after the `Code:` line is parsed, so they get the same READS / WRITES / USES_COLUMN / CALLS_SP edges as bundle SPs.
+If a form bundle also has the SP, the bundle's `.sql` wins. To add more, drop new `.txt` files there and rebuild.
+
 Then, from `KnowledgeGraph\`:
 
 ```powershell
@@ -493,4 +503,5 @@ SpectrumERP/
   functional documentations/     functional docs per form
   functional_template.md, technical_doc_template_SP/   documentation templates
   graphs-by-phase/               form source bundles (NOT in git — get from the team)
+  embedding_text/                nested stored procedures (SQL in a `Code:` section), loaded by `kg build`
 ```

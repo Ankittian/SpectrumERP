@@ -1,6 +1,7 @@
 """Build the full in-memory graph: code + SQL extraction, linking, derived edges, curated domain layer."""
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 
 from . import domain, link
@@ -10,8 +11,10 @@ from .load import documented_types_check
 from .extract.bundle import discover_bundles
 from .extract.code import build_code_graph, collect_types
 from .extract.roslyn import extract_code_facts
-from .extract.tsql import parse_sp_file
+from .extract.tsql import parse_sp_embedding_text, parse_sp_file
 from .model import Graph
+
+NESTED_SP_BUNDLE = "nested-sp"   # bundles value for SPs loaded from nested_sp_dirs
 
 
 @dataclass
@@ -41,6 +44,24 @@ def build_graph(settings: Settings, with_domain: bool = True) -> tuple[Graph, Bu
                             f.relative_to(settings.source_root).as_posix()))
             except Exception as ex:  # keep building; report the file
                 report.errors.append(f"{f}: {ex}")
+    # nested SPs (called only from other SPs). Added after the bundles, so a bundle's copy of the same SP wins.
+    repo_root = settings.project_dir.parent
+    in_bundles = {sp.qualified.lower() for sp, _, _ in sps}
+    for d in settings.nested_sp_dirs:
+        if not d.is_dir():
+            report.warnings.append(f"nested_sp_dirs: {d} not found")
+            continue
+        for f in sorted(d.glob("*.txt")):
+            try:
+                sp = parse_sp_embedding_text(f, settings.sql.get("default_schema", "dbo"))
+            except Exception as ex:
+                report.errors.append(f"{f}: {ex}")
+                continue
+            if sp.qualified.lower() != f.stem.lower():
+                report.warnings.append(f"{f.name}: file name differs from procedure {sp.qualified}")
+            if sp.qualified.lower() in in_bundles:
+                continue   # the form bundle's .sql is authoritative
+            sps.append((sp, NESTED_SP_BUNDLE, os.path.relpath(f, repo_root).replace(os.sep, "/")))
     link.build_sql_graph(g, sps, settings.sql.get("error_log_tables", []))
     report.warnings += link.resolve_code_to_sql(g, cm)
     g.finalize_names()

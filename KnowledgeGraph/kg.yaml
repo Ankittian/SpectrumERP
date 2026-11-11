@@ -8,7 +8,12 @@ source_roots:
 bundles: auto                   # auto = every top-level folder containing CONTENTS.md, Form/ or StoredProcedures/
 exclude: [KnowledgeGraph, .venv, .git, .vs, .claude]
 
-domain_dir: domain              # curated functional docs (modules, concepts, processes, rules, forms)
+# Nested SPs (called only from other SPs, so absent from the form bundles), one embedding-text .txt per SP.
+# Only the SQL after the `Code:` line is parsed; a bundle's copy of the same SP takes precedence.
+nested_sp_dirs:
+  - ../embedding_text
+
+domain_dir: domain             # curated functional docs (modules, concepts, processes, rules, forms)
 cache_dir: .cache               # Roslyn facts + embedding cache (git-ignored)
 roslyn_extractor: tools/bin/RoslynExtractor/RoslynExtractor.exe
 roslyn_project: tools/RoslynExtractor/RoslynExtractor.csproj
