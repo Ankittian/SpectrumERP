@@ -1,0 +1,181 @@
+Stored procedure Project.MaterialPlanningStatus: to Chage Status OF Material Planning. Called from Inventory.MMPRDelete.
+Writes: Project.MaterialPlanningItemDetail, Project.MaterialPlanningMain, Project.MaterialPlanningServiceDetail
+Reads: Inventory.IndentItemDetail, Inventory.IndentMain, Inventory.SCReqMain, Inventory.SCReqServiceDetail, Project.MaterialPlanningItemDetail, Project.MaterialPlanningServiceDetail, Project.MaterialPlanningWBSDetail
+Parameters: @MPWBSDetailNo int, @ItemNo int, @MakeNo smallint, @OutputStatus bit OUTPUT, @Result varchar(100) OUTPUT, @StatusNo tinyint = 2
+Author: K M Disha, created 27 Jun 2022
+Code:
+					
+-- =============================================
+-- Author:		K M Disha
+-- Create date: 27 Jun 2022
+-- Description:	to Chage Status OF Material Planning
+-- =============================================
+CREATE PROCEDURE [Project].[MaterialPlanningStatus] 
+	-- Add the parameters for the stored procedure here
+	@MPWBSDetailNo int,
+	@ItemNo int,
+	@MakeNo smallint ,
+	@OutputStatus bit output,
+	@Result varchar(100) output,
+	@StatusNo tinyint = 2 
+
+	
+AS
+BEGIN
+begin try
+		Declare  @Qty decimal(10,3),@MaterialPlanningNo as int
+		Declare @WBSRevisionNo Int, @WBSRevisionSerialNo Int
+
+		select @MaterialPlanningNo=MaterialPlanningNo
+		,@WBSRevisionNo=WBSRevisionNo
+		,@WBSRevisionSerialNo=WBSRevisionSerialNo
+		from Project.MaterialPlanningWBSDetail
+		where MPWBSDetailNo = @MPWBSDetailNo
+		
+
+
+if (@StatusNo = 2 or @StatusNo = 4 or @StatusNo =7) -- Cancel or complete status
+	begin
+		
+	Select  @Qty = sum(IID.IndentQty)  
+	From Inventory.IndentMain IM
+	Inner join Inventory.IndentItemDetail IID on IM.IndentNo = IID.IndentNo 
+	Where IM.IndentAgainstNo =5 and RefDocumentNo = @MPWBSDetailNo
+	and IID.ItemNo = @ItemNo  and ISNULL(MakeNo,0) = ISNULL(@MakeNo,0)
+					
+	If @Qty Is Null
+	Begin
+		Select @Qty = sum(IID.Quantity) 
+		from Inventory.SCReqMain IM
+		Inner join Inventory.SCReqServiceDetail IID On IID.SCReqNo = Im.SCReqNo
+		Where IM.SourceDocumentNo = 3 and MPWBSDetailNo = @MPWBSDetailNo
+		and IID.ItemNo = @ItemNo
+	End
+
+		Update Project.MaterialPlanningItemDetail  set StatusNo = 2
+					where MaterialPlanningNo =@MaterialPlanningNo and 
+					ItemNo = @ItemNo and isnull(MakeNo,0) = isnull(@MakeNo,0)
+					and Qty  <= isnull(@Qty ,0)
+					And WBSRevisionNo=@WBSRevisionNo
+					And WBSRevisionSerialNo=@WBSRevisionSerialNo
+					
+		Update Project.MaterialPlanningItemDetail set StatusNo = 8
+					where MaterialPlanningNo = @MaterialPlanningNo and 
+					ItemNo = @ItemNo and isnull(MakeNo,0) = isnull(@MakeNo,0)
+					and Qty > isnull(@Qty ,0) and isnull(@Qty ,0) >0
+					And WBSRevisionNo=@WBSRevisionNo
+					And WBSRevisionSerialNo=@WBSRevisionSerialNo
+
+ 
+		Update Project.MaterialPlanningItemDetail set StatusNo = 1
+					where MaterialPlanningNo = @MaterialPlanningNo and 
+					ItemNo = @ItemNo and isnull(MakeNo,0) = isnull(@MakeNo,0)
+					and Qty  > ISNULL(@Qty,0) and StatusNo =2
+					And WBSRevisionNo=@WBSRevisionNo
+					And WBSRevisionSerialNo=@WBSRevisionSerialNo					
+
+		--service
+		Update Project.MaterialPlanningServiceDetail  set StatusNo = 2
+					where MaterialPlanningNo =@MaterialPlanningNo and 
+					ItemNo = @ItemNo 
+					and Qty  <= isnull(@Qty ,0)
+					And WBSRevisionNo=@WBSRevisionNo
+					And WBSRevisionSerialNo=@WBSRevisionSerialNo					
+					
+		Update Project.MaterialPlanningServiceDetail set StatusNo = 8
+					where MaterialPlanningNo = @MaterialPlanningNo and 
+					ItemNo = @ItemNo
+					and Qty > isnull(@Qty ,0) and isnull(@Qty ,0) >0
+					And WBSRevisionNo=@WBSRevisionNo
+					And WBSRevisionSerialNo=@WBSRevisionSerialNo					
+
+ 
+		Update Project.MaterialPlanningServiceDetail set StatusNo = 1
+					where MaterialPlanningNo = @MaterialPlanningNo and 
+					ItemNo = @ItemNo 
+					and Qty  > ISNULL(@Qty,0) and StatusNo =2
+					And WBSRevisionNo=@WBSRevisionNo
+					And WBSRevisionSerialNo=@WBSRevisionSerialNo					
+	end
+	 if @StatusNo <> 2
+	 begin
+		Update Project.MaterialPlanningItemDetail set  StatusNo = @StatusNo
+					where MaterialPlanningNo = @MaterialPlanningNo and 
+					ItemNo = @ItemNo and isnull(MakeNo,0) = isnull(@MakeNo,0)
+					And WBSRevisionNo=@WBSRevisionNo
+					And WBSRevisionSerialNo=@WBSRevisionSerialNo					
+
+		--Service
+		Update Project.MaterialPlanningServiceDetail set  StatusNo = @StatusNo
+					where MaterialPlanningNo = @MaterialPlanningNo and 
+					ItemNo = @ItemNo 
+					And WBSRevisionNo=@WBSRevisionNo
+					And WBSRevisionSerialNo=@WBSRevisionSerialNo					
+					
+	 end 
+	 -- Preferences list Authpoized/Hold/Cancel/Short Close/Completed
+	 
+	 if exists(select 1 from Project.MaterialPlanningItemDetail where MaterialPlanningNo = @MaterialPlanningNo and statusNo =1)
+	 begin
+	   if exists(select 1 from Project.MaterialPlanningItemDetail where	
+						MaterialPlanningNo = @MaterialPlanningNo and statusNo =8)
+		update Project.MaterialPlanningMain  set StatusNo = 8 where MaterialPlanningNo= @MaterialPlanningNo
+	   else
+	     update Project.MaterialPlanningMain  set StatusNo = 1 where MaterialPlanningNo= @MaterialPlanningNo
+	      
+		
+	 end	
+	 else if exists(select 1 from  Project.MaterialPlanningItemDetail where 
+				MaterialPlanningNo = @MaterialPlanningNo and statusNo =8)
+	 begin
+	    update Project.MaterialPlanningMain  set StatusNo = 8 where MaterialPlanningNo= @MaterialPlanningNo
+	 end	
+	
+	 else if exists(select 1 from  Project.MaterialPlanningItemDetail where MaterialPlanningNo = @MaterialPlanningNo and Statusno = 3 )-- Hold 
+		update Project.MaterialPlanningMain  set StatusNo =3 where MaterialPlanningNo = @MaterialPlanningNo
+	 else if exists(select 1 from  Project.MaterialPlanningItemDetail where MaterialPlanningNo = @MaterialPlanningNo and Statusno = 4 )--cancel
+	 	update Project.MaterialPlanningMain  set StatusNo =4 where MaterialPlanningNo = @MaterialPlanningNo
+	else if exists(select 1 from  Project.MaterialPlanningItemDetail where MaterialPlanningNo = @MaterialPlanningNo and Statusno=7)--shortclose
+	 	update Project.MaterialPlanningMain  set StatusNo =7 where MaterialPlanningNo = @MaterialPlanningNo						
+	else if exists(select 1 from  Project.MaterialPlanningItemDetail where MaterialPlanningNo = @MaterialPlanningNo and Statusno=2)--completed
+		update Project.MaterialPlanningMain  set StatusNo =2 where MaterialPlanningNo = @MaterialPlanningNo
+
+	--Service
+	if exists(select 1 from Project.MaterialPlanningServiceDetail where MaterialPlanningNo = @MaterialPlanningNo and statusNo =1)
+	 begin
+	   if exists(select 1 from Project.MaterialPlanningServiceDetail where	
+						MaterialPlanningNo = @MaterialPlanningNo and statusNo =8)
+		update Project.MaterialPlanningMain  set StatusNo = 8 where MaterialPlanningNo= @MaterialPlanningNo
+	   else
+	     update Project.MaterialPlanningMain  set StatusNo = 1 where MaterialPlanningNo= @MaterialPlanningNo
+	      
+		
+	 end	
+	 else if exists(select 1 from  Project.MaterialPlanningServiceDetail where 
+				MaterialPlanningNo = @MaterialPlanningNo and statusNo =8)
+	 begin
+	    update Project.MaterialPlanningMain  set StatusNo = 8 where MaterialPlanningNo= @MaterialPlanningNo
+	 end	
+	
+	 else if exists(select 1 from  Project.MaterialPlanningServiceDetail where MaterialPlanningNo = @MaterialPlanningNo and Statusno = 3 )-- Hold 
+		update Project.MaterialPlanningMain  set StatusNo =3 where MaterialPlanningNo = @MaterialPlanningNo
+	 else if exists(select 1 from  Project.MaterialPlanningServiceDetail where MaterialPlanningNo = @MaterialPlanningNo and Statusno = 4 )--cancel
+	 	update Project.MaterialPlanningMain  set StatusNo =4 where MaterialPlanningNo = @MaterialPlanningNo
+	else if exists(select 1 from  Project.MaterialPlanningServiceDetail where MaterialPlanningNo = @MaterialPlanningNo and Statusno=7)--shortclose
+	 	update Project.MaterialPlanningMain  set StatusNo =7 where MaterialPlanningNo = @MaterialPlanningNo						
+	else if exists(select 1 from  Project.MaterialPlanningServiceDetail where MaterialPlanningNo = @MaterialPlanningNo and Statusno=2)--completed
+		update Project.MaterialPlanningMain  set StatusNo =2 where MaterialPlanningNo = @MaterialPlanningNo
+		  					
+	 
+set @OutputStatus =1
+set @Result='Success'
+end try
+begin catch
+set @OutputStatus =0
+set @Result=error_message()
+
+		select 0, error_message()
+end Catch
+
+
+END

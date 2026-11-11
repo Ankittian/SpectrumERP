@@ -1,0 +1,82 @@
+Stored procedure Information.PendingRFQForItem: Pending RFQ for Item(Means Quotation are not made against RFQ )--------------. Called from Purchase.PRFQGetItemInfo.
+Reads: masterdata.mMakeMaster, masterdata.mVendorLocationDetail, Purchase.QuotationMain, Purchase.RFQItemDetail, Purchase.RFQMain, Purchase.RFQVendorDetail, Security.Login
+Parameters: @CompanyNo tinyint, @DocumentDate smalldatetime, @ItemNo int
+Author: Arvinder kaur Vadrah, created 2013/10/07
+Code:
+
+-- =============================================
+-- Author:		Arvinder kaur Vadrah
+-- Create date: 2013/10/07
+-- Description:	Pending RFQ for Item(Means Quotation are not made against RFQ )--------------
+-- =============================================
+CREATE PROCEDURE [Information].[PendingRFQForItem] 
+	-- Add the parameters for the stored procedure here
+	@CompanyNo tinyint,
+	@DocumentDate smalldatetime,
+	@ItemNo int
+	
+AS
+BEGIN
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+
+    -- Insert statements for procedure here
+	
+
+	declare @str varchar(max)
+    select @str=masterdata.JSForInformation('PRFQ')
+    set @str=@str+masterdata.CSSForInformation('PRFQ')
+	set @str=@str+'<table class="altrowstable" id="alternatecolorPendingRFQForItemInfo">'
+	set @str=@str+'<Caption><Font color="Maroon"><h3 align="Left"><b>Pending RFQ For Quotation</b></h3></Font></Caption>'
+    set @str=@str+'<tr><th>Sl. No.</th><th>Vendor Name</th><th>RFQ No.</th><th>RFQ Date</th><th>Make</th><th>Submission Date</th><th>Validity Date</th><th>Created By</th><th>Authorized By</th></tr>'
+	set @str=@str
+				 +( replace(
+					replace(
+					replace(
+					replace(
+					replace(
+					replace(
+					replace(
+					replace(
+					replace((    
+					      Select ROW_NUMBER() over ( Order by RM.DocumentDate desc) as td1,
+								VL.VendorName td2,
+								RM.DocumentNoYearly td3,
+								Convert(Varchar(20),RM.DocumentDate,103) td4, 
+								Isnull(MM.MakeName,'') td5,
+								Convert(Varchar(20),RM.SubmissionDate,103) td6, 
+								Convert(Varchar(20),RM.ValidityDate,103) td7,
+								SL.Printingname as td8, 
+								Isnull(SLA.Printingname,'') td9
+						From Purchase.RFQMain RM
+						Inner Join Purchase.RFQItemDetail RFQI ON RFQI.RFQNo=RM.RFQNo
+						Left Join masterdata.mMakeMaster MM ON MM.MakeNo=RFQI.MakeNo
+						Inner Join Purchase.RFQVendorDetail VD ON VD.RFQNo=RM.RFQNo---Compalsory Field
+						inner Join masterdata.mVendorLocationDetail VL ON VL.VendorLocationNo=VD.VendorLocationNo
+						Inner JOIN Security.Login SL on SL.LoginNo =  RM.CreatedBy
+						LEFT JOIN Security.Login SLA on SLA.LoginNo =  RM.AuthorizedBy
+						Left Join 
+								(Select QM.RFQNo From Purchase.QuotationMain QM ----Status Is Not Completed after Making Quotation That why Status Column is not use for pending
+								Group By QM.RFQNo
+								)tt ON tt.RFQNo=RM.RFQNo
+						Where tt.RFQNo Is null ------pending for Quotation
+								And RM.CompanyNo=@CompanyNo
+								And RM.DocumentDate<=@DocumentDate
+								And RFQI.ItemNo=@ItemNo
+					    for xml path('tr')),'<td1>','<td style="text-align: Center;">')
+					                       ,'<td2>','<td>')
+		   								   ,'<td3>','<td>')		
+										   ,'<td4>','<td style="text-align: Center;">')
+										   ,'<td5>','<td>')
+										   ,'<td6>','<td style="text-align: Center;">')
+										   ,'<td7>','<td style="text-align: Center;">')
+										   ,'<td8>','<td>')
+										   ,'<td9>','<td>')
+											)
+								
+				   
+	set @str=@str+'</table>'
+	
+	select @str
+END

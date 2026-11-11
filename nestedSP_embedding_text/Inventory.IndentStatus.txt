@@ -1,0 +1,209 @@
+Stored procedure Inventory.IndentStatus: to Chage Status OF Indent. Called from Inventory.IGRNDelete, Purchase.PMPODelete, Purchase.PRFQDelete.
+Writes: Inventory.IndentItemDetail, Inventory.IndentMain
+Reads: DiscreteRM.SINLotOrderDetail, Inventory.ChangeIndentStatusItemDetails, Inventory.ChangeIndentStatusMain, Inventory.GRNItemDetail, Inventory.GRNItemIndentDetail, Inventory.IndentItemDetail, Purchase.ChangePOStatusItemDetails, Purchase.ChangePOStatusMain, Purchase.POAmendmentIndentDetail, Purchase.POAmendmentItemDetail, Purchase.POAmendmentMain, Purchase.POIndentDetail, Purchase.POItemDetail, Purchase.POMain, Purchase.RFQIndentDetail
+Parameters: @IndentNo int, @ItemNo int, @MakeNo smallint, @StatusNo tinyint, @OutputStatus bit OUTPUT, @Result varchar(100) OUTPUT, @TechnicalGradeNo tinyint
+Author: akhil, created 11 feb 2012
+Code:
+-- =============================================
+-- Author:		akhil
+-- Create date: 11 feb 2012
+-- Description:	to Chage Status OF Indent
+-- =============================================
+CREATE PROCEDURE [Inventory].[IndentStatus] 
+	-- Add the parameters for the stored procedure here
+	@IndentNo int,
+	@ItemNo int,
+	@MakeNo smallint,
+	@StatusNo tinyint,
+	@OutputStatus bit output,
+	@Result varchar(100) output,
+	@TechnicalGradeNo tinyint
+AS
+BEGIN
+begin try
+		Declare @POQty decimal(10,3), @GRNQty decimal(10,3)
+	
+	if (@StatusNo = 2 or @StatusNo = 4 or @StatusNo =7) -- Cancel or complete status
+	begin
+		
+		select  @POQty= sum((FirstCF * (POQty -ISNULL(prevQty,0) ))/SecondCF ) 
+				from Purchase.POMain pm inner join Purchase.POIndentDetail pd on pd.PONo= pm.PONo
+				inner join Purchase.POItemDetail pid on pid.PONo = pd.PONo and pid.ItemNo = pd.ItemNo
+								and isnull(pid.MakeNo,0) = isnull(pd.MakeNo,0)
+								and isnull(pid.TechnicalGradeNo,0) = isnull(pd.TechnicalGradeNo,0)
+				
+				left join ( select poam.PONo ,cmd.itemno,cmd.makeno,cmd.TechnicalGradeNo, IndentNo,
+							sum(piid.POQty) prevQty
+				from 
+				Purchase.ChangePOStatusMain  cm 
+				inner join  Purchase.POAmendmentMain poam on poam.POAmendmentNo  = cm.POAmendmentNo 
+				inner join Purchase.ChangePOStatusItemDetails  cmd on cmd.ChangePOStatusNo = cm.ChangePOStatusNo
+				inner join Purchase.POItemDetail ppid on ppid.PONo = poam.PONo and ppid.ItemNo = cmd.ItemNo
+								and isnull(ppid.MakeNo,0) = isnull(cmd.MakeNo,0)
+								and isnull(ppid.TechnicalGradeNo ,0) = isnull(cmd.TechnicalGradeNo,0)
+				 inner join Purchase.POIndentDetail piid on piid.PONo = ppid.PONo and piid.ItemNo = ppid.ItemNo 
+						and isnull(piid.MakeNo,0) = isnull(ppid.MakeNo,0)
+					where cmd.IsReleaseIndent =1 and ppid.StatusNo in (4,7)  and cm.AuthorizedBy is not null
+					group by poam.PONo ,cmd.itemno,cmd.makeno,cmd.technicalgradeno,IndentNo 
+					) tt on pd.ItemNo = tt.ItemNo and tt.PONo = pm.PONo and tt.IndentNo = pd.IndentNo 
+						and isnulL(pid.MakeNo,0) = isnull(tt.MakeNo,0) and
+						isnulL(pid.TechnicalGradeNo,0) = isnull(tt.TechnicalGradeNo,0) 
+					
+				where pd.indentNo= @IndentNo and pd.ItemNo = @ItemNo 
+						and isnulL(pd.IndentMakeNo,0) = isnull(@MakeNo,0) and
+						isnulL(pd.IndentTechnicalGradeNo,0) = isnull(@TechnicalGradeNo,0) 
+						and PODocumentTypeno<>1 
+									
+						-- not for LOI
+	-- commented on 15 apr 2013 as grn qty doubke PO qty
+		--select @GRNQty = sum((gd.AcceptedQty * gid.FirstCF)/gid.SecondCF )
+		--		from Purchase.POAmendmentMain pm inner join Purchase.POIndentDetail pd on pd.PONo= pm.PONo
+		--		inner join Purchase.POItemDetail pid on pid.PONo = pd.PONo and pid.ItemNo = pd.ItemNo
+		--						and isnull(pid.MakeNo,0) = isnull(pd.MakeNo,0)
+		--						and isnull(pid.TechnicalGradeNo,0) = isnull(pd.TechnicalGradeNo ,0)
+		--		inner join Inventory.GRNItemDetail gid on 
+		--				gid.POAmendmentNo =pm.POAmendmentNo and 
+		--				gid.ItemNo = PID.ItemNo and isnull(gid.MakeNo,0) = isnull(PID.makeNo,0)
+		--				and isnull(gid.TechnicalGradeNo,0) = isnull(PID.TechnicalGradeNo,0)				
+		--		inner join Inventory.GRNItemIndentDetail gd on gd.GRNItemDetailNo = gid.GRNItemDetailNo
+		--					and gd.IndentNo = pd.IndentNo
+				
+		--			where pd.indentNo= @IndentNo and pd.ItemNo = @ItemNo and 
+		--					--pid.StatusNo = 4 and comment on 22 oct 2012
+		--				isnulL(pd.IndentMakeNo,0) = isnull(@MakeNo,0) and 
+		--				isnulL(pd.IndentTechnicalGradeNo,0) = isnull(@TechnicalGradeNo,0) and
+		--				PODocumentTypeno<>1 -- not for LOI
+		
+		select @GRNQty = ISNULL( @GRNQty,0) + ISNULL(sum(giid.AcceptedQty),0)
+		from Inventory.GRNItemDetail gid
+		inner join Inventory.GRNItemIndentDetail giid on giid.GRNItemDetailNo = gid.GRNItemDetailNo 
+			where gid.POAmendmentNo is null and giid.IndentNo = @IndentNo and gid.ItemNo = @ItemNo 
+				and ( isnull(gid.MakeNo ,0) =isnull(@MakeNo,0) or gid.MakeNo is null )
+				and isnull(gid.TechnicalGradeNo,0) = isnull(@TechnicalGradeNo,0) 
+		
+		select @GRNQty = ISNULL( @GRNQty,0) + ISNULL(sum(giid.AcceptedQty),0)
+		from Inventory.GRNItemDetail gid
+		inner join Inventory.GRNItemIndentDetail giid on giid.GRNItemDetailNo = gid.GRNItemDetailNo 
+		inner join Purchase.POAmendmentItemDetail pid on pid.POAmendmentNo = gid.POAmendmentNo 
+			and pid.ItemNo = gid.ItemNo and ISNULL(pid.MakeNo,0) = ISNULL(gid.MakeNo,0)
+			and ISNULL(gid.TechnicalGradeNo ,0) = ISNULL(pid.TechnicalGradeNo ,0) and 
+				pid.StatusNo in(4,7)
+		inner join Purchase.POAmendmentMain pom on pom.POAmendmentNo = pid.POAmendmentNo 		
+			where giid.IndentNo = @IndentNo and gid.ItemNo = @ItemNo 
+				and isnull(gid.MakeNo ,0) =isnull(@MakeNo,0) 
+				and isnull(gid.TechnicalGradeNo,0) = isnull(@TechnicalGradeNo,0) 
+				and not exists (select 1 from Purchase.ChangePOStatusMain  a
+						inner join  Purchase.POAmendmentMain b on b.POAmendmentNo  = a.POAmendmentNo 
+						inner join Purchase.ChangePOStatusItemDetails  c on c.ChangePOStatusNo = a.ChangePOStatusNo
+						where b.PONo = pom.PONo and c.ItemNo = pid.ItemNo and c.IsReleaseIndent = 0
+						)
+		
+		select @GRNQty = ISNULL( @GRNQty,0) + ISNULL(sum(giid.Qty),0)
+		from  DiscreteRM.SINLotOrderDetail  giid
+		inner join Purchase.POAmendmentItemDetail pid on pid.POAmendmentNo = giid.POAmendmentNo 
+			and pid.ItemNo = giid.ItemNo and ISNULL(pid.MakeNo,0) = ISNULL(giid.MakeNo,0)
+			and	pid.StatusNo in(4,7)
+		inner join Purchase.POAmendmentMain pom on pom.POAmendmentNo = pid.POAmendmentNo 		
+			where giid.IndentNo = @IndentNo and giid.ItemNo = @ItemNo 
+				and isnull(giid.MakeNo ,0) =isnull(@MakeNo,0) 
+				and not exists (select 1 from Purchase.ChangePOStatusMain  a
+						inner join  Purchase.POAmendmentMain b on b.POAmendmentNo  = a.POAmendmentNo 
+						inner join Purchase.ChangePOStatusItemDetails  c on c.ChangePOStatusNo = a.ChangePOStatusNo
+						where b.PONo = pom.PONo and c.ItemNo = pid.ItemNo and c.IsReleaseIndent = 0
+						)
+		
+					
+		Update Inventory.IndentItemdetail set POQty = isnulL(@POQty,0) + isnull(@GRNQty,0)
+					where IndentNo = @IndentNo and ItemNo = @ItemNo and isnull(MakeNo,0) = isnull(@MakeNo,0)
+					and isnull(TechnicalGradeNo,0) = isnull(@TechnicalGradeNo,0)
+								
+		Update Inventory.IndentItemdetail set StatusNo = 2
+					where IndentNo = @IndentNo and ItemNo = @ItemNo and isnull(MakeNo,0) = isnull(@MakeNo,0)
+					and isnull(TechnicalGradeNo,0) = isnull(@TechnicalGradeNo,0)
+					and IndentQty <= POQty
+		
+		Update Inventory.IndentItemdetail set StatusNo = 8
+					where IndentNo = @IndentNo and ItemNo = @ItemNo and isnull(MakeNo,0) = isnull(@MakeNo,0)
+					and isnull(TechnicalGradeNo,0) = isnull(@TechnicalGradeNo,0)
+					and IndentQty > POQty and POQty >0 and StatusNo in(1,2)
+					
+					
+		Update Inventory.IndentItemdetail set StatusNo = 1
+					where IndentNo = @IndentNo and ItemNo = @ItemNo and isnull(MakeNo,0) = isnull(@MakeNo,0)
+					and isnull(TechnicalGradeNo,0) = isnull(@TechnicalGradeNo,0)
+					and IndentQty > POQty and StatusNo =2
+		
+		Update IID set StatusNo = 1
+		From Inventory.IndentItemdetail IID
+					where IndentNo = @IndentNo and ItemNo = @ItemNo and isnull(MakeNo,0) = isnull(@MakeNo,0)
+					and isnull(TechnicalGradeNo,0) = isnull(@TechnicalGradeNo,0)
+					and IndentQty > POQty and POQty =0
+					And Not Exists (Select 1
+									From Inventory.ChangeIndentStatusItemDetails CID
+									Inner Join Inventory.ChangeIndentStatusMain CIS on CIS.ChangeIndentStatusNo=CID.ChangeIndentStatusNo
+									Where CIS.IndentNo=IID.IndentNo
+									And CID.ItemNo=IID.ItemNo
+									And Isnull(CID.MakeNo,0)=Isnull(IID.MakeNo,0)
+									And isnull(TechnicalGradeNo,0) = isnull(@TechnicalGradeNo,0)
+									)--- Don't change status if Indent is cancelled, it we don't apply this (exists code) here then it is making issue in POAmenmdent (direct authorization)
+									--- Indent item's status getting changed 1 from 4 and then it changed to inprogress.
+					
+	 end
+	 if @StatusNo <> 2
+	 begin
+		Update Inventory.IndentItemdetail set  StatusNo = @StatusNo
+					where IndentNo = @IndentNo and ItemNo = @ItemNo and isnull(MakeNo,0) = isnull(@MakeNo,0)
+					and isnull(TechnicalGradeNo,0) = isnull(@TechnicalGradeNo,0)
+	 end
+	 
+	 -- Preferences list Authpoized/Hold/Cancel/Short Close/Completed
+	 
+	 if exists(select 1 from Inventory.IndentItemDetail where IndentNo = @IndentNo and statusNo =1)
+	 begin
+	   if exists (select 1 from purchase.RFQIndentDetail where indentNo = @IndentNo)
+		update Inventory.IndentMain set StatusNo = 8 where IndentNo= @IndentNo
+	   else if exists (select 1 from purchase.POIndentDetail where indentNo = @IndentNo)
+		 update Inventory.IndentMain set StatusNo = 8 where IndentNo= @IndentNo
+	   else if exists (select 1 from Inventory.GRNItemIndentDetail giid
+						inner join Inventory.GRNItemDetail gd  on gd.GRNNo = giid.GRNNo 
+						 where gd.POAmendmentNo is null and indentNo = @IndentNo)
+		update Inventory.IndentMain set StatusNo = 8 where IndentNo= @IndentNo				  
+	   else
+	     update Inventory.IndentMain set StatusNo = 1 where IndentNo= @IndentNo	 
+		
+	 end	
+	 else if exists(select 1 from Inventory.IndentItemDetail where IndentNo = @IndentNo and statusNo =8)
+	 begin
+	   if exists (select 1 from purchase.RFQIndentDetail where indentNo = @IndentNo)
+		update Inventory.IndentMain set StatusNo = 8 where IndentNo= @IndentNo
+	   else if exists (select 1 from purchase.POAmendmentIndentDetail where indentNo = @IndentNo)
+		 update Inventory.IndentMain set StatusNo = 8 where IndentNo= @IndentNo
+	   else if exists (select 1 from Inventory.GRNItemIndentDetail giid
+						inner join Inventory.GRNItemDetail gd  on gd.GRNNo = giid.GRNNo 
+						 where gd.POAmendmentNo is null and indentNo = @IndentNo)
+	    update Inventory.IndentMain set StatusNo = 8 where IndentNo= @IndentNo
+	   else
+	     update Inventory.IndentMain set StatusNo = 1 where IndentNo= @IndentNo	 
+		
+	 end	
+	 else if exists(select 1 from Inventory.IndentItemdetail where IndentNo = @IndentNo and Statusno = 3 )-- Hold 
+		update Inventory.indentMain set StatusNo =3 where IndentNo = @IndentNo
+	 else if exists(select 1 from Inventory.IndentItemdetail where IndentNo = @IndentNo and Statusno = 4 )--cancel
+	 	update Inventory.indentMain set StatusNo =4 where IndentNo = @IndentNo
+	else if exists(select 1 from Inventory.IndentItemdetail where IndentNo = @IndentNo and Statusno=7)--shortclose
+	 	update Inventory.indentMain set StatusNo =7 where IndentNo = @IndentNo						
+	else if exists(select 1 from Inventory.IndentItemdetail where IndentNo = @IndentNo and Statusno=2)--completed
+		update Inventory.indentMain set StatusNo =2 where IndentNo = @IndentNo
+
+set @OutputStatus =1
+set @Result='Success'
+end try
+begin catch
+set @OutputStatus =0
+set @Result=error_message()
+
+		select 0, error_message()
+end Catch
+
+
+END

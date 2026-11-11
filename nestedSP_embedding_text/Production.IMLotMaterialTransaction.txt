@@ -1,0 +1,629 @@
+Stored procedure Production.IMLotMaterialTransaction: For Intermediate Lot Transaction. Called from Inventory.IGRNAuthorize.
+Writes: Production.IntermediateLotBillDetail, Production.IntermediateLotDetail, Production.IntermediateLotSummary
+Reads: Finance.Setting, GlobalData.FormMaster, Inventory.GRNMain, masterdata.mActivityMaster, masterdata.mItemMaster, masterdata.mItemWarehouseDetail, ProcessProduction.BatchOrderAmendmentMain, ProcessProduction.BatchOrderRejectionMain, ProcessProduction.ManufactureEntryMain, Production.BOMRevisionMain, Production.BOMRevisionMarkActivityMapping, Production.BOMRevisionMarkDetail, Production.ConsumptionEntryMain, Production.IntermediateLotSummary, Production.JobCardMain, Production.ProductionEntryJobCardActivityDetail, Production.ProductionEntryMain, Production.WorkOrderInputMaterial, Production.WorkOrderMarkDetail, Quality.InspectionOrderMain, Quality.InspectionResultMain, VTPL.CBOMRejectionMain, VTPL.InspectionEntryMain, VTPL.InternalShortageMain
+Parameters: @TransacionType varchar(1), @IMLotSummaryNo int OUTPUT, @IMLotDetailNo int OUTPUT, @Status bit OUTPUT, @result varchar(1000) OUTPUT, @ProductionUnitNo int, @TransactionFlag char(4), @DocumentNo int, @JobCardNo int, @WorkOrderNo int, @ActivityNo smallint, @BOMRevisionSerialNo int, @BOMRevisionNo int, @ItemNo int, @ReceivedQty decimal(12,3), @IssuedQty decimal(12,3), @RejectedQty decimal(12,3), @ItemRate money, @DivisionNo int, @WarehouseNo smallint, @AssignTo smallint, @SequenceNo tinyint, @IsFinishedGoods bit = 0, @IsInspectionRequired bit = 0, @IsUsedInSameJC Bit, @FirstCF Decimal(12,3), @SecondCF Decimal(12,3), @ContractorNo Int = Null, @BatchOrderAmendmentNo int = null, @SalesOrderAmendmentNo int = null, @HeatNo varchar(30) = null, @ParentIMLotSummaryNo int = Null, @FirstInvLotSummaryNo int = Null, @HeatNoInternal varchar(30) = null
+Calls procedures: Inventory.InvLotMaterialTransaction
+Author: Alok, created 1 Feb 2014
+Code:
+ 
+-- =============================================
+-- Author:		Alok
+-- Create date: 1 Feb 2014
+-- Description:	For Intermediate Lot Transaction
+-- =============================================
+
+CREATE PROCEDURE [Production].[IMLotMaterialTransaction]
+(
+	@TransacionType varchar(1),      --  I = Insert , U = Update  in FGLotSummary 
+	@IMLotSummaryNo int output,
+	@IMLotDetailNo int output,
+	@Status bit output,
+	@result varchar(1000) output,
+	@ProductionUnitNo int, 
+	@TransactionFlag char(4),
+	@DocumentNo int,  
+	@JobCardNo int, 
+	@WorkOrderNo int, 
+	@ActivityNo smallint, 
+	@BOMRevisionSerialNo int, 
+	@BOMRevisionNo int, 
+	@ItemNo int, 	
+	@ReceivedQty decimal(12,3), 
+	@IssuedQty decimal(12,3), 
+	@RejectedQty decimal(12,3),
+	@ItemRate money, 
+	@DivisionNo int, 	
+	@WarehouseNo smallint,
+	@AssignTo smallint,	
+	@SequenceNo tinyint ,
+	@IsFinishedGoods bit =0	,
+	@IsInspectionRequired bit =0,
+	@IsUsedInSameJC Bit,  -- Pass Zero in not from production entry
+	@FirstCF Decimal(12,3),
+	@SecondCF Decimal(12,3),
+	@ContractorNo Int = Null ,
+	@BatchOrderAmendmentNo int = null,
+	@SalesOrderAmendmentNo int = null,
+	@HeatNo varchar(30) = null,
+	@ParentIMLotSummaryNo int =Null,
+	@FirstInvLotSummaryNo int =Null,
+	@HeatNoInternal varchar(30) = null
+)
+AS
+BEGIN	
+Declare @ErrorMsg Varchar(100),@balQty decimal(15,3) 
+	DECLARE  @LotNo varchar(100) ,@BalanceQty decimal(12,3) 
+	,@DocumentNoYearly VARCHAR(30),@DocumentDate SMALLDATETIME
+	,@IsAuthorized bit,@ReleaseQty decimal(12,3),@EndDate smalldatetime
+	, @IsAccountableStock bit,@CompanyNo tinyint
+	,@YearNo tinyint,@BomTypeNo TinyInt,@IsReadyForUse Bit=1
+	,@NextInspectionActivityNo SmallInt ,@ProductionStatusNo tinyint
+	
+	Declare @TransactionFormNo SmallInt
+	       ,@maxActivityNo smallint,@QualitySourceDocNo Int 
+	
+
+SET NOCOUNT ON;
+BEGIN TRY
+
+-- ============================================ FETCH Record from Particular Table ==============================
+declare @GetDate datetime = GETDATE()
+
+	Select @TransactionFormNo=FormNo 
+	From GlobalData.FormMaster
+	Where FormCode=@TransactionFlag
+	
+
+
+IF @TransactionFlag  = 'PSPE' --  Production Entry
+   BEGIN
+		SELECT  @DocumentNoYearly = PEM.DocumentNoYearly, 
+		@DocumentDate = DocumentDate, @DivisionNo =DivisionNo,@WareHouseNo=PEM.WareHouseNo
+		,@IsAuthorized=case when PEM.AuthorizedBy Is not null then 1 else 0 end
+		,@CompanyNo=CompanyNo 
+		FROM Production.ProductionEntryMain PEM				
+		WHERE PEM.ProductionEntryNo = @DocumentNo
+		
+		Select @AssignTo = JCM.AssignToResourceNo 
+		From Production.JobCardMain JCM
+		Where JCM.JobCardNo=@JobCardNo
+		
+		If @IsInspectionRequired=1
+		BEGIN
+			Set @IsReadyForUse=0
+		END	
+
+	END  
+Else IF @TransactionFlag  = 'PCSE' --  Consumption Entry
+   BEGIN
+		SELECT  @DocumentNoYearly = CEM.DocumentNoYearly, 
+		@DocumentDate = DocumentDate, @DivisionNo =DivisionNo,@WareHouseNo=CEM.WareHouseNo
+		,@IsAuthorized=case when CEM.AuthorizedBy Is not null then 1 else 0 end
+		,@CompanyNo=CompanyNo 
+		FROM Production.ConsumptionEntryMain CEM
+		WHERE CEM.ConsumptionEntryNo= @DocumentNo
+
+	END  	
+Else IF @TransactionFlag  = 'QMIR' --  Consumption Entry
+   BEGIN
+		SELECT  @DocumentNoYearly = IRM.DocumentNoYearly, 
+		@DocumentDate = IRM.DocumentDate, @DivisionNo =IRM.DivisionNo		
+		,@IsAuthorized=case when IRM.AuthorizedBy Is not null then 1 else 0 end
+		,@CompanyNo=IRM.CompanyNo
+		,@QualitySourceDocNo=IOM.SourceDocumentNo		
+		,@IsFinishedGoods=0 --- To Set it Zero
+		,@ProductionStatusNo = ProductionStatusNo
+		FROM Quality.InspectionResultMain IRM
+		Inner Join Quality.InspectionOrderMain IOM on IOM.InspectionOrderNo=IRM.InspectionOrderNo
+		WHERE IRM.InspectionResultNo=@DocumentNo
+	
+		
+	END  	
+Else IF @TransactionFlag  = 'IGRN' --  GRN
+   BEGIN
+		SELECT  @DocumentNoYearly = CEM.DocumentNoYearly, 
+		@DocumentDate = DocumentDate, @DivisionNo =DivisionNo
+		,@IsAuthorized=case when CEM.AuthorizedBy Is not null then 1 else 0 end
+		,@CompanyNo=CompanyNo 
+		FROM Inventory.GRNMain CEM
+		WHERE CEM.GRNNo= @DocumentNo
+
+	END 	
+Else IF @TransactionFlag  = 'VTIE' --  isnpection entry
+   BEGIN
+		SELECT  @DocumentNoYearly = CEM.DocumentNoYearly, 
+		@DocumentDate = DocumentDate, @DivisionNo =DivisionNo
+		,@IsAuthorized=case when CEM.AuthorizedBy Is not null then 1 else 0 end
+		,@CompanyNo=CompanyNo 
+		FROM vtpl.InspectionEntryMain  CEM
+		WHERE CEM.InspectionEntryNo = @DocumentNo
+
+	END
+	
+Else IF @TransactionFlag  = 'VTIS' --  internal Shortage
+   BEGIN
+		SELECT  @DocumentNoYearly = CEM.DocumentNoYearly, 
+		@DocumentDate = DocumentDate, @DivisionNo =DivisionNo
+		,@IsAuthorized=case when CEM.AuthorizedBy Is not null then 1 else 0 end
+		,@CompanyNo=CompanyNo 
+		FROM VTPL.InternalShortageMain CEM
+		WHERE CEM.InternalShortageNo = @DocumentNo
+
+	END
+Else IF @TransactionFlag  = 'VTBR' --  cbom rejection
+   BEGIN
+		SELECT  @DocumentNoYearly = CEM.DocumentNoYearly, 
+		@DocumentDate = DocumentDate, @DivisionNo =DivisionNo
+		,@IsAuthorized=case when CEM.AuthorizedBy Is not null then 1 else 0 end
+		,@CompanyNo=CompanyNo 
+		FROM vtpl.CBOMRejectionMain  CEM
+		WHERE CEM.CBOMRejectionNo  = @DocumentNo
+
+	END 	
+Else IF @TransactionFlag  = 'BPPE'  
+   BEGIN
+		SELECT  @DocumentNoYearly = DocumentNoYearly, 
+		@DocumentDate = DocumentDate, @DivisionNo =DivisionNo		
+		,@IsAuthorized=case when AuthorizedBy Is not null then 1 else 0 end
+		,@CompanyNo=CompanyNo
+		FROM ProcessProduction.ManufactureEntryMain
+			where ManufactureNo = @DocumentNo 
+	
+		if @IsInspectionRequired = 1
+			set @IsReadyForUse = 0
+		
+	END   			
+Else IF @TransactionFlag  = 'BORC'  
+   BEGIN
+		SELECT  @DocumentNoYearly = DocumentNoYearly, 
+		@DocumentDate = DocumentDate, @DivisionNo =DivisionNo		
+		,@IsAuthorized=case when AuthorizedBy Is not null then 1 else 0 end
+		,@CompanyNo=CompanyNo
+		FROM ProcessProduction.BatchOrderRejectionMain 
+			where BatchRejectionNo = @DocumentNo 
+		
+	END  
+-- ================================ Generate LOT No. and Insert Record Into FGLOTSummary ====================== 
+
+	IF @TransacionType = 'I'		-- In case of Insering Records into FGLOTSummary 
+      BEGIN							-- Start Case 'I'
+
+	  	--SELECT @LOTNo = isnull(max(LOTNo),0) + 1 FROM [Production].[FGLotSummary]
+	  	--WHERE ProductionUnitNo =@ProductionUnitNo and ISNUMERIC(LOTNo)=1
+	  	
+	  	if not exists(Select 1 from masterdata.mItemWarehouseDetail 
+	  				  Where ItemNo = @ItemNo and WarehouseNo =@WareHouseNo 
+	  				  And CompanyNo =@CompanyNo and ISNULL(DivisionNo,0)= ISNULL(@DivisionNo,0) 
+	  				  )
+	  	begin
+	  		Select @ErrorMsg= IM.ItemDescription + ' is not linked with selected ware house '  From masterdata.mItemMaster IM Where ItemNo=@ItemNo
+			raiserror(@ErrorMsg,16,-1) 
+	  	end			  
+					
+	
+
+		if @LotNo is null
+		begin      
+ 				if @LotNo is null
+					set @LotNo= @DocumentNoYearly
+				else 
+					set  @LotNo	= @LotNo + '/' + @DocumentNoYearly
+					
+				Declare @ItemCount as Int
+				select @ItemCount = count(1) from Production .IntermediateLotSummary  where ItemNo = @ItemNo
+				
+				set @LotNo=@LotNo + '/' + Convert(varchar,(Right(Replicate('0',4)+
+						Convert(varchar,isnull(@ItemCount,0)+ 1),4)))		
+		end
+	
+		-- BOMType
+		Select @BomTypeNo=BOMTypeNo
+		From Production.BOMRevisionMain
+		Where BOMRevisionNo=@BOMRevisionNo
+		
+		If @BomTypeNo = 1 -- Assembly
+		BEGIN
+				If Not Exists(
+							Select 1
+							From Production.WorkOrderInputMaterial 
+							Where ItemNo=@ItemNo
+							And WorkOrderNo=@WorkOrderNo
+							And BOMRevisionSerialNo is Null
+						 ) -- If Item is not in Input then only it is finished goods
+				BEGIN
+					Select @IsFinishedGoods=1
+				END
+		END
+		ELSE If @BomTypeNo=2 -- Non Assembly
+		BEGIN
+				Declare @TempSeqNo SmallInt
+				
+				Select @TempSeqNo=tt.Id
+				From Production.WorkOrderMarkDetail MD
+				Inner Join Production.BOMRevisionMarkActivityMapping AM on MD.BOMRevisionSerialNo=AM.BOMRevisionSerialNo
+																And MD.BOMRevisionNo=AM.BOMRevisionNo
+																And AM.RevisionNo=MD.BOMRevisionMarkActivityRevisionNo
+				Cross Apply (Select * From masterdata.Split(AM.ActivityNos,','))tt
+				Inner join masterdata.mActivityMaster ActM on ActM.ActivityNo=tt.Data
+				Where MD.WorkOrderNo=@WorkOrderNo
+				And MD.BOMRevisionSerialNo=@BOMRevisionSerialNo
+				And MD.BOMRevisionNo=@BOMRevisionNo
+				And tt.Data=@ActivityNo
+				
+			-- If Activity is not sub assembly then next activity will on same mark				
+			-- Else Activity is sub assembly then next activity will be on next or parent mark
+
+			IF Exists (Select 1 From masterdata.mActivityMaster 
+					   Where ActivityNo=@ActivityNo
+					   And IsSubAssemblyType=0)
+			BEGIN					   					
+				Select @NextInspectionActivityNo=tt.ActivityNo
+				From (
+					Select ActM.ActivityNo,ActM.ActivityTypeNo,tt.Id
+					From Production.WorkOrderMarkDetail MD
+					Inner Join Production.BOMRevisionMarkActivityMapping AM on MD.BOMRevisionSerialNo=AM.BOMRevisionSerialNo
+																	And MD.BOMRevisionNo=AM.BOMRevisionNo
+																	And AM.RevisionNo=MD.BOMRevisionMarkActivityRevisionNo
+					Cross Apply (Select * From masterdata.Split(AM.ActivityNos,','))tt
+					Inner join masterdata.mActivityMaster ActM on ActM.ActivityNo=tt.Data
+					Where MD.WorkOrderNo=@WorkOrderNo
+					And MD.BOMRevisionSerialNo=@BOMRevisionSerialNo
+					And MD.BOMRevisionNo=@BOMRevisionNo
+					)tt
+				Where tt.Id=@TempSeqNo+1
+				And tt.ActivityTypeNo=2 -- Inspection Type Activity
+				And @TransactionFlag In ('PSPE','QMIR','IGRN')
+			END
+			ELSE
+			BEGIN
+				Select @NextInspectionActivityNo=tt.ActivityNo
+				From (
+					Select ActM.ActivityNo,ActM.ActivityTypeNo,tt.Id
+					From Production.WorkOrderMarkDetail MD
+					Inner Join Production.BOMRevisionMarkActivityMapping AM on MD.BOMRevisionSerialNo=AM.BOMRevisionSerialNo
+																	And MD.BOMRevisionNo=AM.BOMRevisionNo
+																	And AM.RevisionNo=MD.BOMRevisionMarkActivityRevisionNo
+					Cross Apply (Select * From masterdata.Split(AM.ActivityNos,','))tt
+					Inner join masterdata.mActivityMaster ActM on ActM.ActivityNo=tt.Data
+					Where MD.WorkOrderNo=@WorkOrderNo
+					And MD.BOMRevisionSerialNo=@BOMRevisionSerialNo
+					And MD.BOMRevisionNo=@BOMRevisionNo
+					)tt
+				Where tt.Id=1--Else Activity is sub assembly then next activity will be on next or parent mark
+							 -- And check 1st activity of parent mark
+				And tt.ActivityTypeNo=2 -- Inspection Type Activity
+				And @TransactionFlag In ('PSPE','QMIR','IGRN')
+			END	
+				
+
+				Select @maxActivityNo = tt.Data
+				From Production.WorkOrderMarkDetail WMD
+				Inner Join Production.BOMRevisionMarkActivityMapping BAM on BAM.BOMRevisionSerialNo=WMD.BOMRevisionSerialNo
+																		And BAM.BOMRevisionNo=WMD.BOMRevisionNo
+																		And BAM.RevisionNo=WMD.BOMRevisionMarkActivityRevisionNo
+				Cross apply masterdata.Split (BAM.ActivityNos,',') tt														
+				Where WMD.BOMRevisionSerialNo = @BOMRevisionSerialNo
+				And WMD.BOMRevisionNo =@BOMRevisionNo
+				And WMD.WorkOrderNo=@WorkOrderNo
+				And @TransactionFlag In ('PSPE','QMIR','IGRN')
+				Order by tt.Id  asc -- Assign Last Activty into variable
+
+				--- If activity is not applicable on any parent mark then 
+				If @maxActivityNo is Null
+				And Exists (Select 1 From Production.BOMRevisionMarkDetail Md Where MD.BOMRevisionSerialNo=@BOMRevisionSerialNo and MD.BOMRevisionNo=@BOMRevisionNo)
+				And  Exists (Select 1 From masterdata.mActivityMaster Where ActivityNo=@ActivityNo And IsSubAssemblyType=1) -- SubAssemblyActivity/Welding
+				And Not Exists (select 1 From Production.WorkOrderMarkDetail MD where MD.WorkOrderNo=@WorkOrderNo and MD.BOMRevisionSerialNo=@BOMRevisionSerialNo and MD.BOMRevisionNo=@BOMRevisionNo)  -- When Parent Mark not exists on work order
+				BEGIN
+						Select @maxActivityNo = tt.Data
+						From Production.BOMRevisionMarkDetail MD 
+						Outer Apply (
+									Select top 1 CMD.BOMRevisionSerialNo,CMD.BOMRevisionNo,CMD.ActivityNos,CMD.Activity
+									From Production.BOMRevisionMarkDetail CMD 
+									Where CMD.ParentBOMRevisionSerialNo=MD.BOMRevisionSerialNo
+									And CMD.ParentBOMRevisionNo=MD.BOMRevisionNo
+									)Chd
+						Inner Join Production.BOMRevisionMarkActivityMapping BAM on BAM.BOMRevisionSerialNo=Chd.BOMRevisionSerialNo
+																				And BAM.BOMRevisionNo=Chd.BOMRevisionNo
+																				And BAM.RevisionNo=( Select Max(WMD.BOMRevisionMarkActivityRevisionNo) From  Production.WorkOrderMarkDetail WMD Where WMD.WorkorderNo=@WorkOrderNo) 
+						Cross apply masterdata.Split (BAM.ActivityNos,',') tt														
+						Where MD.BOMRevisionSerialNo = @BOMRevisionSerialNo
+						And MD.BOMRevisionNo =@BOMRevisionNo					
+						And @TransactionFlag In ('PSPE','QMIR','IGRN')
+						Order by tt.Id  asc -- Assign Last Activty into variable
+				END
+
+
+		END
+		
+		If @maxActivityNo=@ActivityNo And @BomTypeNo=2
+		BEGIN
+			Set @IsFinishedGoods=1
+		END
+		--Else
+		--BEGIN
+		--	Set @IsFinishedGoods=@IsFinishedGoods
+		--END
+		
+		Select @BalanceQty=@ReceivedQty		
+		
+		INSERT INTO [Production].[IntermediateLotSummary]
+				   ([ProductionUnitNo],[LotNo]
+				   ,[IsFinishedGoods],[TransactionFormNo]
+				   ,[DocumentNo],[DocumentNoYearly],[DocumentDate]
+				   ,[JobCardNo],[WorkOrderNo],[ActivityNo]
+				   ,[SequenceNo],[BOMRevisionSerialNo],[BOMRevisionNo]
+				   ,[ItemNo],[ReceivedQty],[IssuedQty],[RejectedQty]
+				   ,[BalanceQty],[ItemRate],[CompanyNo]
+				   ,[DivisionNo],[WarehouseNo],[AssignTo],IsInspectionRequired,IsReadyForUse,IsUsedInSameJC
+				   ,NextInspectionActivityNo,VendorNo,Vrate ,BatchOrderAmendmentNo , LRate,SalesOrderAmendmentNo,HeatNo 
+				   ,ParentIMLotSummaryNo,FirstInvLotSummaryNo
+				   ,HeatNoInternal 
+				   )
+		VALUES
+				   (@ProductionUnitNo,@LotNo
+				   ,@IsFinishedGoods,@TransactionFormNo
+				   ,@DocumentNo,@DocumentNoYearly,@DocumentDate
+				   ,@JobCardNo,@WorkOrderNo,@ActivityNo
+				   ,@SequenceNo,@BOMRevisionSerialNo,@BOMRevisionNo
+				   ,@ItemNo,@ReceivedQty,@IssuedQty,@RejectedQty
+				   ,@BalanceQty,@ItemRate,@CompanyNo
+				   ,@DivisionNo,@WarehouseNo,@AssignTo,@IsInspectionRequired,@IsReadyForUse,@IsUsedInSameJC
+				   ,@NextInspectionActivityNo,@ContractorNo,@ItemRate , @BatchOrderAmendmentNo 
+				   ,@ItemRate,@SalesOrderAmendmentNo,@HeatNo
+				   ,@ParentIMLotSummaryNo,@FirstInvLotSummaryNo
+				   ,@HeatNoInternal 
+				   )
+				   
+			
+		Set @IMLotSummaryNo = ident_current('Production.IntermediateLotSummary')
+		
+		insert into Production.IntermediateLotBillDetail(IMLotSummaryNo, BillNo, BillNoYearly, BillDate, PartyBillNo, PartyBillDate, 
+				TransactionFlag, BillQty, ItemRate, DiffRate, VRate, LotBalanceQty, CreatedDate)
+		select IMLotSummaryNo, ls.DocumentNo  , ls.DocumentNoYearly , ls.DocumentDate , null, null, @TransactionFlag, ls.ReceivedQty, ItemRate, 
+				0 , VRate, ls.ReceivedQty , @GetDate
+		from Production.IntermediateLotSummary ls where IMLotSummaryNo = @IMLotSummaryNo 
+				
+			
+		INSERT INTO [Production].[IntermediateLotDetail]
+			   ([IMLotSummaryNo],[TransactionFormNo],[DocumentNo],[DocumentNoYearly]
+			   ,[DocumentDate],[ReceivedQty],[IssuedQty],[RejectedQty]
+			   ,[IsAuthorized],[CompanyNo],[DivisionNo],[ItemRate],Vrate ,CreatedDate)
+		 VALUES
+			   (@IMLotSummaryNo,@TransactionFormNo,@DocumentNo,@DocumentNoYearly
+			   ,@DocumentDate,@ReceivedQty,@IssuedQty,@RejectedQty
+			   ,@IsAuthorized,@CompanyNo,@DivisionNo,@ItemRate,@ItemRate ,@GetDate)
+
+		
+		Set @IMLotDetailNo = ident_current('Production.IntermediateLotDetail')
+		
+		-- If It is Finished Goods then Create Finished Goods Lot
+			If @IsFinishedGoods = 1  And @IsReadyForUse=1
+			And (	@TransactionFlag='PSPE' or @TransactionFlag ='BPPE'
+					Or
+					 (@TransactionFlag='QMIR'
+						And Exists(Select 1 
+								From masterdata.mActivityMaster AM 
+								where AM.ActivityNo=@ActivityNo
+								and AM.ActivityTypeNo=2 )-- Inspection Type
+					 )
+				 )
+			BEGIN
+				Declare @InvLotSummaryNo int,@InvLotDetailNo int,@CombinationNo int
+				
+				Declare @Rate money =@ItemRate
+		
+				If Not Exists(	
+							Select 1
+							From Finance.Setting 
+							where CompanyNo= @CompanyNo 
+							And isnull(ProcessProductionEntryPostingInApp,0)=0
+						 )
+				BEGIN
+				--if @TransactionFlag not in('BPPE','QMIR') -- commenteed on 04 01 2020
+						Set @Rate=0 -- Because we are not doing posting
+				END
+
+				Select @CombinationNo = BPO.CombinationNo
+				from ProcessProduction.ManufactureEntryMain BPE
+				Inner join ProcessProduction.BatchOrderAmendmentMain BPO on BPE.BatchOrderAmendmentNo = BPO.BatchOrderAmendmentNo				
+				Where BPE.ManufactureNo = @DocumentNo and BPO.ItemNo = @ItemNo
+
+				exec [Inventory].[InvLotMaterialTransaction]
+				@TransacionType ='I' ,@ItemNo = @ItemNo ,@MakeNo =nUll ,
+				@AccountingReceivedQty = @ReceivedQty ,
+				@ReceivedQty =@ReceivedQty, @IssuedQty = null, @ReturnQty = null, @TransactionFlag =@TransactionFlag,
+				@DocumentNo = @DocumentNo, @ItemRate =@Rate,	@ProjectNo = null ,@DeptNo = null ,
+				@CostCenterNo = null ,	@BINNo = NUll, @WareHouseNo = @WareHouseNo , @VendorNo = null,
+				@IsOwnership =1 ,@IsReserved = 0 ,@IsCapital = 0 ,
+				@POAmendmentNo = null,@IndentNo = null,@GateEntryNo = null,
+				@StockNatureNo = 1 ,  @StockTypeNo =1, @TechnicalGradeNo= null,
+				@SalesOrderAmendmentNo= @SalesOrderAmendmentNo ,@RouteIdentity=null,
+				@InvStockTransferNo =null , @FIrstCF = @FirstCF ,@SecondCF =@SecondCF ,
+				@DispatchChallanNo =null, @JobCardNo =@JobCardNo, 
+				@WorkOrderNo =@WorkOrderNo,	@BOMRevisionSerialNo =@BOMRevisionSerialNo, @BOMRevisionNo =@BOMRevisionNo, 
+				@IMLotSummaryNo = @IMLotSummaryNo,
+				@Status = @Status output,
+				@Result = @Result  output,
+				@InvLotSummaryNo = @InvLotSummaryNo output,
+				@InvLotDetailNo =@InvLotDetailNo output,
+				@IsManageCF=1,@CombinationNo = @CombinationNo,@HeatNo = @HeatNo,@HeatNoInternal=@HeatNoInternal,
+				@FirstInvLotSummaryNo=@FirstInvLotSummaryNo
+
+				if @Status <> 1
+					raiserror (@Result,16,-1)
+					
+					 
+			END
+		
+
+	  END				-- End Case 'I'
+
+	ELSE IF @TransacionType = 'U' --	Issue/Consumption From Lot
+	  BEGIN             -- Start Case 'U'	  
+
+		
+		Declare @IMLotDetail as table (IDNo smallint,FGLotSummaryNo int,balanceQty decimal(12,3))
+		Declare @iRowCount smallint, @iCount smallint ,@TempFGLotSummaryNo int,@TempIssuedQty decimal(12,3)
+				
+		insert into @IMLotDetail
+		Select row_Number()over (order by ILS.IMLotSummaryNo), ILS.IMLotSummaryNo, BalanceQty 
+		From Production.IntermediateLotSummary ILS
+		Where BalanceQty >0
+		And ILS.IMLotSummaryNo = @IMLotSummaryNo
+		And (ILS.IsReadyForUse=1
+			 Or
+			 (
+			   @TransactionFlag='QMIR'
+			   And ILS.IsInspectionRequired=1			
+			   And ILS.IsReadyForUse=0
+			   And @QualitySourceDocNo in(2,10) -- JC(Then only it is case is InspectionRequired)			   
+			 )
+			 Or
+			 (
+			   @TransactionFlag='BORC'			   			   
+			 ) -- Show all intermediate lot having balance qty
+			)
+										
+		SET @iRowCount = @@ROWCOUNT	
+					
+		If @iRowCount=0 
+		BEGIN
+			
+			
+			Select @ErrorMsg='Insufficient stock for selected lot' + IsNull(' of "' + IM.ItemDescription + ' LotNo-' + CONVERT(varchar,@IMLotSummaryNo) +
+									'"','') 
+			From masterdata.mItemMaster IM
+			Where ItemNo=@ItemNo
+				
+			raiserror(@ErrorMsg,16,-1)	
+		END	
+
+
+					
+		IF (@IssuedQty>0 Or @RejectedQty>0)	
+		BEGIN
+			INSERT INTO [Production].[IntermediateLotDetail]
+				   ([IMLotSummaryNo],[TransactionFormNo],[DocumentNo],[DocumentNoYearly]
+				   ,[DocumentDate],[ReceivedQty],[IssuedQty],[RejectedQty]
+				   ,[IsAuthorized],[CompanyNo],[DivisionNo],[ItemRate],Vrate,CreatedDate  )
+			 select @IMLotSummaryNo,@TransactionFormNo,@DocumentNo,@DocumentNoYearly
+				   ,@DocumentDate,@ReceivedQty,@IssuedQty,@RejectedQty
+				   ,@IsAuthorized,@CompanyNo,@DivisionNo,@ItemRate,Vrate ,@GetDate
+				   from Production.IntermediateLotSummary where IMLotSummaryNo = @IMLotSummaryNo 
+				   
+			Update  Production .IntermediateLotSummary  set 
+			BalanceQty = balanceQty - case when @IsAuthorized =1 then  @IssuedQty else 0 end
+								    - case when @IsAuthorized =1 then  @RejectedQty else 0 end
+			,IssuedQty= isnull(IssuedQty,0) + case when @IsAuthorized =1 then  @IssuedQty else 0 end
+			,RejectedQty = IsNull(RejectedQty,0)  + case when @IsAuthorized =1 then ISNULL( @RejectedQty,0) else 0 end
+			--,HeatNo = @HeatNo
+			Where IMLotSummaryNo =@IMLotSummaryNo
+					   
+		END		
+				
+
+		
+		Update  Production.IntermediateLotSummary  
+		Set IsReadyForUse=1
+		Where IMLotSummaryNo =@IMLotSummaryNo
+		And (@TransactionFlag='QMIR'
+			 And Exists(Select 1 
+				        From Production.IntermediateLotSummary ILS
+				        Where ILS.IMLotSummaryNo=@IMLotSummaryNo
+				        And ILS.IsReadyForUse=0
+				        And ILS.IsInspectionRequired=1
+				        )
+			 )
+			And IsReadyForUse=0	 
+			
+		If isnull(@ProductionStatusNo,1) <>3 and Exists(Select 1
+				 From Production.IntermediateLotSummary  ILS
+				 Where ILS.IMLotSummaryNo =@IMLotSummaryNo
+				 And @TransactionFlag='QMIR' And ILS.IsReadyForUse=1	 
+				 And ILS.BalanceQty>0
+				 And ILS.IsFinishedGoods=1
+				 ) -- When Lot is FinishGood and activity is last then create lot in inventory too
+		BEGIN 
+				Declare @InvLotSummaryNo1 int,@InvLotDetailNo1 int
+				Declare @AcceptedQty Decimal(12,3)
+				
+				Select @AcceptedQty=BalanceQty
+				,@ProductionUnitNo =ProductionUnitNo,@JobCardNo =JobCardNo
+				,@WorkOrderNo =WorkOrderNo,@ActivityNo =ActivityNo
+				,@BOMRevisionSerialNo =BOMRevisionSerialNo,@BOMRevisionNo =BOMRevisionNo
+				,@ItemNo =ItemNo,@WareHouseNo=WarehouseNo,@AssignTo=AssignTo
+				,@SequenceNo=SequenceNo,@HeatNo = HeatNo 
+				From Production.IntermediateLotSummary 
+				Where IMLotSummaryNo=@IMLotSummaryNo
+				
+				-- Find 1st CF and 2nd CF From Producton Entry.
+				--,@FirstCF = @FirstCF ,@SecondCF =@SecondCF,
+				
+				Select @FirstCF=PJCD.FirstCF
+				,@SecondCF=PJCD.SecondCF
+				From Production.ProductionEntryJobCardActivityDetail PJCD
+				Inner Join Production.ProductionEntryMain PEM on PEM.ProductionEntryNo=PJCD.ProductionEntryNo
+															And PEM.ProductTypeNo=2 -- Non-Assembly
+				Inner Join Production.IntermediateLotSummary ILS on ILS.TransactionFormNo=310
+																And ILS.DocumentNo=PJCD.ProductionEntryNo
+																And PJCD.JobCardNo=ILS.JobCardNo
+																And PJCD.BOMRevisionNo=ILS.BOMRevisionNo
+																And PJCD.BOMRevisionSerialNo=ILS.BOMRevisionSerialNo
+																And PJCD.ActivityNo=ILS.ActivityNo
+				Where PJCD.JobCardNo=@JobCardNo
+				And PJCD.BOMRevisionSerialNo=@BOMRevisionNo
+				And PJCD.BOMRevisionNo=@BOMRevisionSerialNo
+				And PJCD.ActivityNo=@ActivityNo			
+				
+				
+				Declare @FGRate money =@ItemRate
+		
+				If  Not Exists(	
+							Select 1
+							From Finance.Setting 
+							where CompanyNo=@CompanyNo
+							And isnull(ProcessProductionEntryPostingInApp,0)=0
+						 )
+				BEGIN
+						Set @FGRate=0
+				END
+
+				Exec [Inventory].[InvLotMaterialTransaction]
+				@TransacionType ='I' ,@ItemNo = @ItemNo ,@MakeNo =nUll ,
+				@AccountingReceivedQty = @AcceptedQty ,
+				@ReceivedQty =@AcceptedQty, @IssuedQty = null, @ReturnQty = null, @TransactionFlag =@TransactionFlag,
+				@DocumentNo = @DocumentNo, @ItemRate =@FGRate,	@ProjectNo = null ,@DeptNo = null ,
+				@CostCenterNo = null ,	@BINNo = NUll, @WareHouseNo = @WareHouseNo , @VendorNo = null,
+				@IsOwnership =1 ,@IsReserved = 0 ,@IsCapital = 0 ,
+				@POAmendmentNo = null,@IndentNo = null,@GateEntryNo = null,
+				@StockNatureNo = 1 ,  @StockTypeNo =1, @TechnicalGradeNo= null,
+				@SalesOrderAmendmentNo= null,@RouteIdentity=null,
+				@InvStockTransferNo =null 
+				,@FirstCF = @FirstCF ,@SecondCF =@SecondCF ,
+				@DispatchChallanNo =null, @JobCardNo =@JobCardNo, 
+				@WorkOrderNo =@WorkOrderNo,	@BOMRevisionSerialNo =@BOMRevisionSerialNo, @BOMRevisionNo =@BOMRevisionNo, 
+				@IMLotSummaryNo = @IMLotSummaryNo,
+				@Status = @Status output,
+				@Result = @Result  output,
+				@InvLotSummaryNo = @InvLotSummaryNo1 output,
+				@InvLotDetailNo =@InvLotDetailNo1 output,
+				@IsManageCF=1,@HeatNo = @HeatNo,@HeatNoInternal=@HeatNoInternal
+
+				if @Status <> 1
+					raiserror (@Result,16,-1)						
+
+		END	
+		
+	  END --end of	IF @TransacionType = 'U'	 
+
+ set @Status =1
+ set @result ='Success'
+
+
+END TRY
+    BEGIN CATCH
+		 set @Status = 0
+		 set @result =ERROR_MESSAGE()
+		Select 0, @result
+	END CATCH
+END

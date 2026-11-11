@@ -1,0 +1,84 @@
+Stored procedure Information.POSourceDetail: Indent/Sales Order Detail. Called from Purchase.PMPOPODetail.
+Reads: Inventory.IndentItemDetail, Inventory.IndentMain, masterdata.mCostCenterMaster, masterdata.mItemMaster, payroll.tblDeptMaster, Purchase.POIndentDetail, Purchase.POMain, Sales.SalesOrderAmendmentMain, Sales.SalesOrderItemDetail, Sales.SalesOrderMain
+Parameters: @CompanyNo tinyint, @DocumentDate smalldatetime, @PONo int
+Author: Teerath, created 16/11/2013
+Code:
+
+-- =============================================
+-- Author:		Teerath
+-- Create date: 16/11/2013
+-- Description:	Indent/Sales Order Detail
+-- =============================================
+CREATE PROCEDURE [Information].[POSourceDetail] 
+	-- Add the parameters for the stored procedure here
+	@CompanyNo tinyint,
+	@DocumentDate smalldatetime,
+	@PONo int
+	
+AS
+BEGIN
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+
+    -- Insert statements for procedure here
+	
+
+	declare @str varchar(max)
+    select @str=masterdata.JSForInformation('PMPO')
+    set @str=@str+masterdata.CSSForInformation('PMPO')
+	set @str=@str+'<table class="altrowstable" id="alternatecolorPOSourceDetail">'
+	set @str=@str+'<Caption><Font color="Maroon"><h3 align="Left"><b>Indent/Sales Order Detail</b></h3></Font></Caption>'
+    set @str=@str+'<tr><th>Sl. No.</th><th>Item Name</th><th>Indent No/Sales Order No</th><th>Date</th><th>Department</th><th>Quantity</th><th>Cost Center</th></tr>'
+	set @str=@str
+				 +( 
+					replace(
+					replace(
+					replace( 
+					replace( 
+					replace(
+					replace(
+					replace( 
+							(
+								Select	 Row_number() over (order by SOM.DocumentDate desc) as td1
+								        ,IM.ItemDescription td2
+										,ISNULL( IIM.DocumentNoYearly,SOM.DocumentNoYearly) td3
+										,ISNULL( IIM.DocumentDate,SOM.DocumentDate) td4
+										,ISNULL( DM.DeptName,'') td5
+										,ISNULL( II.IndentQty ,SOID.Quantity) td6
+										,ISNULL( CCM.CostCenterName,'') td7
+								From Purchase.POMain POM 
+								Inner JOIN Purchase.POIndentDetail POIND ON POIND.PONo=POM.PONo
+								Left Join Inventory.IndentMain IIM on POIND.IndentNo  = IIM.IndentNo
+								Left JOIN Inventory.IndentItemDetail II ON IIM.IndentNo = II.IndentNo
+																	And II.ItemNo=POIND.ItemNo
+																	And IsNull(II.MakeNo,0)=IsNull(POIND.IndentMakeNo,0)
+																	And IsNull(II.TechnicalGradeNo,0)=IsNull(poind.TechnicalGradeNo,0)																
+								Left Join Sales.SalesOrderAmendmentMain SOAM  On  POIND.SalesOrderAmendmentNo = SOAM.SalesOrderAmendmentNo
+								Left Join Sales.SalesOrderMain  SOM On SOAM.SalesOrderNo = SOM.SalesOrderNo
+								Left JOIN Sales.SalesOrderItemDetail SOID ON SOM.SalesOrderNo= SOID.SalesOrderNo
+																	And SOID.ItemNo=POIND.ItemNo
+																	And IsNull(SOID.MakeNo,0)=IsNull(POIND.IndentMakeNo,0)
+								Inner Join masterdata.mItemMaster IM On II.ItemNo = IM.ItemNo
+																		oR SOID.ItemNo = IM.ItemNo									
+								Left Join payroll.tblDeptMaster DM On IIM.DeptNo = DM.DeptNo 
+								Left Join masterdata.mCostCenterMaster CCM On II.CostCenterNo = CCM.CostCenterNo
+
+								Where POM.PONo = @PONo
+										And POM.DocumentDate = @DocumentDate
+										And POM.CompanyNo = @CompanyNo
+							for xml path('tr')),'<td1>','<td style="text-align: Center;">')
+							                   ,'<td2>','<td>')
+		   									   ,'<td3>','<td>')				
+											   ,'<td4>','<td>')
+											   ,'<td5>','<td>')
+		   									   ,'<td6>','<td style="text-align: Right;">')				
+											   ,'<td7>','<td>')
+											   											   
+									    	)
+								
+				   
+	set @str=@str+'</table>'
+	
+	select @str
+END

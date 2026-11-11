@@ -1,0 +1,216 @@
+Stored procedure Inventory.InvLotBillMapCalculation. Called from Finance.PBPBAuthorize.
+Writes: Inventory.InvLotBillDetail, Inventory.InvLotSummary
+Reads: Inventory.InvLotBillDetail, Inventory.InvLotDetail, Inventory.InvLotSummary, Inventory.InvlotSummaryRefDetail, Inventory.Setting, masterdata.mItemOtherInformation, masterdata.mWarehouse
+Parameters: @Documentno int, @TransactionFlag varchar(4), @OutputStatusNo bit OUTPUT, @OutputStatusRemarks varchar(1000) OUTPUT
+Code:
+CREATE PROCEDURE  [Inventory].[InvLotBillMapCalculation] 
+(@Documentno int ,@TransactionFlag varchar(4)
+ , @OutputStatusNo bit output
+ ,@OutputStatusRemarks varchar(1000) output
+)
+as
+begin
+Begin try
+
+
+if not exists  (select 1 from Inventory.InvLotBillDetail a,masterdata.mItemOtherInformation  im
+			 where BillNo =@Documentno and TransactionFlag =@TransactionFlag and im.ItemNo = a.ItemNo and im.StockValueMethodNo  = 4)
+begin
+	select @OutputStatusNo = 1 ,@OutputStatusRemarks = 'Success'
+	return
+end
+if not exists  (select 1 from Inventory.InvLotDetail a,masterdata.mItemOtherInformation  im
+			 where DocumentNo  =@Documentno and TransactionFlag =@TransactionFlag and im.ItemNo = a.ItemNo and im.StockValueMethodNo  = 4)
+begin
+	select @OutputStatusNo = 1 ,@OutputStatusRemarks = 'Success'
+	return
+end	
+
+
+declare @qty decimal(12,3) =0 , @MAPAmount decimal(18,6) =0,@itemNo int =0 ,@Warehouseno int =0
+    
+    ;with CTE
+			as
+			(select ld.InvLotSummaryNo InvLotSummaryNo ,ld.InvLotSummaryNo ParentInvlotSummaryNo from Inventory.InvLotDetail ld
+						inner join Inventory.InvLotBillDetail bd on bd.InvLotSummaryNo = ld.InvLotSummaryNo 
+							 where bd.BillNo = @Documentno and bd.TransactionFlag =@TransactionFlag 
+					 and ld.TransactionFlag ='IMST' group by ld.InvLotSummaryNo
+			union all
+			select ls.InvLotSummaryNo ,CTE.ParentInvlotSummaryNo    from CTE , Inventory.InvlotSummaryRefDetail ls
+					where ls.ParentInvLotSummaryNo = CTE.InvLotSummaryNo  and ls.InvLotSummaryNo <>ls.ParentInvLotSummaryNo 
+)
+		select CTE.ParentInvlotSummaryNo, SUM(ls.ReceivedQty) ReceivedQty, SUM(IssuedQty ) IssuedQty into #MainInvSummary from cte 
+		inner join Inventory.InvLotSummary ls on ls.InvLotSummaryNo = CTE.InvLotSummaryNo 
+		inner join masterdata.mWarehouse wh on wh.WareHouseNo = ls.WarehouseNo  and @TransactionFlag <>'ISML'
+		where wh.TypeNo = 1 and wh.Ownership =1 and ls.RouteIdentity is not null group by CTE.ParentInvlotSummaryNo 
+  
+		
+update bd set  
+			 @qty = case when @itemNo=0 or (@itemNo = ls.ItemNo AND @Warehouseno = ls.WarehouseNo ) 
+						then @qty + ls.BalanceQty else ls.BalanceQty  end  
+			 ,@MAPAmount = case when @itemNo=0 or (@itemNo = ls.ItemNo AND @Warehouseno = ls.WarehouseNo ) then 
+					@MAPAmount + ((ls.BalanceQty  * isnull(dt.MAPRate, ls.MAPRate)) + (bd.BillQty * bd.DiffRate )) 
+						- ISNULL(bd.IntransitQty * bd.DiffRate ,0)  - ISNULL(inv.receivedqty * bd.DiffRate,0)
+				else 
+				   ((ls.BalanceQty  * isnull(dt.MAPRate, ls.MAPRate  )) + (bd.BillQty * bd.DiffRate )) - ISNULL(bd.IntransitQty * bd.DiffRate ,0)  
+						 - ISNULL(inv.receivedqty * bd.DiffRate,0)
+				end  
+		 , ClosingQty = dt.ClosingQty + @qty 
+		 , @Itemno = ls.ItemNo 
+		 ,@Warehouseno = ls.WarehouseNo 
+		, MAPAmount =  (dt.ClosingQty * isnull(dt.MAPRate,0)) + @MAPAmount 
+		--, MAPAmount =  dt.ClosingQty 
+		,Status ='A'
+		,MAPDiffRate = case when (dt.ClosingQty  + ls.BalanceQty)>0 
+					 then  (((dt.ClosingQty * isnull(dt.MAPRate,0)) + @MAPAmount)/(dt.ClosingQty + @qty )) - ISNULL(dt.MAPRate,ls.MAPRate )
+							   when @qty>0 then (@MAPAmount/@qty ) - ls.MAPRate else  null end
+		--,MAPDiffRate = case when (dt.ClosingQty  + ls.BalanceQty)>0 
+		--			 then  (( (dt.ClosingQty * isnull(dt.MAPRate,0)) + 
+		--			((ls.BalanceQty * ls.MAPRate ) + (bd.BillQty * bd.DiffRate)) - ISNULL(bd.IntransitQty * bd.DiffRate ,0)  - ISNULL(inv.receivedqty * bd.DiffRate,0))
+		--			/(dt.ClosingQty  + ls.BalanceQty  ))
+		--					 - ISNULL(dt.MAPRate,ls.MAPRate ) when @qty>0 then (@MAPAmount/@qty ) - ls.MAPRate else  null end
+		--,PriceVarianceAmount = 	case when  dt.ClosingQty =0 then (bd.BillQty -ISNULL(bd.IntransitQty,0)) * bd.DiffRate else null end			 
+	from Inventory.InvLotBillDetail bd With (Index = invLotBillDetail_Createddate_IX)
+	inner join Inventory.InvLotSummary ls on ls.InvLotSummaryNo = bd.InvLotSummaryNo 
+	left join #MainInvSummary inv on inv.ParentInvLotSummaryNo = ls.InvLotSummaryNo 
+	inner join masterdata.mItemOtherInformation ioi on ioi.ItemNo = ls.ItemNo 
+	outer apply 
+	(select isnull(sum(BalanceQty),0)ClosingQty ,Max(MAPRate) MAPRate from
+	Inventory.InvLotSummary  cls
+	where cls.itemno = ls.ItemNo  and cls.warehouseno = ls.warehouseno 
+	and cls.companyno = ls.CompanyNo and isnull(cls.Divisionno,0) = isnull(ls.DivisionNo,0)
+	and isnull(cls.MakeNo,0)=ISNULL(ls.MakeNo,0)
+	and cls.isCapital=0 and balanceQty>0      
+	and not exists (select 1 from Inventory.InvLotBillDetail where 
+				 BillNo = @Documentno and TransactionFlag =@TransactionFlag and
+					  InvLotSummaryNo = cls.InvLotSummaryNo ) 
+	) dt
+	where bd.BillNo = @Documentno --and bd.TransactionFlag = ls.TransactionFlag 
+	and bd.TransactionFlag = @TransactionFlag 
+	and ls.IsCapital =0 and ioi.StockValueMethodNo = 4 
+  
+--select MAPAmount/ClosingQty, * from Inventory.InvLotBillDetail where BillNo = @Documentno and TransactionFlag = @TransactionFlag 
+
+update bd set 
+MAPDiffRate = case when bd.InvLotBillDetailNo = tt.InvLotBillDetailNo then
+					bd.MAPDiffRate
+					else 0 end
+
+from  Inventory.InvLotSummary pls  
+left join #MainInvSummary inv on inv.ParentInvLotSummaryNo = pls.InvLotSummaryNo 
+inner join Inventory.Setting s on s.CompanyNo = pls.CompanyNo 
+inner join inventory.InvLotBillDetail bd on bd.InvLotSummaryNo = pls.InvLotSummaryNo 
+outer apply(
+select ROW_NUMBER() over (order by nrbd.ItemNo,  InvLotBillDetailNo desc )SLNo, MAPAmount / ClosingQty NewRate  ,InvLotBillDetailNo
+			from inventory.invLotBillDetail nrbd 
+			inner join Inventory.InvLotSummary nrls on  nrbd.InvLotSummaryNo = nrls.InvLotSummaryNo 
+	where nrbd.BillNo = @Documentno   and nrbd.TransactionFlag = @TransactionFlag 
+	and nrls.IsCapital =0  --and nrls.DocumentNo = pls.DocumentNo and nrls.TransactionFlag = pls.TransactionFlag
+			and nrls.ItemNo = pls.ItemNo and ISNULL(nrls.MakeNo,0) = ISNULL(pls.MakeNo,0) 
+			and nrls.CompanyNo = pls.CompanyNo and ISNULL(nrls.DivisionNo ,0) = ISNULL(pls.DivisionNo ,0)
+			and nrls.WarehouseNo = pls.WarehouseNo and ClosingQty>0 
+ ) tt
+ where bd.BillNo = @Documentno  and bd.TransactionFlag = @TransactionFlag and SLNo=1
+        		  
+update bd set 
+ MAPAmount = case when 100*( (NewRate /MAPRate)-1) > MAPPlus then ( pls.MAPRate +  (pls.MAPRate * 0.01 * s.MAPPlus))* closingQty
+			  when 100*( 1-(NewRate /MAPRate))> MAPMinus then ( pls.MAPRate -  (pls.MAPRate * 0.01 * s.MAPMinus))* ClosingQty end
+,MAPDiffRate = case when bd.InvLotBillDetailNo = tt.InvLotBillDetailNo then
+			 case when 100*( (NewRate /MAPRate)-1) > MAPPlus then (pls.MAPRate +  (pls.MAPRate * 0.01 * s.mapPlus))  - pls.MAPRate
+				when 100*( 1-(NewRate /MAPRate))> MAPMinus then (pls.MAPRate -  (pls.MAPRate * 0.01 * s.MAPMinus))  - pls.MAPRate
+				end	else 0 end
+
+,PriceVarianceAmount = case when bd.InvLotBillDetailNo = tt.InvLotBillDetailNo then
+ (NewRate * ClosingQty) --+ ISNULL(inv.ReceivedQty*bd.DiffRate,0) 
+		-  case when 100*( (NewRate /MAPRate)-1) > MAPPlus then 
+								((pls.MAPRate +  (pls.MAPRate * 0.01 * s.MAPPlus)) * ClosingQty)
+								when 100*( 1-(NewRate /MAPRate))> s.MAPMinus then
+								 ((pls.MAPRate  -  (pls.MAPRate * 0.01 * s.MAPMinus)) * ClosingQty)
+								 else 0
+								 end
+								   else null end
+	
+from  Inventory.InvLotSummary pls  
+left join #MainInvSummary inv on inv.ParentInvLotSummaryNo = pls.InvLotSummaryNo 
+inner join Inventory.Setting s on s.CompanyNo = pls.CompanyNo 
+inner join inventory.InvLotBillDetail bd on bd.InvLotSummaryNo = pls.InvLotSummaryNo 
+outer apply(
+select ROW_NUMBER() over (order by nrbd.ItemNo,  InvLotBillDetailNo desc )SLNo, MAPAmount / ClosingQty NewRate  ,InvLotBillDetailNo
+			from inventory.invLotBillDetail nrbd 
+			inner join Inventory.InvLotSummary nrls on  nrbd.InvLotSummaryNo = nrls.InvLotSummaryNo 
+	where nrbd.BillNo = @Documentno   and nrbd.TransactionFlag = @TransactionFlag 
+	and nrls.IsCapital =0  --and nrls.DocumentNo = pls.DocumentNo and nrls.TransactionFlag = pls.TransactionFlag
+			and nrls.ItemNo = pls.ItemNo and ISNULL(nrls.MakeNo,0) = ISNULL(pls.MakeNo,0) 
+			and nrls.CompanyNo = pls.CompanyNo and ISNULL(nrls.DivisionNo ,0) = ISNULL(pls.DivisionNo ,0)
+			and nrls.WarehouseNo = pls.WarehouseNo and ClosingQty>0 
+ ) tt
+ where bd.BillNo = @Documentno  and bd.TransactionFlag = @TransactionFlag and SLNo=1
+ and  (100*( (NewRate /MAPRate)-1) >= MAPPlus  or   100*( 1-(NewRate /MAPRate)) > MAPMinus)
+      and pls.RouteIdentity is not null   
+       		  
+ Update bd set  
+  MAPAmount = case when 100*( (NewRate /MAPRate)-1) > MAPPlus then ( pls.MAPRate +  (pls.MAPRate * 0.01 * s.mapPlus))* closingQty
+			  when 100*( 1-(NewRate /MAPRate))> MAPMinus then ( pls.MAPRate -  (pls.MAPRate * 0.01 * s.MAPMinus))* ClosingQty end
+, PriceVarianceAmount = case when bd.InvLotBillDetailNo = tt.InvLotBillDetailNo then
+				case when 100*( (NewRate /MAPRate)-1) > MAPPlus then (NewRate -( pls.MAPRate +  (pls.MAPRate * 0.01 * s.mapPlus))) * ClosingQty 
+				when 100*( 1-(NewRate /MAPRate))> MAPMinus then  (NewRate -( pls.MAPRate -  (pls.MAPRate * 0.01 * s.MAPMinus))) * ClosingQty
+				 end
+				else null end
+,MAPDiffRate = case when bd.InvLotBillDetailNo = tt.InvLotBillDetailNo then
+			 case when 100*( (NewRate /MAPRate)-1) > MAPPlus then (pls.MAPRate +  (pls.MAPRate * 0.01 * s.mapPlus))  - pls.MAPRate
+				when 100*( 1-(NewRate /MAPRate))> MAPMinus then (pls.MAPRate -  (pls.MAPRate * 0.01 * s.MAPMinus))  - pls.MAPRate
+				end	else 0 end
+from  Inventory.InvLotSummary pls  
+inner join Inventory.Setting s on s.CompanyNo = pls.CompanyNo 
+inner join inventory.InvLotBillDetail bd on bd.InvLotSummaryNo = pls.InvLotSummaryNo 
+outer apply(
+select ROW_NUMBER() over (order by nrbd.ItemNo,nrbd.CreatedDate, InvLotBillDetailNo desc )SLNo, MAPAmount / ClosingQty NewRate  ,InvLotBillDetailNo
+			from inventory.invLotBillDetail nrbd 
+			inner join Inventory.InvLotSummary nrls on  nrbd.InvLotSummaryNo = nrls.InvLotSummaryNo 
+	where nrbd.BillNo = @Documentno   and nrbd.TransactionFlag = @TransactionFlag 
+	and nrls.IsCapital =0  --and nrls.DocumentNo = pls.DocumentNo and nrls.TransactionFlag = pls.TransactionFlag
+			and nrls.ItemNo = pls.ItemNo and ISNULL(nrls.MakeNo,0) = ISNULL(pls.MakeNo,0) 
+			and nrls.CompanyNo = pls.CompanyNo and ISNULL(nrls.DivisionNo ,0) = ISNULL(pls.DivisionNo ,0)
+			and nrls.WarehouseNo = pls.WarehouseNo and ClosingQty>0 
+ ) tt
+ where bd.BillNo = @Documentno  and bd.TransactionFlag = @TransactionFlag and SLNo=1
+ and  (100*( (NewRate /MAPRate)-1) >= MAPPlus  or   100*( 1-(NewRate /MAPRate)) > MAPMinus)
+ and pls.RouteIdentity is null
+   
+update ls set MAPRate   = NewRate 
+from Inventory.InvLotSummary ls
+inner join Inventory.InvLotSummary pls on pls.CompanyNo = ls.CompanyNo  
+and ISNULL(pls.DivisionNo,0) = ISNULL(ls.DivisionNo,0)
+and pls.ItemNo = ls.ItemNo and ISNULL(ls.MakeNo,0) = ISNULL(pls.MakeNo,0)
+and pls.WarehouseNo = ls.WarehouseNo and ls.IsCapital = pls.IsCapital and pls.IsCapital =0
+inner join inventory.InvLotBillDetail bd on bd.InvLotSummaryNo = pls.InvLotSummaryNo 
+outer apply(
+select ROW_NUMBER() over (order by InvLotBillDetailNo desc )SLNo, MAPAmount / ClosingQty NewRate  
+			from inventory.invLotBillDetail nrbd 
+			inner join Inventory.InvLotSummary nrls on  nrbd.InvLotSummaryNo = nrls.InvLotSummaryNo 
+	where nrbd.BillNo = @Documentno   and nrbd.TransactionFlag = @TransactionFlag 
+	and nrls.IsCapital =0 --and nrls.DocumentNo = pls.DocumentNo and nrls.TransactionFlag = pls.TransactionFlag
+			and nrls.ItemNo = pls.ItemNo and ISNULL(nrls.MakeNo,0) = ISNULL(pls.MakeNo,0) 
+			and nrls.CompanyNo = pls.CompanyNo and ISNULL(nrls.DivisionNo ,0) = ISNULL(pls.DivisionNo ,0)
+			and nrls.WarehouseNo = pls.WarehouseNo  and ClosingQty>0
+ ) tt
+ where bd.BillNo = @Documentno  and bd.TransactionFlag = @TransactionFlag and SLNo=1  and NewRate is not null
+ 
+ update bd set ActualMAPRate = ls.MAPRate
+	from Inventory.InvLotBillDetail bd
+		inner join Inventory.InvLotSummary ls on ls.InvLotSummaryNo = bd.InvLotSummaryNo 
+		where bd.BillNo = @Documentno and bd.TransactionFlag = @TransactionFlag 
+ 
+ 
+ if OBJECT_ID ('tempdb..#MainInvSummary') is not null
+   drop table #MainInvSummary
+   
+ select @OutputStatusNo =1,@OutputStatusRemarks='Success'
+end try
+
+begin catch
+	select @OutputStatusNo  = 0,@OutputStatusRemarks = ERROR_MESSAGE ()
+	select 0 Error,ERROR_MESSAGE ()
+end catch
+		
+end

@@ -1,0 +1,83 @@
+Stored procedure masterdata.procOperativeAccount: Get Operative COA Accounts. Called from Finance.VoucherFillValuesDependent, Finance.FinancePostingFillValuesMiscChargeItemNo, Finance.FIPPFillValuesDependent.
+Reads: masterdata.COAAccountGroupDetail, masterdata.mAccountGroup, masterdata.mAccountInactiveDetail, masterdata.mAccountMaster, masterdata.mCompanyMaster, masterdata.mFBMain, masterdata.mUnitMaster
+Parameters: @FBNo smallint, @CompanyNo tinyint
+Author: Yusuf, created 23-Nov-13
+Code:
+-- =============================================
+-- Author:		Yusuf
+-- Create date: 23-Nov-13
+-- Description:	Get Operative COA Accounts
+-- =============================================
+-- select * from [masterdata].[OperativeAccount] (1)
+CREATE procedure [masterdata].[procOperativeAccount] 
+(
+	-- Add the parameters for the function here
+	@FBNo smallint
+	,@CompanyNo tinyint
+)
+AS
+begin
+	-- Add the SELECT statement with parameter references here
+	declare @CompanyMaster table (CompanyNo tinyint)
+	if exists (select 1 from masterdata.mCompanyMaster where CompanyNo=@CompanyNo and HeadOfficeNo is null)
+	begin
+		insert into @CompanyMaster
+		select CompanyNo from masterdata.mCompanyMaster
+	end
+	else
+	begin
+		insert into @CompanyMaster
+		select CompanyNo from masterdata.mCompanyMaster
+		where CompanyNo=@CompanyNo
+	end
+	
+	if object_Id('tempdb..#COAGR') is not NULL
+	Drop table #COAGR
+
+	select COANo,PostingAccountNo,PostingGroupNo
+	into #COAGR	 
+			from masterdata.COAAccountGroupDetail
+	Group by COANo,PostingAccountNo,PostingGroupNo 
+
+	Create NonClustered Index CG_IX1 on #COAGR (COANo,PostingAccountNo,PostingGroupNo)
+
+	if object_Id('tempdb..#AccActive') is not NULL
+	Drop table #AccActive
+
+	select AccountNo,FBNo
+	into #AccActive	 
+			from masterdata.mAccountInactiveDetail AID
+			where AID.Inactive = 1
+	Group by AccountNo,FBNo  
+
+	Create NonClustered Index Acc_IX1 on #AccActive (AccountNo,FBNo)
+
+
+
+
+
+	select AM.AccountNo,AM.AccountName,AM.IsReferenceApp,AM.IsCostCenterApp,AM.IsQtyWiseApp,AM.AccountTypeNo
+		,AM.MultiplicativeRate,AM.DivisibilityRate
+		,AG.GroupName,AG.GroupTypeNo,AG.NatureNo
+		,AM.CurrencyConversionNo,am.CostCenterNo,UM.UnitName
+		,FBM.OpeningDate
+		,FBM.FBNo
+		,AG.OrderBy GroupOrderBy
+		,AM.PrintingName
+	from #COAGR COAAGD
+	inner join masterdata.mFBMain FBM on FBM.OperativeCOANo=COAAGD.COANo
+									and FBM.FBTypeNo=1
+									--and FBM.CompanyNo in (select CM.CompanyNO from @CompanyMaster CM)
+    inner join @CompanyMaster CM on CM.CompanyNo = FBM.CompanyNo 
+	inner join masterdata.mAccountMaster AM on AM.AccountNo=COAAGD.PostingAccountNo
+	inner join masterdata.mAccountGroup AG on AG.GroupNo=COAAGD.PostingGroupNo
+	left join masterdata.mUnitMaster UM on UM.UnitNo=AM.UnitNo
+	Left Join #AccActive AccA on AccA.AccountNo = AM.AccountNo and AccA.FBNo = FBM.FBNo 
+	where FBM.FBNo*@FBNo=@FBNo*@FBNo
+	and AccA.AccountNo is NULL
+		--and not exists (select 1 from masterdata.mAccountInactiveDetail AID 
+		--				where AID.AccountNo=AM.AccountNo
+		--					and AID.Inactive=1
+		--					and AID.FBNo=FBM.FBNo)
+
+end

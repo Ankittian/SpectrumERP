@@ -1,0 +1,416 @@
+Stored procedure Sales.SDPEAuthorize: Pre Cal of ERSO. Called from Notifications.TANRSaveUserApproval.
+Writes: Notifications.TATAuthorizationDetail, Sales.EstimationEROSPreCal, Sales.QuotationItemDetail, Sales.RevisedQuotationItemDetail
+Reads: masterdata.mCostGroupMain, masterdata.mCostHeadEROSCalculationfrom, masterdata.mCostHeadEROSMain, masterdata.mCostHeadEROSPercentOf, masterdata.mMiscCharges, Notifications.MultiAuthorizationSetting, Notifications.TATAuthorizationDetail, Sales.CustomerEnquiryLiftDetail, Sales.CustomerEnquiryMain, Sales.EstimationExpenseDetail, Sales.EstimationMain, Sales.EstimationMaterialCost, Sales.EstimationOverHeads, Sales.EstimationTaxDetail, Sales.QuotationMain, Sales.RevisedEstimationMain, Sales.RevisedQuotationMain, Security.LoginRoleDetail, Security.LoginTempRoleDetail, Security.mRoleMasterFormDetail
+Parameters: @EstimationNo int, @RevisedEstimationNo int = 0, @IsCallingForMultiLevelAuthorization tinyint = 0, @OutputStatusNo tinyint = null OUTPUT, @OutputStatusRemarks varchar(4000) = null OUTPUT
+Calls procedures: Sales.SDPEPreCalRevision, Sales.SDPESendAuthorizationMail
+Author: Alok, created 14 April 2015
+Code:
+-- =============================================
+-- Author:		Alok
+-- Create date: 14 April 2015
+-- Description: Pre Cal of ERSO
+-- =============================================
+CREATE PROCEDURE [Sales].[SDPEAuthorize]
+(
+ @EstimationNo  int,
+ @RevisedEstimationNo int = 0,
+ @IsCallingForMultiLevelAuthorization tinyint = 0, 
+  @OutputStatusNo tinyint = null output,
+    @OutputStatusRemarks varchar(4000)  = null output
+)
+AS
+
+BEGIN
+	SET NOCOUNT ON;
+	
+	BEGIN TRY
+			declare @DocumentDate smalldatetime
+				,@RevEstimationNo int
+				
+		select @DocumentDate=DocumentDate
+				,@RevEstimationNo=RevisedEstimationNo
+		from Sales.RevisedEstimationMain where EstimationNo=@EstimationNo
+       if @IsCallingForMultiLevelAuthorization = 1   ---------- When 1 then  Notification for Multi Level Authorization will call
+	   Begin 
+	   
+		 declare @MAPValuationNo smallint,@AuthorizedBy int,@CompanyNo tinyint ,@DivisionNo int ,@DocumentStatusNo tinyint
+	 ,@AuthDetailNo int ,@CreatedBy smallint
+	
+ 		 select @AuthorizedBy = AuthorizedBy,@CompanyNo =CompanyNo  ,@DivisionNo = DivisionNo ,@DocumentStatusNo = DocumentStatusNo
+		,@CreatedBy = sam.CreatedBy  
+		from Sales.RevisedEstimationMain sam where RevisedEstimationNo = @RevisedEstimationNo 
+	Declare  @UserCount int 
+	Declare @NextUsers table(SNo smallint,AuthDetailNo int,LevelNo int,LoginNo int) 
+	Declare @UserNO int,@LevelNo smallint,@UserCounter int =1
+	   
+	   If Exists (Select 1  From Notifications.MultiAuthorizationSetting where CompanyNo =@CompanyNo and ISNULL(DivisionNo,0) = ISNULL(@DivisionNo,0)
+ 					and FormCode ='SPER') and @DocumentStatusNo = 20
+ 		BEGIN
+ 		
+ 			 if Exists (Select 1 From Notifications.TATAuthorizationDetail where FormCode ='SPER' and InternalNo = @RevisedEstimationNo  
+ 							and IsReady = 1 and IsEmailSent=0)
+				BEGIN
+						-- Send Email
+					
+					Insert into @NextUsers
+					select ROW_NUMBER () over (order by LoginNo) SlNo,AuthDetailNo, LevelNo, LoginNo  from (
+					Select LevelNo,LoginNo,AuthDetailNo
+					 From Notifications.TATAuthorizationDetail where FormCode ='SPER' and InternalNo = @RevisedEstimationNo  
+						and IsReady = 1 and IsEmailSent =0	and LoginNo is not null
+					union 
+					Select LevelNo,lrd.LoginNo,AuthDetailNo
+					 From Notifications.TATAuthorizationDetail tad
+					 inner join Security.mRoleMasterFormDetail rfd on rfd.RoleMasterNo = tad.RoleNo and rfd.FormNo in( 151,167,464)
+					 inner join Security.LoginRoleDetail lrd on rfd.RoleMasterNo = lrd.RoleMasterNo 
+					 where FormCode ='SPER' and InternalNo = @RevisedEstimationNo 
+						and IsReady = 1 and IsEmailSent =0	and tad.RoleNo  is not null	
+					union 
+					Select LevelNo,lrd.LoginNo,AuthDetailNo
+					 From Notifications.TATAuthorizationDetail tad
+					 inner join Security.mRoleMasterFormDetail rfd on rfd.RoleMasterNo = tad.RoleNo and rfd.FormNo in( 151,167,464)
+					 inner join Security.LoginTempRoleDetail lrd on rfd.RoleMasterNo = lrd.RoleMasterNo 
+					 where FormCode ='SPER' and InternalNo = @RevisedEstimationNo and CONVERT(smalldatetime,convert(varchar(15), GETDATE(),106))
+						 between lrd.FromDate and ISNULL( lrd.ToDate,CONVERT(smalldatetime,convert(varchar(15), GETDATE(),106)))
+						and IsReady = 1 and IsEmailSent =0	and tad.RoleNo  is not null	) tt
+						group by LevelNo, LoginNo 	,AuthDetailNo							
+					
+					
+					Set @UserCount = @@ROWCOUNT	
+					
+					While @UserCounter <= @UserCount
+					 Begin
+					
+						 Select @UserNO=LoginNo , @LevelNo = LevelNo,@AuthDetailNo=AuthDetailNo From @NextUsers Where SNo = @UserCounter
+								
+						 Exec [Sales].[SDPESendAuthorizationMail] @RevisedEstimationNo,@UserNo,@LevelNo ,@AuthDetailNo
+						 
+						Update Notifications.TATAuthorizationDetail  set IsEmailSent =1 where FormCode = 'SPER' and InternalNo = @RevisedEstimationNo 
+								and LevelNo = @LevelNo and IsReady =1
+						 Set @UserCounter=@UserCounter+1 
+					 End
+		 
+				END							   
+				
+				 
+			 					  	
+ 		 END
+ 	  else If Exists (Select 1  From Notifications.MultiAuthorizationSetting where CompanyNo =@CompanyNo and ISNULL(DivisionNo,0) = ISNULL(@DivisionNo,0)
+ 					and FormCode ='SPER') and Exists (Select 1 From Notifications.TATAuthorizationDetail where FormCode ='SPER' 
+ 						and InternalNo = @RevisedEstimationNo and IsRejectedMailSend =1) -- rejection mail
+ 		BEGIN
+ 			 
+ 			 if Exists (Select 1 From Notifications.TATAuthorizationDetail where FormCode ='SPER' and InternalNo = @RevisedEstimationNo 
+ 							and IsRejectedMailSend =1)
+				BEGIN
+						-- Send Email
+					 
+					Insert into @NextUsers
+					select ROW_NUMBER () over (order by LoginNo) SlNo,AuthDetailNo, LevelNo, LoginNo  from (
+					Select LevelNo,LoginNo,AuthDetailNo
+					 From Notifications.TATAuthorizationDetail where FormCode ='SPER' and InternalNo = @RevisedEstimationNo 
+						and IsRejectedMailSend =1 and LoginNo is not null
+					union 
+					Select LevelNo,lrd.LoginNo,AuthDetailNo
+					 From Notifications.TATAuthorizationDetail tad
+					 inner join Security.mRoleMasterFormDetail rfd on rfd.RoleMasterNo = tad.RoleNo and rfd.FormNo in(151,167,464)
+					 inner join Security.LoginRoleDetail lrd on rfd.RoleMasterNo = lrd.RoleMasterNo 
+					 where FormCode ='SPER' and InternalNo = @RevisedEstimationNo 
+						and IsRejectedMailSend =1 and tad.RoleNo  is not null	
+					union 
+					Select LevelNo,lrd.LoginNo,AuthDetailNo
+					 From Notifications.TATAuthorizationDetail tad
+					 inner join Security.mRoleMasterFormDetail rfd on rfd.RoleMasterNo = tad.RoleNo and rfd.FormNo in(151,167,464)
+					 inner join Security.LoginTempRoleDetail lrd on rfd.RoleMasterNo = lrd.RoleMasterNo 
+					 where FormCode ='SPER' and InternalNo = @RevisedEstimationNo and CONVERT(smalldatetime,convert(varchar(15), GETDATE(),106))
+						 between lrd.FromDate and ISNULL( lrd.ToDate,CONVERT(smalldatetime,convert(varchar(15), GETDATE(),106)))
+						and IsRejectedMailSend =1 and tad.RoleNo  is not null	) tt
+						group by LevelNo, LoginNo 	,AuthDetailNo							
+					
+					
+					Set @UserCount = @@ROWCOUNT	
+					
+					
+					While @UserCounter <= @UserCount
+					 Begin
+					
+						 Select @UserNO=LoginNo , @LevelNo = LevelNo,@AuthDetailNo=AuthDetailNo From @NextUsers Where SNo = @UserCounter
+								
+						 Exec [Sales].[SDPESendAuthorizationMail] @RevisedEstimationNo,@UserNo,@LevelNo ,@AuthDetailNo ,1
+						 
+						Update Notifications.TATAuthorizationDetail  set IsRejectedMailSend =0 where FormCode = 'SPER' and InternalNo = @RevisedEstimationNo 
+								and LevelNo = @LevelNo and IsRejectedMailSend =1
+						 Set @UserCounter=@UserCounter+1 
+					 End
+				
+				
+				
+				END							   
+				
+				 
+			 					  	
+ 		 END 	 
+
+		--MultiAuthorization Query Ends here 
+		End 
+		Else 
+		Begin
+			Declare @Tbl as Table(CostGroupNo Int,GSNo TinyInt,HSNo TinyInt,CostHeadNo Int,Amount Money,PerOF Money)
+		
+		Select @RevisedEstimationNo = NULL
+		--- Revision of Estimation (Pre Cal)
+		Declare @Result TinyInt, @ResultMsg Varchar(500)
+		If Exists(
+					Select 1
+					From Sales.RevisedEstimationMain REM 
+					Where REM.EstimationNo=@EstimationNo
+					And REM.RevisionNo = (
+											Select Max(REM.RevisionNo)
+											From Sales.RevisedEstimationMain REM 
+											Where REM.EstimationNo=@EstimationNo
+										  )
+					And REM.AuthorizedBy is not Null		
+				 )
+		BEGIN
+					Select @RevisedEstimationNo=REM.RevisedEstimationNo
+					From Sales.RevisedEstimationMain REM 
+					Where REM.EstimationNo=@EstimationNo
+					And REM.RevisionNo = (
+											Select Max(REM.RevisionNo)
+											From Sales.RevisedEstimationMain REM 
+											Where REM.EstimationNo=@EstimationNo
+										  )
+					And REM.AuthorizedBy is not Null	
+
+					Exec [Sales].[SDPEPreCalRevision]  @RevisedEstimationNo, @Result output,@ResultMsg output 
+					
+					If @Result=0
+					BEGIN
+						Select 0,@ResultMsg
+						Return
+					END					
+		END				
+
+
+		Delete From [Sales].[EstimationEROSPreCal]
+		Where EstimationNo=@EstimationNo	 
+	
+
+Insert into @Tbl 
+Select GM.CostGroupNo,GM.SNo,HM.SNo,HM.CostHeadNo,EST.Amount-- GM.CostGroupName,GM.SNo,HM.HeadName,HM.SNo,EST.Amount
+,Per.Amount
+From masterdata.mCostGroupMain GM
+Inner Join masterdata.mCostHeadEROSMain HM on HM.CostGroupNo=GM.CostGroupNo
+Left Join(
+			Select Sum(tt.Amount) as Amount,CF.CostHeadNo
+			From masterdata.mCostHeadEROSCalculationfrom CF 
+			Left Join
+				(	Select SUM(Amount) as Amount, 3 TypeNo, 0 ParticularNo
+					From Sales.EstimationMaterialCost  EMC
+					Where EMC.EstimationNo=@EstimationNo --And CF.TypeNo=3
+					Union All
+					Select SUM(Amount) as Amount,4 TypeNo,EMC.CostElementNo ParticularNo
+					From Sales.EstimationOverHeads  EMC
+					Where EMC.EstimationNo=@EstimationNo --And CF.TypeNo=4 
+					--And CF.ParticularNo=EMC.CostElementNo
+					Group by EMC.CostElementNo		
+					Union All
+					Select SUM(Amount) as Amount,5 TypeNo,EMC.ExpenseHeadNo ParticularNo
+					From Sales.EstimationExpenseDetail  EMC
+					Where EMC.EstimationNo=@EstimationNo --And CF.TypeNo=5
+					--And CF.ParticularNo=EMC.ExpenseHeadNo
+					Group by EMC.ExpenseHeadNo 
+					Union All
+					Select SUM(EMC.TotalValue) as Amount,6 TypeNo,EMC.MiscChargeNo ParticularNo
+					From Sales.EstimationTaxDetail  EMC
+					Where EMC.EstimationNo=@EstimationNo --And CF.TypeNo=6
+					--And CF.ParticularNo=EMC.MiscChargeNo
+					Group by EMC.MiscChargeNo 
+					Union All
+					Select SUM(EMC.MarginRate) as Amount, 7 TypeNo,0 ParticularNo
+					From Sales.EstimationMain EMC
+					Where EMC.EstimationNo=@EstimationNo --And CF.TypeNo=7			
+				)tt	On tt.TypeNo = CF.TypeNo
+					And IsNull(tt.ParticularNo,0) = IsNull(CF.ParticularNo,0)
+				Group By CF.CostHeadNo
+			)Est On EST.CostHeadNo = HM.CostHeadNo
+Left Join (
+			Select Sum(tt.Amount) as Amount,CF.CostHeadNo
+			From masterdata.mCostHeadEROSPercentOf CF 
+			Left Join
+				(	Select SUM(Amount) as Amount, 3 TypeNo, 0 ParticularNo
+					From Sales.EstimationMaterialCost  EMC
+					Where EMC.EstimationNo=@EstimationNo --And CF.TypeNo=3
+					Union All
+					Select SUM(Amount) as Amount,4 TypeNo,EMC.CostElementNo ParticularNo
+					From Sales.EstimationOverHeads  EMC
+					Where EMC.EstimationNo=@EstimationNo --And CF.TypeNo=4 
+					--And CF.ParticularNo=EMC.CostElementNo
+					Group by EMC.CostElementNo		
+					Union All
+					Select SUM(Amount) as Amount,5 TypeNo,EMC.ExpenseHeadNo ParticularNo
+					From Sales.EstimationExpenseDetail  EMC
+					Where EMC.EstimationNo=@EstimationNo --And CF.TypeNo=5
+					--And CF.ParticularNo=EMC.ExpenseHeadNo
+					Group by EMC.ExpenseHeadNo 
+					Union All
+					Select SUM(EMC.TotalValue) as Amount,6 TypeNo,EMC.MiscChargeNo ParticularNo
+					From Sales.EstimationTaxDetail  EMC
+					Where EMC.EstimationNo=@EstimationNo --And CF.TypeNo=6
+					--And CF.ParticularNo=EMC.MiscChargeNo
+					Group by EMC.MiscChargeNo 
+					Union All
+					Select SUM(EMC.MarginRate) as Amount, 7 TypeNo,0 ParticularNo
+					From Sales.EstimationMain EMC
+					Where EMC.EstimationNo=@EstimationNo --And CF.TypeNo=7			
+				)tt	On tt.TypeNo = CF.TypeNo
+					And IsNull(tt.ParticularNo,0) = IsNull(CF.ParticularNo,0)
+				Group by CF.CostHeadNo						
+			)Per On Per.CostHeadNo=HM.CostHeadNo			
+Order by GM.SNo,HM.SNo
+
+-- Update For Amount
+Update Tbl
+Set Tbl.Amount =IsNull(Tbl.Amount,0) + IsNull(Est.Amount,0)
+From @Tbl Tbl
+Cross Apply(
+			Select Sum(tt.Amount) as Amount
+			From masterdata.mCostHeadEROSCalculationfrom CF 
+			Outer Apply
+				(	
+					Select SUM(T.Amount) as Amount
+					From @Tbl T
+					Where T.CostHeadNo=Cf.ParticularNo and  CF.TypeNo=2
+				)tt				
+			Where CF.CostHeadNo=Tbl.CostHeadNo			
+			)Est			
+
+Update Tbl
+Set Tbl.Amount =IsNull(Tbl.Amount,0) + IsNull(Est.Amount,0)
+From @Tbl Tbl
+Cross Apply(
+			Select Sum(tt.Amount) as Amount
+			From masterdata.mCostHeadEROSCalculationfrom CF 
+			Outer Apply
+				(	
+					Select SUM(T.Amount) as Amount
+					From @Tbl T
+					Where T.CostGroupNo=Cf.ParticularNo And  CF.TypeNo=1
+				)tt				
+			Where CF.CostHeadNo=Tbl.CostHeadNo			
+			)Est			
+	
+			
+-- Update For Per Of
+
+Update Tbl
+Set Tbl.PerOF=IsNull(Tbl.PerOF,0) + IsNull(Per.Amount,0)
+From @Tbl Tbl
+Cross Apply(
+			Select Sum(tt.Amount) as Amount
+			From masterdata.mCostHeadEROSPercentOf CF 
+			Outer Apply
+				(	
+					Select SUM(T.Amount) as Amount
+					From @Tbl T
+					Where T.CostHeadNo=Cf.ParticularNo and  CF.TypeNo=2
+				)tt				
+			Where CF.CostHeadNo=Tbl.CostHeadNo			
+			)Per	
+
+Update Tbl
+Set Tbl.PerOF=IsNull(Tbl.PerOF,0) + IsNull(Per.Amount,0)
+From @Tbl Tbl			
+Cross Apply(
+			Select Sum(tt.Amount) as Amount
+			From masterdata.mCostHeadEROSPercentOf CF 
+			Outer Apply
+				(	
+					Select SUM(T.Amount) as Amount
+					From @Tbl T
+					Where T.CostGroupNo=Cf.ParticularNo And  CF.TypeNo=1
+				)tt				
+			Where CF.CostHeadNo=Tbl.CostHeadNo			
+			)Per		
+	
+
+Insert Into [Sales].[EstimationEROSPreCal]
+Select @EstimationNo,ROW_NUMBER () Over (Order By GSNo,HSNo) SNo
+		,T.CostGroupNo,T.CostHeadNo
+		,IsNull(T.Amount,0)
+		,ISNULL( Convert(Varchar(10),TxRt.Rate ) , 
+				Convert(Varchar(10),Convert(Decimal(10,2), (T.Amount/NullIf(T.PerOf,0))*100)) ) 
+		+ '% '				
+		+ IsNull(EM.PercentageOfText, --'% '
+		 + Case When TxRt.Rate Is Not Null then ' ON ' Else ' OF ' End
+		+
+		Stuff((
+		Select '+' + Coalesce(CH.HeadName,MC.MiscChargeName,GM.CostGroupName,MT.PArticular)
+		From masterdata.mCostHeadEROSPercentOf as PO
+		Left Join Masterdata.mCostHeadErosMain CH on CH.CostHeadNo = PO.ParticularNo
+										And PO.TypeNo=2 
+		Left Join  Masterdata.mCostGroupMain GM1 on GM1.CostGroupNo = CH.CostGroupNo											
+		Left Join  Masterdata.mCostGroupMain GM on GM.CostGroupNo = PO.ParticularNo
+											And PO.TypeNo=1
+		Left Join  Masterdata.mMiscCharges MC on MC.MiscChargeNo= PO.ParticularNo
+											And PO.TypeNo=6
+		Outer Apply(	
+					Select 'MATERIAL COST' as Particular
+					where PO.TypeNo=3
+				  )MT 		  
+		Where PO.CostHeadNo=T.CostHeadNo
+		Order By GM1.SNo,GM.SNo
+		For Xml Path('')
+		),1,1,''))		
+		From @Tbl T
+		Inner Join Masterdata.mCostHeadErosMain EM on EM.CostHeadNo=T.CostHeadNo
+		Outer Apply(
+						Select Max(MC1.Rate) as Rate
+								From masterdata.mCostHeadEROSCalculationfrom CF1
+								Inner Join Sales.EstimationTaxDetail  EMC on EMC.EstimationNo=@EstimationNo 
+																		  And CF1.TypeNo=6
+																		  And CF1.ParticularNo=EMC.MiscChargeNo																		  
+								Inner Join masterdata.mMiscCharges MC1 on MC1.MiscChargeNo=CF1.ParticularNo																
+								Where CF1.CostHeadNo=T.CostHeadNo
+								And EMC.TotalValue>0
+								Group by CF1.CostHeadNo
+								Having COUNT(Cf1.CostHeadNo)=1
+					)TxRt	
+
+	 --Update Quotation Rate only for Maintenance Estimation
+	If Exists ( Select 1
+			  	From Sales.EstimationMain EM
+			  	Inner Join Sales.CustomerEnquiryMain cEM on cEM.CustomerEnquiryNo=EM.RefDocNo and EM.SourceDocumentNo=2
+			  	Inner Join Sales.RevisedQuotationMain QM on QM.RefDocumentNo=cEM.CustomerEnquiryNo and QM.SourceDocumentNo=2 And QM.AuthorizedBy is  null
+			  	Where EM.EstimationNo=@EstimationNo
+			  	And Exists (Select 1 FRom Sales.CustomerEnquiryLiftDetail LD where LD.CustomerEnquiryNo=cEM.CustomerEnquiryNo)
+			  	And EM.AuthorizedBy is not null
+			  )
+	BEGIN
+				Declare @RevisedQuotationNo int,@QuotationNo Int,@Rate Money,@RevisionNo Tinyint
+				
+				Select @RevisedQuotationNo=QM.RevisedQuotationNo
+				,@QuotationNo=QM.QuotationNo,@Rate = EM.ProductCost
+				,@RevisionNo=QM.RevisionNo
+			  	From Sales.EstimationMain EM
+			  	Inner Join Sales.CustomerEnquiryMain cEM on cEM.CustomerEnquiryNo=EM.RefDocNo and EM.SourceDocumentNo=2
+			  	Inner Join Sales.RevisedQuotationMain QM on QM.RefDocumentNo=cEM.CustomerEnquiryNo and QM.SourceDocumentNo=2 And QM.AuthorizedBy is null
+			  	Where EM.EstimationNo=@EstimationNo
+			  	And Exists (Select 1 FRom Sales.CustomerEnquiryLiftDetail LD where LD.CustomerEnquiryNo=cEM.CustomerEnquiryNo)
+			  	
+			  	Update Sales.RevisedQuotationItemDetail Set Rate=@Rate Where RevisedQuotationNo=@RevisedQuotationNo
+			  	Update QID Set Rate=@Rate 
+			  	From Sales.QuotationItemDetail QID 
+			  	Inner Join Sales.QuotationMain QM on QM.QuotationNo=QID.QuotationNo 
+			  	Where Qm.QuotationNo=@QuotationNo And @RevisionNo=QM.RevisionNo
+	END
+			
+	End
+	
+	Select 1
+	
+	END TRY
+	BEGIN CATCH
+			   
+		Select 0,Error_Message()
+	END CATCH
+END

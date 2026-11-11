@@ -1,0 +1,145 @@
+Stored procedure Inventory.MSVAFinancePosting: stock qty adjustment Finance Posting. Called from Finance.FinancePostingFillValuesDocumentDetails.
+Reads: Finance.ARDItemRule, masterdata.mAccountMaster
+Parameters: @ItemNos varchar(max), @CompanyNo tinyint
+Author: Akhli, created 29 jan 2014
+Code:
+
+					-- =============================================
+-- Author:		Akhli
+-- Create date:  29 jan 2014
+-- Description:	stock qty adjustment Finance Posting
+-- =============================================
+
+CREATE PROCEDURE [Inventory].[MSVAFinancePosting] 
+	@ItemNos varchar(max),
+	@CompanyNo tinyint
+	
+AS
+BEGIN
+
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+
+begin try
+
+declare @ItemTable table (ItemNo int,BasicAmount money,Id int,Qty decimal(12,3),Rate money)
+		insert into @ItemTable
+		select Col1, sum(convert(money,Col2)), Col3, sum(CONVERT(decimal(12,3),Col4)), sum(CONVERT(money,Col5))
+		from masterdata.Split_RowColumn(@ItemNos,'`','~')
+		group by Col1, Col3
+
+create table #PostingDrop ([Add to Basic] bit,Particular varchar(500),[Debit Amount] decimal(15,2) , 
+		[Credit Amount] decimal(15,2),[Account Name] int, [Ref. Detail] varchar(50),[Cost Center] varchar(50),
+		[Amount] decimal(15,2), [Type] tinyint,SlNo tinyint ,MiscChargeNo int , TaxCodeMiscChargesDetailNo int,
+			ItemNos varchar(200))
+					
+ 
+
+Insert into #PostingDrop 
+		select cast(0 as bit) [Add to Basic]
+				,'Stock Account' as Particular
+				,convert(decimal(15,2),case when sum(BasicAmount)>0 then sum(BasicAmount) else null end) [Debit Amount]
+				,convert(decimal(15,2),case when sum(BasicAmount)>0 then null else ABS(sum(BasicAmount)) end) [Credit Amount]
+				, ItemAC.AccountNo [Account Name]
+				,cast(null as varchar) [Ref. Detail]
+				,cast(null as varchar) [Cost Center]
+				,abs(sum(BasicAmount)) [Amount]
+				,case when sum(BasicAmount)>0 then 1 else 2 end [Type]
+				,ROW_NUMBER()over(order by ItemAC.AccountNo ) SlNo
+				,null MiscChargeNo
+				,null TaxCodeMiscChargesDetailNo
+				,'' ItemNos
+			from  @ItemTable TT
+				outer apply ( select max(IR.AccountNo) AccountNo 
+							from Finance.ARDItemRule IR
+							inner join masterdata.mAccountMaster AM on AM.AccountNo=IR.AccountNo
+							where AM.AccountTypeNo=14 and ir.ItemNo = TT.ItemNo 
+							
+						) ItemAC 
+			group by  ItemAC.AccountNo 
+
+Insert into #PostingDrop 
+		select cast(0 as bit) [Add to Basic]
+				,'Stock Revaluation Account' as Particular
+				,convert(decimal(15,2),case when sum(BasicAmount)>0 then null else abs(sum(BasicAmount))  end) [Debit Amount]
+				,convert(decimal(15,2),case when sum(BasicAmount)>0 then  ABS(sum(BasicAmount)) else Null end) [Credit Amount]
+				, ItemAC.AccountNo [Account Name]
+				,cast(null as varchar) [Ref. Detail]
+				,cast(null as varchar) [Cost Center]
+				,abs(sum(BasicAmount)) [Amount]
+				,case when sum(BasicAmount)>0 then 2 else 1 end [Type]
+				,ROW_NUMBER()over(order by ItemAC.AccountNo ) SlNo
+				,null MiscChargeNo
+				,null TaxCodeMiscChargesDetailNo
+				,'' ItemNos
+			from  @ItemTable TT
+				outer apply ( select max(IR.AccountNo) AccountNo 
+							from Finance.ARDItemRule IR
+							where IR.AccountTypeNo=12 and ir.ItemNo = TT.ItemNo 
+							
+						) ItemAC 
+			group by  ItemAC.AccountNo 
+			
+ 
+ if exists(select 1 from #PostingDrop having abs(SUM([Credit Amount])- SUM([Debit Amount]))<=.5)
+ begin
+	update PD set [Debit Amount] = [Debit Amount] + ISNULL(diff,0)
+		from
+		#PostingDrop PD
+		cross join (select SUM([Credit Amount])- SUM([Debit Amount]) Diff from #PostingDrop) tt
+		where PD.SlNo  = 1
+	
+	update PD set [Credit Amount] = [Credit Amount] + ISNULL(diff,0)
+		from
+		#PostingDrop PD
+		cross join (select SUM([Debit Amount])- SUM([Credit Amount]) Diff from #PostingDrop) tt
+		where PD.SlNo  = 1
+			
+ end
+ 
+ 
+select * from #PostingDrop
+ where isnull([Debit Amount],0) >0 or isnull([Credit Amount],0) >0
+  
+		 
+--if OBJECT_ID('tempdb..#ItemDetailDrop') is not null
+--	drop table #ItemDetailDrop
+
+--if OBJECT_ID('tempdb..#IncludedTaxDrop') is not null
+--	drop table #IncludedTaxDrop
+
+--if OBJECT_ID('tempdb..#FreightDrop') is not null
+--	drop table #FreightDrop
+
+--if OBJECT_ID('tempdb..#ExpensesDrop') is not null
+--	drop table #ExpensesDrop
+--if OBJECT_ID('tempdb..#PostingDrop') is not null
+--	drop table #PostingDrop
+	
+END TRY
+	
+	BEGIN CATCH
+		select ERROR_MESSAGE()
+		INSERT INTO [masterdata].[mErrorLog]
+			   ([ErrorDate]
+			   ,[ErrorNo]
+			   ,[ErrorSeverity]
+			   ,[ErrorState]
+			   ,[ErrorProcedure]
+			   ,[ErrorLine]
+			   ,[ErrorDescription]
+			   ,[UserName]
+			   ,[FormCode])
+		VALUES
+			   (getdate()
+			   ,ERROR_NUMBER()
+			   ,ERROR_SEVERITY()
+			   ,ERROR_STATE()
+			   ,ERROR_PROCEDURE()
+			   ,ERROR_LINE()
+			   ,ERROR_MESSAGE()
+			   ,SUSER_SNAME()
+			   ,'MSVA')
+	END CATCH
+END

@@ -1,0 +1,94 @@
+Stored procedure Information.PurchaseOrderDetail. Called from Inventory.MMPRGetItemInfo, Inventory.IDMRGetItemInfo.
+Reads: Inventory.InvLotSummary, masterdata.mItemMaster, masterdata.mMakeMaster, payroll.tblDeptMaster, payroll.tblDivisionMaster, Purchase.POAmendmentMain, Purchase.POItemDetail, Purchase.POMain, Security.Login
+Parameters: @CompanyNo tinyint, @DocumentDate smalldatetime, @ItemNo int
+Code:
+-- =============================================
+-- Author:		<Anjum>
+-- Create date: <2013/06/04>
+-- Description:	<Pending Purchase Order Detail>
+-- =============================================
+CREATE PROCEDURE [Information].[PurchaseOrderDetail] 
+	-- Add the parameters for the stored procedure here
+	@CompanyNo tinyint,
+	@DocumentDate smalldatetime,
+	@ItemNo int
+AS
+BEGIN
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+
+    -- Insert statements for procedure here
+	declare @str varchar(max)
+    select @str=masterdata.JSForInformation('MMPR')
+    set @str=@str+masterdata.CSSForInformation('MMPR')
+	set @str=@str+'<table class="altrowstable" id="alternatecolorPOInfo">'
+	set @str=@str+'<Caption><Font color="Maroon"><h3 align="Left"><b>Pending Purchase Order</b></h3></Font></Caption>'
+    set @str=@str+'<tr><th>Sl. No.</th><th>Division</th><th>Department</th><th>Make</th><th>Document No.</th><th>Document Date</th><th>PO Quantity</th><th>Received Quantity</th><th>Balance Quantity</th><th>Created By</th><th>Authorized By</th></tr>'
+	set @str=@str
+				 +(	replace(
+					replace(
+					replace(
+					replace(
+					replace(
+					replace(
+					replace(
+					replace(
+					replace(
+					replace(
+					replace((    
+						     Select Row_number() over (Order By PO.DocumentDate,PO.DocumentNoYearly) td1
+						            ,isnull(DV.DivisionName,'') As [td2]
+						            ,isnull(DM.DeptName,'') As [td3]
+						            ,isnull(MM.MakeName,'') As [td4]
+						            ,PO.DocumentNoYearly As [td5]
+							        ,convert(varchar,PO.DocumentDate,103) As [td6]
+							        ,sum(ID.Quantity) As [td7]
+							        ,sum(isnull(LS.ReceivedQty,0)) As [td8]
+							        ,sum((ID.Quantity-isnull(LS.ReceivedQty,0))) As [td9] 
+							        ,L.PrintingName [td10]
+                                    ,Isnull(L1.PrintingName,'') [td11]
+							From Purchase.POMain PO
+							Inner Join Purchase.POItemDetail ID on ID.PONo=PO.PONo
+							Inner Join masterdata.mItemMaster IM on IM.ItemNo=ID.ItemNo
+							Left Join masterdata.mMakeMaster MM on MM.MakeNo=ID.MakeNo
+							Left Join payroll.tblDivisionMaster DV on DV.DivisionNo=PO.DivisionNo
+							Left Join payroll.tblDeptMaster DM on DM.DeptNo=PO.DeptNo
+							--Inner Join Purchase.POAmendmentMain AM on AM.PONo=PO.PONo
+							Left Join  (
+										   Select pam.PONo,ItemNo,TechnicalGradeNo
+												 ,MakeNo,Sum(ReceivedQty) ReceivedQty
+											From Inventory.InvLotSummary LS
+											inner join Purchase.POAmendmentMain pam on pam.POAmendmentNo = LS.POAmendmentNo 
+											Group by pam.PONo ,ItemNo,TechnicalGradeNo,MakeNo
+							            ) LS on LS.PONo=PO.PONo 
+																  And LS.ItemNo=ID.ItemNo
+																  And ISNULL(LS.MakeNo,0)=ISNULL(ID.MakeNo,0)
+																  And ISNULL(LS.TechnicalGradeNo,0)=ISNULL(ID.TechnicalGradeNo,0)
+							Left Join Security.Login L ON L.LoginNo=PO.CreatedBy
+                            Left Join Security.Login L1 ON L1.LoginNo=PO.AuthorizedBy
+							Where (ID.Quantity-isnull(LS.ReceivedQty,0))>0
+							And PO.CompanyNo=@CompanyNo
+							And PO.DocumentDate<=@DocumentDate
+							And ID.ItemNo=@ItemNo
+							And (PO.StatusNo in (8,1) or PO.DocumentStatusNo in (10,20))
+						Group By PO.DocumentNoYearly,PO.DocumentDate
+						,MM.MakeName,DM.DeptName,DV.DivisionName,L.PrintingName,L1.PrintingName
+						Order By PO.DocumentDate,PO.DocumentNoYearly
+						for xml path('tr')),'<td1>','<td style="text-align: center;">')
+						                   ,'<td2>','<td>')
+										   ,'<td3>','<td>')
+										   ,'<td4>','<td>')
+										   ,'<td5>','<td>')
+										   ,'<td6>','<td style="text-align: center;">')
+										   ,'<td7>','<td style="text-align: right;">')
+										   ,'<td8>','<td style="text-align: right;">')
+										   ,'<td9>','<td style="text-align: right;">')
+										   ,'<td10>','<td>')
+										   ,'<td11>','<td>'))
+										   
+				   
+	set @str=@str+'</table>'
+	
+	select @str
+END

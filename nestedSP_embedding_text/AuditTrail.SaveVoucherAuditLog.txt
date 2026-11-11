@@ -1,0 +1,157 @@
+Stored procedure AuditTrail.SaveVoucherAuditLog: To manage the log for deleted voucher. Called from Finance.VoucherDelete.
+Writes: AuditTrail.AuditAccountDetail, AuditTrail.AuditaccVoucherDetail, AuditTrail.AuditaccVoucherMain, AuditTrail.AuditReferenceDetail, AuditTrail.AuditReferenceMain
+Reads: Finance.accVoucherDetail, Finance.accVoucherMain, Finance.ReferenceDetail, Finance.ReferenceMain, Finance.Setting, masterdata.mAccountMaster, Security.Login
+Parameters: @LoginNo int, @VoucherNo int
+Author: Himanshu Vaishnav, created 30 Mar 2022
+Code:
+-- =============================================
+-- Author:		Himanshu Vaishnav
+-- Create date: 30 Mar 2022
+-- Description:	To manage the log for deleted voucher 
+-- =============================================
+CREATE PROCEDURE [AuditTrail].[SaveVoucherAuditLog]
+ @LoginNo int,
+ @VoucherNo int 
+ 
+AS
+BEGIN
+	Begin Try
+	
+	If Exists (
+			   Select 1 
+			   From Finance.Setting ST
+			   Where ST.IsEnableAuditTrail=1
+			   And ST.CompanyNo = (Select V.CompanyNo From Finance.accVoucherMain V where V.VoucherNo=@VoucherNo)
+			   )
+	And Exists (Select 1 FRom Finance.accVoucherMain Where VoucherNo=@VoucherNo and AuthorizedBy is not null) -- Manage Log for Authorized entry only.
+	And Exists (Select 1 From Finance.accVoucherMain VM Where FormattedDocumentDate>='2023/04/01' And VoucherNo=@VoucherNo)
+	BEGIN			   
+			
+			Declare @LoginName varchar(300)
+			Select @LoginName =  PrintingName
+			From Security.Login
+			Where LoginNo = @LoginNo
+			
+			--- Table 0
+			Insert into [AuditTrail].[AuditaccVoucherMain]
+			Select  
+			 VM.VoucherNo
+			,VM.DocumentDate
+			,VM.DocumentNoYearly
+			,VM.DocumentStatusNo
+			,VM.ProjectAmendmentNo
+			,VM.VoucherTypeNo
+			,VM.SourceDocumentFormNo
+			,VM.SourceDocumentNo
+			,VM.SourceDocumentNoYearly
+			,VM.TransactionFormNo
+			,VM.SpecificAmount
+			,VM.BaseAmount
+			,VM.Narration
+			,VM.ReversalDate
+			,VM.CreatedBy
+			,VM.CreatedDate
+			,VM.ModifiedBy
+			,VM.ModifiedDate
+			,VM.ReleasedBy
+			,VM.ReleasedDate
+			,VM.AuthorizedBy
+			,VM.AuthorizedDate
+			,VM.DocumentSettingNo
+			,VM.ForDisplayAccountNo
+			,VM.ForDisplayParticularNo
+			,VM.CurrencyConversionNo
+			,VM.DivisibilityRate
+			,VM.MultiplicativeRate
+			,VM.CompanyNo
+			,VM.YearNo
+			,VM.FBNo
+			,VM.VendorLocationNo
+			,VM.RegularInterFBNo
+			,VM.FormattedDocumentDate
+			,VM.VendorDocumentNo
+			,VM.VendorDocumentDate
+			,VM.ServiceTaxAbatementRuleNo
+			,VM.BillAmount
+			,VM.StatusNo    		
+			,@LoginNo [DeletedBy]
+			,@LoginName [DeledtedByName]
+			,GETDATE() [DeletedDate]
+			,VM.IsExcludeFromReport
+			From Finance.accVoucherMain VM
+			Where VM.VoucherNo =@VoucherNo 
+			   
+			
+			----- Table 1
+			Insert into AuditTrail.[AuditaccVoucherDetail]
+			Select VD.*
+			From Finance.accVoucherDetail  VD
+			Where VD.VoucherNo = @VoucherNo
+			
+			---- Table 2 
+			Insert into AuditTrail.[AuditReferenceMain]
+			Select 
+			  RM.CompanyNo,RM.ReferenceNo,RM.VoucherDetailNo,RM.AccountNo,RM.SourceDocumentFormNo
+			 ,RM.SourceDocumentNo,RM.SourceDocumentDate,RM.SourceDocumentNoYearly,RM.VendorDocumentNo
+			 ,RM.VendorDocumentDate,RM.TransactionFormNo,RM.SpecificReferenceAmount,RM.BaseReferenceAmount
+			 ,RM.SpecificDrAmount,RM.SpecificCrAmount,RM.BaseDrAmount,RM.BaseCrAmount	
+			 ,RM.SpecificInprocessDrAmount,RM.SpecificInprocessCrAmount,RM.BaseInprocessDrAmount,RM.BaseInprocessCrAmount	
+			 ,RM.SpecificBalanceDrAmount,RM.SpecificBalanceCrAmount,RM.BaseBalanceDrAmount,RM.BaseBalanceCrAmount	
+			 ,RM.ByToNo,RM.CreditDays,RM.DueDate,RM.Remarks,RM.IsHold,RM.HoldReason
+			 ,RM.ReferenceTypeNo,RM.AuthorizedBy,RM.PaymentModeNo,RM.FBNo
+			 ,RM.HoldCRAmount,RM.HoldDRAmount	
+			From Finance.ReferenceMain RM
+			Where RM.ReferenceNo in ( Select RFD.ReferenceNo
+									  From Finance.accVoucherDetail AVD
+									  Inner Join Finance.ReferenceDetail RFD on RFD.VoucherDetailNo = AVD.VoucherDetailNo
+									  Where AVD.VoucherNo = @VoucherNo
+									  Group by RFD.ReferenceNo
+									 ) 
+			---- Table 3
+			
+			Insert into AuditTrail.[AuditReferenceDetail]					 
+			Select RFD.* 
+			From Finance.ReferenceDetail RFD
+			Inner Join  Finance.ReferenceMain RFM on RFM.ReferenceNo = RFD.ReferenceNo
+			Where RFD.VoucherDetailNo in ( 
+										  Select AVD.VoucherDetailNo
+										  From Finance.accVoucherDetail AVD
+										  Where AVD.VoucherNo = @VoucherNo
+										)
+
+		  ---- Table 4
+		  Insert into [AuditTrail].[AuditAccountDetail]
+		  Select AccM.AccountNo,AVD.VoucherNo,AccM.AccountName,AccM.AccountTypeNo
+		  From Finance.accVoucherDetail AVD
+		  Inner Join [masterdata].[mAccountMaster] AccM on AccM.AccountNo = AVD.AccountNo
+		  Where AVD.VoucherNo = @VoucherNo
+		  Group by AccM.AccountNo,AVD.VoucherNo,AccM.AccountName,AccM.AccountTypeNo
+	END
+	
+	return(1)
+	End Try
+	Begin Catch 
+	return(@@Error)
+	INSERT INTO [masterdata].[mErrorLog]
+		   ([ErrorDate]
+		   ,[ErrorNo]
+		   ,[ErrorSeverity]
+		   ,[ErrorState]
+		   ,[ErrorProcedure]
+		   ,[ErrorLine]
+		   ,[ErrorDescription]
+		   ,[UserNo]
+		   ,[FormCode])
+	 VALUES
+		   (getdate()
+		   ,ERROR_NUMBER()
+		   ,ERROR_SEVERITY()
+		   ,ERROR_STATE()
+		   ,ERROR_PROCEDURE()
+		   ,ERROR_LINE()
+		   ,ERROR_MESSAGE()
+		   ,null
+		   ,'VCAL')	
+	End Catch
+	
+END

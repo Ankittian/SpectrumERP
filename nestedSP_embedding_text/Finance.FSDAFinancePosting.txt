@@ -1,0 +1,137 @@
+Stored procedure Finance.FSDAFinancePosting: Stock Difference Adjustment Finance Posting. Called from Finance.FinancePostingFillValuesDocumentDetails.
+Reads: masterdata.mAccountMaster
+Parameters: @ItemDetail xml, @CompanyNo tinyint, @ItemNos varchar
+Author: K M Disha, created 16 Mar 2022
+Code:
+								
+-- =============================================
+-- Author:		K M Disha
+-- Create date: 16 Mar 2022
+-- Description:	Stock Difference Adjustment Finance Posting
+-- =============================================
+CREATE PROCEDURE [Finance].[FSDAFinancePosting]
+	@ItemDetail xml ,
+	@CompanyNo tinyint ,
+	@ItemNos varchar(max)
+	
+AS
+BEGIN
+
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+
+begin try
+
+Create table #ItemDetail (AccountNo Int,DebitAmount decimal(15,2),CreditAmount decimal(15,2),[Type] tinyint)
+
+
+
+create table #Posting ([Add to Basic] bit,Particular varchar(500),[Debit Amount] decimal(15,2) , 
+		[Credit Amount] decimal(15,2),[Account Name] int, [Ref. Detail] varchar(50),[Cost Center] varchar(50),
+		[Amount] decimal(15,2), [Type] tinyint,SlNo tinyint ,MiscChargeNo int , TaxCodeMiscChargesDetailNo int,
+			ItemNos varchar(200))
+
+;with cte as 
+	(
+		SELECT v.value('AccountNo[1]','Int') AS AccountNo,
+				v.value('Debit_x0020_Amount[1]','decimal(15,2)') AS DebitAmount,
+				v.value('Credit_x0020_Amount[1]','decimal(15,2)') AS CreditAmount,
+				v.value('Type[1]','Tinyint') AS [Type]
+		FROM @ItemDetail.nodes('/DocumentElement/Table') x(v)
+	)
+	Insert into #ItemDetail 
+	select AccountNo ,DebitAmount,CreditAmount,[Type]
+	from cte group by AccountNo,DebitAmount,CreditAmount,[Type]
+		 
+	 
+	 Insert into #Posting 
+		select cast(0 as bit) [Add to Basic]
+				,'Stock Account' as Particular
+				,Case When ID.DebitAmount = 0 Then null else ID.DebitAmount end [Debit Amount]
+				,Case When ID.CreditAmount = 0 Then null else ID.CreditAmount end [Credit Amount]
+				,ID.AccountNo [Account Name]
+				,cast(null as varchar) [Ref. Detail]
+				,cast(null as varchar) [Cost Center]
+				,Case When ID.[Type] = 1 Then ID.DebitAmount
+						When ID.[Type] = 2 Then ID.CreditAmount
+				End [Amount]
+				,ID.[Type] [Type]
+				,ROW_NUMBER()over(order by ID.AccountNo ) + (select isnull(max(SlNo),0) from #Posting) SlNo
+				,null MiscChargeNo
+				,null TaxCodeMiscChargesDetailNo
+				,'' ItemNos
+			from #ItemDetail ID
+			Inner Join masterdata.mAccountMaster AM On AM.AccountNo = ID.AccountNo
+			Where AccountTypeNo = 14
+			
+		 
+		Insert into #Posting 
+		select cast(0 as bit) [Add to Basic]
+				,'Consumption Account' as Particular
+				,Case When ID.DebitAmount = 0 Then null else ID.DebitAmount end [Debit Amount]
+				,Case When ID.CreditAmount = 0 Then null else ID.CreditAmount end [Credit Amount]
+				,ID.AccountNo [Account Name]
+				,cast(null as varchar) [Ref. Detail]
+				,cast(null as varchar) [Cost Center]
+				,Case When ID.[Type] = 1 Then ID.DebitAmount
+						When ID.[Type] = 2 Then ID.CreditAmount
+				End [Amount]
+				,ID.[Type] [Type]
+				,ROW_NUMBER()over(order by ID.AccountNo ) + (select isnull(max(SlNo),0) from #Posting) SlNo
+				,null MiscChargeNo
+				,null TaxCodeMiscChargesDetailNo
+				,'' ItemNos
+			from #ItemDetail ID
+			Inner Join masterdata.mAccountMaster AM On ID.AccountNo = AM.AccountNo
+			Where AM.AccountTypeNo = 15
+
+
+ if exists(select 1 from #Posting having abs(SUM([Credit Amount])- SUM([Debit Amount]))<=.5)
+ begin
+	update PD set [Debit Amount] = [Debit Amount] + ISNULL(diff,0)
+		from
+		#Posting PD
+		cross join (select SUM([Credit Amount])- SUM([Debit Amount]) Diff from #Posting) tt
+		where PD.SlNo  = 1
+	
+	update PD set [Credit Amount] = [Credit Amount] + ISNULL(diff,0)
+		from
+		#Posting PD
+		cross join (select SUM([Debit Amount])- SUM([Credit Amount]) Diff from #Posting) tt
+		where PD.SlNo  = 1
+			
+ end
+ 
+ 
+select * from #Posting
+ where isnull([Debit Amount],0) >0 or isnull([Credit Amount],0) >0
+   
+   
+   
+END TRY
+	
+	BEGIN CATCH
+		select ERROR_MESSAGE()
+		INSERT INTO [masterdata].[mErrorLog]
+			   ([ErrorDate]
+			   ,[ErrorNo]
+			   ,[ErrorSeverity]
+			   ,[ErrorState]
+			   ,[ErrorProcedure]
+			   ,[ErrorLine]
+			   ,[ErrorDescription]
+			   ,[UserName]
+			   ,[FormCode])
+		VALUES
+			   (getdate()
+			   ,ERROR_NUMBER()
+			   ,ERROR_SEVERITY()
+			   ,ERROR_STATE()
+			   ,ERROR_PROCEDURE()
+			   ,ERROR_LINE()
+			   ,ERROR_MESSAGE()
+			   ,SUSER_SNAME()
+			   ,'FSDA')
+	END CATCH
+END

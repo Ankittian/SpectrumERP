@@ -1,0 +1,65 @@
+Stored procedure Sales.SDSOUpdateItemSchedule: Update fromqty and toqty of Item Schedule. Called from Sales.SDSODelete.
+Writes: Sales.SalesOrderItemScheduleDetail
+Reads: Sales.SalesOrderItemScheduleDetail
+Parameters: @SalesOrderNo Int, @OutputStatus bit = Null OUTPUT, @Result varchar(100) = Null OUTPUT
+Author: Priyanka Tiwari, created 28 July 2014
+Code:
+-- =============================================
+-- Author:		Priyanka Tiwari
+-- Create date: 28 July 2014
+-- Description: Update fromqty and toqty of Item Schedule.
+-- =============================================
+CREATE PROCEDURE [Sales].[SDSOUpdateItemSchedule]
+(
+ @SalesOrderNo Int,
+ @OutputStatus bit = Null output,
+ @Result varchar(100) = Null output	
+)
+AS
+BEGIN
+
+	SET NOCOUNT ON;	
+	BEGIN TRY
+	
+	-- 1 Update Item Schedule
+	
+	Declare @MaxSLNo tinyint,@Count tinyint
+
+	Select @MaxSLNo = MAX(SLNo) 
+	From Sales.SalesOrderItemScheduleDetail where SalesOrderNo = @SalesOrderNo
+
+		Set @Count = 1
+		While @Count < = @MaxSLNo
+		Begin
+				Update SOIS
+				Set SOIS.FromQty = ISNULL(dtPreSchedule.ToQty,0) +1,
+					SOIS.ToQty = ISNULL(dtPreSchedule.ToQty,0) + SOIS.Quantity 	
+				From Sales.SalesOrderItemScheduleDetail SOIS
+				Outer Apply(Select SOIS1.ToQty
+							From Sales.SalesOrderItemScheduleDetail SOIS1
+							Where SOIS.SalesOrderNo = SOIS1.SalesOrderNo
+							And SOIS.ItemNo = SOIS1.ItemNo
+							And ISNULL(SOIS.MakeNo,0) = ISNULL(SOIS1.MakeNo,0)
+							And ISNULL(SOIS.CombinationNo,0) = isnull(SOIS1.CombinationNo,0)
+							And SOIS1.SLNo = SOIS.SLNo - 1
+							)dtPreSchedule
+				Where SOIS.SalesOrderNo = @SalesOrderNo
+				And SOIS.SLNo = @Count
+				
+				Set @Count = @Count + 1
+		End		
+		
+
+		set @OutputStatus =1
+		set @Result='Success'
+
+	    Select 1
+	    
+	END TRY	
+	BEGIN CATCH
+		set @OutputStatus =0
+		set @Result=error_message()
+		
+		Select 0,Error_Message()
+	END CATCH
+END

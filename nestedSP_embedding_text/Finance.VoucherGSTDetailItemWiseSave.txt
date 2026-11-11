@@ -1,0 +1,37 @@
+Stored procedure Finance.VoucherGSTDetailItemWiseSave. Called from Finance.VoucherGSTPosting.
+Writes: Finance.VoucherGSTDetailItemWise
+Parameters: @VoucherGSTDetailNo int, @HSNSACCodeNo smallint, @Type varchar(10), @MiscChargeNo smallint, @Amount decimal(15,2), @DetailInternalID int
+Author: akhil, created 16 june 2017
+Code:
+-- =============================================
+-- Author:		akhil	
+-- Create date: 16 june 2017
+-- Description:	<Description,,>
+-- =============================================
+CREATE PROCEDURE [Finance].[VoucherGSTDetailItemWiseSave]
+	@VoucherGSTDetailNo int, 
+	@HSNSACCodeNo smallint, 
+	@Type varchar(10),
+	@MiscChargeNo smallint,
+	@Amount decimal(15,2) ,
+	@DetailInternalID int
+AS
+BEGIN
+begin try
+	
+	SET NOCOUNT ON;
+	 
+	 insert into Finance.VoucherGSTDetailItemWise (VoucherGSTDetailNo,HSNSACCodeNo,Type,MiscChargeNo,Amount,DetailInternalID)
+	 values (@VoucherGSTDetailNo,@HSNSACCodeNo,@Type,@MiscChargeNo,@Amount ,@DetailInternalID)
+	 
+	 select 1, IDENT_CURRENT ('Finance.VoucherGSTDetailItemWise')
+
+end try
+
+begin catch
+	select 0,ERROR_MESSAGE ()
+	 
+end catch
+
+    
+END 

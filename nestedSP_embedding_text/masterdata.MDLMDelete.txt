@@ -1,0 +1,49 @@
+Stored procedure masterdata.MDLMDelete: Delete from Location Master. Called from masterdata.ADCTDelete.
+Writes: masterdata.mLocationMaster, masterdata.mLocationMasterCompanyDetail
+Parameters: @Id smallint, @loginNo smallint
+Author: Yusuf, created 4-Jul-12
+Code:
+
+
+
+-- =============================================
+-- Author:		Yusuf
+-- Create date: 4-Jul-12
+-- Description:	Delete from Location Master
+-- =============================================
+CREATE Procedure [masterdata].[MDLMDelete] 
+	-- Add the parameters for the stored procedure here
+	 @Id smallint
+	,@loginNo smallint
+AS
+BEGIN
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT Countryments.
+	SET NOCOUNT ON;
+
+    --Try Block Starts Here
+	begin Try
+
+	Begin Transaction
+	--Transaction Begins from here
+
+	delete from MasterData.mLocationMasterCompanyDetail where LocationNo=@Id
+	delete from MasterData.mLocationMaster where LocationNo=@Id
+
+	select 1,'Success'
+
+	--Transaction Ends here
+	Commit Transaction
+
+	End Try
+	--Try Block ends here
+	--Catch Block starts here
+	Begin Catch
+		Rollback Transaction
+		select 0, error_message()
+	End Catch
+	--Catch Block ends here
+END
+
+
+----

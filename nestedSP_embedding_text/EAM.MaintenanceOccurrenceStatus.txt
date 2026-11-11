@@ -1,0 +1,214 @@
+Stored procedure EAM.MaintenanceOccurrenceStatus: To Change Status of Maintenance Schedule Occurrence. Called from EAM.EAMOAuthorize.
+Writes: EAM.MaintenanceScheduleMain, EAM.MaintenanceScheduleOccurrenceDetail
+Reads: EAM.MaintenanceOrderMain, EAM.MaintenanceOrderRefDetail, EAM.MaintenanceScheduleMain, EAM.MaintenanceScheduleOccurrenceDetail, EAM.MaintenanceScheduleTriggerDetail, EAM.MeterReadingTransactionDetail, EAM.MSChangeStatus
+Parameters: @MaintenanceScheduleNo int, @OccurrenceNo smallint, @StatusNo tinyint, @TriggerNo tinyint, @OutputStatus tinyint = null OUTPUT, @Result varchar(4000) = null OUTPUT, @FormCode varchar(4) = null
+Author: HimanshuVn, created 26 Nov 2022
+Code:
+--=============================================
+-- Author:		HimanshuVn
+-- Create date: 26 Nov 2022
+-- Description:	To Change Status of Maintenance Schedule Occurrence
+-- =============================================
+CREATE PROCEDURE [EAM].[MaintenanceOccurrenceStatus] 	
+ @MaintenanceScheduleNo  int
+,@OccurrenceNo  smallint
+,@StatusNo  tinyint
+,@TriggerNo tinyint	
+,@OutputStatus tinyint = null output
+,@Result varchar(4000)  = null output
+,@FormCode varchar(4) = null ---For this ticket 130325002, we (Alok + Himanshu) decided that when this procedure get called from MSCS form then only we will 
+							-- complete the status, for other form we will not change the maintenance order main Status.
+AS
+BEGIN
+Begin Try
+	
+	Declare @IsCloseSingleTriggerMS bit = 0
+
+	If @StatusNo = 2
+	Begin 
+		If Exists(	
+					Select 1
+					From EAM.MaintenanceOrderRefDetail MORD
+					Inner Join EAM.MaintenanceOrderMain MOM ON MOM.MaintenanceOrderNo = MORD.MaintenanceOrderNo
+					Where MOM.SourceDocumentNo = 3 
+						And MORD.RefDocNo = @MaintenanceScheduleNo
+						And ISNULL(MORD.TriggerNo,MOM.TriggerNo)  = @TriggerNo
+						And ISNULL(MORD.OccurrenceNo,MOM.RefOccurrenceNo) = @OccurrenceNo
+					Union 
+					Select 1
+					From EAM.MaintenanceOrderMain MOM
+					Where MOM.RefMaintenanceScheduleNo = @MaintenanceScheduleNo
+						And MOM.TriggerNo = @TriggerNo
+						And MOM.RefOccurrenceNo = @OccurrenceNo	
+				)
+		Begin	
+			UPDATE EAM.MaintenanceScheduleOccurrenceDetail
+			SET StatusNo = 2 
+			Where MaintenanceScheduleNo= @MaintenanceScheduleNo
+				  And TriggerNo=@TriggerNo
+				  And OccurrenceNo= @OccurrenceNo
+		End
+		Else
+		Begin
+			UPDATE EAM.MaintenanceScheduleOccurrenceDetail
+			SET StatusNo = 1
+			Where MaintenanceScheduleNo= @MaintenanceScheduleNo
+				  And TriggerNo=@TriggerNo
+				  And OccurrenceNo= @OccurrenceNo
+		End
+	End
+	
+	If @StatusNo <> 2
+	Begin 
+		UPDATE EAM.MaintenanceScheduleOccurrenceDetail
+		SET StatusNo = @StatusNo 
+		Where MaintenanceScheduleNo= @MaintenanceScheduleNo
+			  And TriggerNo=@TriggerNo
+			  And OccurrenceNo= @OccurrenceNo			
+	End
+	
+	Declare @ISCloseMS bit , @MSCSStatusNo tinyint
+	Select @ISCloseMS = MSCS.IsCloseMS 
+		  ,@MSCSStatusNo = MSCS.StatusNo
+	From EAM.MSChangeStatus MSCS        
+	Where MSCS.MaintenanceScheduleNo = @MaintenanceScheduleNo
+		  And MSCS.DocumentStatusNo = 30    
+		  
+	/*if maintenance schedule has single trigger then we will change the status of maintenance schedule*/
+	Begin
+		Select MaintenanceScheduleNo
+		Into #SingleTriggerMS
+		From EAM.MaintenanceScheduleTriggerDetail  TD
+		Where TD.MaintenanceScheduleNo = @MaintenanceScheduleNo
+		GROUP BY MaintenanceScheduleNo 
+		Having COUNT(TriggerDetailNo) = 1
+
+			-- Time based
+		Select @IsCloseSingleTriggerMS = CONVERT(bit,
+							CASE WHEN TD.ScheduleTypeNo = 1 and OA.OccurrenceCount = 1-- Fixed
+							THEN 1
+							WHEN TD.ScheduleTypeNo = 2 And TD.TimeEndAfterOccurrence IS NOT NULL and @OccurrenceNo >= TD.TimeEndAfterOccurrence -- Recurring
+							THEN 1
+							WHEN TD.ScheduleTypeNo = 2 And TD.TimeEndDate IS NOT NULL and CONVERT(date,OA.MXOccDate)  >=  CONVERT(date,DATEADD(DAY,-TD.TimeThresholdDays,TD.TimeEndDate)) -- Recurring
+							THEN 1
+							ELSE 
+								0
+							END
+						) 
+		From EAM.MaintenanceScheduleTriggerDetail TD
+		Inner JOin #SingleTriggerMS ST on ST.MaintenanceScheduleNo = TD.MaintenanceScheduleNo
+		Outer apply(
+					Select COUNT(1) [OccurrenceCount],MAX(OccurrenceDate) MXOccDate
+					From EAM.MaintenanceScheduleOccurrenceDetail OD
+					Where OD.MaintenanceScheduleNo  = TD.MaintenanceScheduleNo
+					and OD.TriggerNo = TD.TriggerNo
+				) OA
+		Where 
+			TD.MaintenanceScheduleNo = @MaintenanceScheduleNo
+			And TD.TriggerNo = @TriggerNo
+			And  TriggerTypeNo = 1 -- Time Based
+			And (TD.ScheduleTypeNo = 1 OR (TD.ScheduleTypeNo = 2 And (TD.TimeEndAfterOccurrence IS NOT NULL OR TD.TimeEndDate IS NOT NULL)))
+			
+
+		-- meter Reading based
+		Select @IsCloseSingleTriggerMS = CONVERT(bit,
+					CASE WHEN TD.ScheduleTypeNo = 2 And TD.MREndBy IS NOT NULL And OA.OccurrenceCount >= TD.MREndBy 
+							THEN 1 
+							WHEN TD.MREndValue = 2 And TD.MREndValue IS NOT NULL And SUM(CONVERT(decimal(15,4),MTD.TotalReadingValue)) >= TD.MREndValue
+							THEN 1 
+					ELSE 0
+					END 
+					) 
+		From EAM.MaintenanceScheduleTriggerDetail TD
+		Inner Join #SingleTriggerMS ST on ST.MaintenanceScheduleNo = TD.MaintenanceScheduleNo
+		Inner Join EAM.MaintenanceScheduleMain SM on SM.MaintenanceScheduleNo = TD.MaintenanceScheduleNo
+		Left Join EAM.MeterReadingTransactionDetail MTD on MTD.MeasurementParameterNo = TD.MeasurementParameterNo
+													And MTD.FormTag = 'EAMR'
+													And ISNULL(MTD.EquipmentNo,0) = ISNULL(SM.EquipmentNo,0)
+													And ISNULL(MTD.FunctionalLocationNo,0) = ISNULL(SM.FunctionalLocationNo,0)
+													And ISNUMERIC(MTD.TotalReadingValue) = 1
+		Outer apply(
+					Select COUNT(1) [OccurrenceCount],MAX(OccurrenceDate) MXOccDate
+					From EAM.MaintenanceScheduleOccurrenceDetail OD
+					Where OD.MaintenanceScheduleNo  = TD.MaintenanceScheduleNo
+					and OD.TriggerNo = TD.TriggerNo
+					) OA
+		Where 
+			TD.MaintenanceScheduleNo = @MaintenanceScheduleNo
+			And TD.TriggerNo = @TriggerNo
+			And TD.TriggerTypeNo = 2 -- Meter Reading
+			And (TD.ScheduleTypeNo = 2 OR (TD.MREndBy IS NOT NULL  or TD.MREndValue IS NOT NULL ))
+		Group by TD.ScheduleTypeNo,TD.MREndBy,TD.MREndValue,OA.OccurrenceCount
+	
+	    Drop table #SingleTriggerMS
+	End
+
+	
+	
+			if @ISCloseMS = 1
+			Begin
+					Update EAM.MaintenanceScheduleMain  
+					set StatusNo = @MSCSStatusNo
+					Where MaintenanceScheduleNo = @MaintenanceScheduleNo
+			End
+			Else
+			Begin
+					 IF (ISNULL(@ISCloseMS,1) = 1 OR @IsCloseSingleTriggerMS = 1)  And Exists(select 1 From EAM.MaintenanceScheduleOccurrenceDetail where MaintenanceScheduleNo = @MaintenanceScheduleNo And statusNo IN (1,8) )
+					 BEGIN
+						If Exists(	
+									Select 1
+									From EAM.MaintenanceOrderRefDetail MORD
+									Inner Join EAM.MaintenanceOrderMain MOM ON MOM.MaintenanceOrderNo = MORD.MaintenanceOrderNo
+									Where MOM.SourceDocumentNo = 3 
+										And MORD.RefDocNo = @MaintenanceScheduleNo
+									Union 
+									Select 1
+									From EAM.MaintenanceOrderMain MOM
+									Where MOM.RefMaintenanceScheduleNo = @MaintenanceScheduleNo
+								)
+						Begin
+							update EAM.MaintenanceScheduleMain set StatusNo = 8 where  MaintenanceScheduleNo= @MaintenanceScheduleNo
+						End
+						Else
+						Begin
+							update EAM.MaintenanceScheduleMain set StatusNo = 1 where  MaintenanceScheduleNo= @MaintenanceScheduleNo
+						End
+					 END
+					 Else if ISNULL(@ISCloseMS,1) = 1   And exists(select 1 from EAM.MaintenanceScheduleOccurrenceDetail where  MaintenanceScheduleNo = @MaintenanceScheduleNo and Statusno = 3 )-- Hold 
+							And  (@FormCode = 'MSCS' OR @IsCloseSingleTriggerMS = 1)
+					 Begin
+						update EAM.MaintenanceScheduleMain set StatusNo = 3 where  MaintenanceScheduleNo= @MaintenanceScheduleNo
+					 End
+					 Else If (ISNULL(@ISCloseMS,1) = 1) And exists(select 1 from EAM.MaintenanceScheduleOccurrenceDetail where  MaintenanceScheduleNo = @MaintenanceScheduleNo and Statusno = 4    )--cancel
+							And  (@FormCode = 'MSCS' OR @IsCloseSingleTriggerMS = 1)
+						
+					 Begin
+						update EAM.MaintenanceScheduleMain set StatusNo = 4 where  MaintenanceScheduleNo= @MaintenanceScheduleNo
+					 End
+					 Else if (ISNULL(@ISCloseMS,1) = 1)  And exists(select 1 from EAM.MaintenanceScheduleOccurrenceDetail where  MaintenanceScheduleNo = @MaintenanceScheduleNo and Statusno = 7  )--shortclose
+							And  (@FormCode = 'MSCS' OR @IsCloseSingleTriggerMS = 1)
+					 Begin
+						update EAM.MaintenanceScheduleMain set StatusNo = 7 where  MaintenanceScheduleNo= @MaintenanceScheduleNo
+					 End				
+					 Else if (ISNULL(@ISCloseMS,1) = 1)  And exists(select 1 from EAM.MaintenanceScheduleOccurrenceDetail where  MaintenanceScheduleNo = @MaintenanceScheduleNo and Statusno = 2 )--completed
+							And  (@FormCode = 'MSCS' OR @IsCloseSingleTriggerMS = 1)
+					 Begin
+						update EAM.MaintenanceScheduleMain set StatusNo = 2 where  MaintenanceScheduleNo= @MaintenanceScheduleNo
+					 End
+			End	
+	
+	
+
+ set @OutputStatus =1
+ set @Result='Success'
+
+End Try
+
+Begin Catch
+	set @OutputStatus =0
+	set @Result=error_message()
+
+	select 0, error_message()
+End Catch
+
+END

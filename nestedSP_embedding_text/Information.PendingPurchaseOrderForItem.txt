@@ -1,0 +1,103 @@
+Stored procedure Information.PendingPurchaseOrderForItem: Get Pending Purchase Order for Item. Called from Purchase.PMPOGetItemInfo.
+Reads: Inventory.GRNItemDetail, Inventory.GRNMain, masterdata.mMakeMaster, payroll.tblDeptMaster, payroll.tblDivisionMaster, Purchase.POAmendmentItemDetail, Purchase.POAmendmentMain, Purchase.POItemDetail, Purchase.POMain, Security.Login
+Parameters: @CompanyNo tinyint, @DocumentDate smalldatetime, @ItemNo int
+Author: Teerath, created 2013/09/24
+Code:
+
+-- =============================================
+-- Author:		Teerath
+-- Create date: 2013/09/24
+-- Description:	Get Pending Purchase Order for Item
+-- =============================================
+CREATE PROCEDURE [Information].[PendingPurchaseOrderForItem] 
+	-- Add the parameters for the stored procedure here
+	@CompanyNo tinyint,
+	@DocumentDate smalldatetime,
+	@ItemNo int
+AS
+BEGIN
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+
+    -- Insert statements for procedure here
+	
+
+	declare @str varchar(max)
+    select @str=masterdata.JSForInformation('PMPO')
+    set @str=@str+masterdata.CSSForInformation('PMPO')
+	set @str=@str+'<table class="altrowstable" id="alternatecolorPOPendingItemInfo">'
+	set @str=@str+'<Caption><Font color="Maroon"><h3 align="Left"><b>Pending Purchase Order</b></h3></Font></Caption>'
+    set @str=@str+'<tr><th>Sl. No.</th><th>Division</th><th>Department</th><th>Document No.</th><th>Document Date</th><th>Make</th><th>PO Quantity</th><th>Received Quantity</th><th>Balance Quantity</th><th>Created By </th><th>Authorized By</th></tr>'
+	set @str=@str
+				 +( REPLACE(
+					REPLACE(
+				    REPLACE(
+				    REPLACE(
+				    REPLACE(
+				    REPLACE(
+				    replace(
+					replace(
+					replace(
+					replace(
+					replace((    
+							Select ROW_NUMBER() over ( Order by PO.DocumentDate desc) as td1
+							      ,isnull(DM.DivisionName,'') td2
+								  ,Isnull(DP.DeptName,'') td3
+							      ,PO.DocumentNoYearly td4
+								  ,convert(varchar(20),PO.DocumentDate,103) td5
+								  ,Isnull( MM.MakeName,'')td6
+								  ,SUM( POID.Quantity)  td7
+								  ,Isnull(Cast(Sum(Bal1.ReceivedQty)as decimal(10,3)),0) td8
+								  ,Sum(POID.Quantity - Isnull(Bal1.ReceivedQty,0)) td9
+                                  ,L1.PrintingName td10
+                                  ,Isnull(L2.PrintingName,'') td11
+							From Purchase.POMain PO 
+							Inner Join Purchase.POItemDetail POID On PO.PONo = POID.PONo
+							LEFT Join masterdata.mMakeMaster MM On POID.MakeNo = MM.MakeNo 
+							Left Join (SElect PM.PONo,POID.ItemNo,POID.MakeNo,POID.TechnicalGradeNo,sum(GRID.ReceivedQty)  ReceivedQty
+											   ,SUM(GRID.ChallanQty) ChallanQty,SUM(GRID.AcceptedQty) AcceptedQty
+												From Inventory.GRNMain GRNM
+												INNER JOIN Inventory.GRNItemDetail GRID	ON GRID.GRNNo=GRNM.GRNNo
+												INNER JOIN Purchase.POAmendmentItemDetail POID ON IsNull(POID.POAmendmentNo,0)=IsNull(GRID.POAmendmentNo,0)
+																							   AND POID.ItemNo=GRID.ItemNo
+																							   AND IsNull(POID.MakeNo,0)=IsNull(GRID.MakeNo,0)
+																							   And IsNull(POID.TechnicalGradeNo,0)=IsNull(GRID.TechnicalGradeNo,0)
+																							   
+												INNER JOIN Purchase.POAmendmentMain POAM ON POAM.POAmendmentNo=POID.POAmendmentNo
+												Inner Join Purchase.POMain PM on PM.PONo=POAM.PONo
+												Group By PM.PONo,POID.ItemNo,POID.MakeNo,POID.TechnicalGradeNo
+										) Bal1 on Bal1.PONo=PO.PONo
+							                   And Bal1.ItemNo=POID.ItemNo
+							                   And isnull(Bal1.MakeNo,0)=isnull(POID.MakeNo,0)
+							                   And isnull(Bal1.TechnicalGradeNo,0)=isnull(POID.TechnicalGradeNo,0)
+							Left join payroll.tblDeptMaster DP ON DP.DeptNo=PO.DeptNo
+							Left Join payroll.tblDivisionMaster DM ON DM.DivisionNo=PO.DivisionNo
+							Inner Join Security.Login L1 ON L1.LoginNo=PO.CreatedBy
+							Left Join Security.Login L2 ON L2.LoginNo=PO.AuthorizedBy
+							where PO.StatusNo in(1,8,5,6)   ------For Pending
+							      and POID.ItemNo=@ItemNo 
+							      and PO.CompanyNo=@CompanyNo 
+							      and PO.DocumentDate<=@DocumentDate
+							Group by  PO.DocumentNoYearly,PO.DocumentDate,POID.ItemNo,POID.MakeNo,MM.MakeName
+								  ,DP.DeptName,L1.PrintingName,L2.PrintingName,DM.DivisionName
+								 
+								  
+						 for xml path('tr')),'<td1>','<td style="text-align: center;">')
+						                     ,'<td2>','<td>')
+											 ,'<td3>','<td>')
+											 ,'<td4>','<td>')
+											 ,'<td5>','<td style="text-align: center;">')
+											 ,'<td6>','<td>')
+											 ,'<td7>','<td style="text-align: right;">')
+											 ,'<td8>','<td style="text-align: right;">')
+											 ,'<td9>','<td style="text-align: right;">')
+											 ,'<td10>','<td>')
+											 ,'<td11>','<td>')
+											)
+								
+				   
+	set @str=@str+'</table>'
+	
+	select @str
+END

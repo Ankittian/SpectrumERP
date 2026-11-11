@@ -1,0 +1,164 @@
+Stored procedure CustomerService.CMSOFillValuesAccountAssignment: Fill Values Dependent Script For [CMSOFillValuesAccountAssignment]. Called from Finance.FOAMFillValuesOrderNo.
+Reads: CustomerService.ServiceOrderAccountAssignmentDetail, Finance.ARDItemRule, Finance.ARDMain, Finance.ARDSaleAccountRule, Finance.ARDVendorLocationRule, Finance.SaleAccPostingRuleDetails, masterdata.mAccountMaster, masterdata.mEAMResourceMaster, masterdata.mItemMaster, masterdata.mVendorLocationDetail
+Parameters: @ItemNos xml, @ServiceItemNos xml, @PaymentTermNos xml, @CustomerLocationNo int, @DocumentDate smalldatetime, @ServiceOrderNo int, @ResourceNos xml
+Author: Yusuf, created 20 Feb 2014
+Code:
+-- =============================================
+-- Author:		Yusuf
+-- Create date: 20 Feb 2014
+-- Description: Fill Values Dependent Script For [CMSOFillValuesAccountAssignment]
+-- =============================================
+CREATE PROCEDURE [CustomerService].[CMSOFillValuesAccountAssignment] 
+(
+	@ItemNos xml
+	,@ServiceItemNos xml
+	,@PaymentTermNos xml
+	,@CustomerLocationNo int
+	,@DocumentDate smalldatetime
+	,@ServiceOrderNo int
+	,@ResourceNos xml
+)
+AS
+
+BEGIN
+	SET NOCOUNT ON;
+	
+	BEGIN TRY
+		declare @ResourceDetail table(ResourceNo int)
+		insert into @ResourceDetail
+		SELECT v.value('Resource_x0020_Name[1]','int') AS ResourceNo
+		FROM @ResourceNos.nodes('/DocumentElement/Table') x(v)
+		where v.value('Resource_x0020_Name[1]','int')>0
+		
+		declare @ItemDetail table(ItemNo int,Code varchar(5))
+		insert into @ItemDetail
+		SELECT v.value('Item_x0020_Code[1]','int') AS ItemNo,'PIM'
+		FROM @ItemNos.nodes('/DocumentElement/Table') x(v)
+		where v.value('Item_x0020_Code[1]','int')>0
+		
+		insert into @ItemDetail
+		SELECT v.value('Service_x0020_Description[1]','int') AS ItemNo,'SIM'
+		FROM @ServiceItemNos.nodes('/DocumentElement/Table') x(v)
+		where v.value('Service_x0020_Description[1]','int')>0
+				
+		declare @PaymentTermDetail table (PaymentTypeNo tinyint)
+		insert into @PaymentTermDetail
+		SELECT v.value('Payment_x0020_Type[1]','int') AS PaymentTypeNo
+		FROM @PaymentTermNos.nodes('/DocumentElement/Table') x(v)
+		where v.value('Payment_x0020_Type[1]','tinyint')>0
+		
+	--0
+		select 'Sales Revenue A/c' [Account Type],IM.ItemDescription+ISNULL(REPLACE(AD.Flag,AD.Flag,''),' *') [Particular]
+				,isnull(AD.AccountNo,tt.AccountNo)[Account Name]
+				,11 [AccountTypeNo],ID.ItemNo Id,ID.Code [Flag]
+		from @ItemDetail ID 
+			inner join masterdata.mItemMaster IM on IM.ItemNo=ID.ItemNo
+			outer apply (
+						-- select AM.AccountNo,IR.ItemNo 
+						--  from Finance.ARDItemRule IR 
+						--  inner join Finance.ARDMain ARDM on ARDM.ARDNo=IR.ARDNo
+						--  cross apply (select MAX(ARDMIn.EffectiveFrom) EffectiveFrom
+						--			 from Finance.ARDMain ARDMIn
+						--			 where ARDMIn.ARDNo=IR.ARDNo
+						--				and ARDMIn.EffectiveFrom<=@DocumentDate
+						--			having MAX(ARDMIn.EffectiveFrom)=ARDM.EffectiveFrom) MaxARD
+						--  inner join masterdata.mAccountMaster AM on AM.AccountNo=IR.AccountNo
+						--									and AM.AccountTypeNo=11
+						--  inner join Finance.ARDSaleAccountRule SAR on SAR.ARDNo=IR.ARDNo
+						--where SAR.SaleAccPostingRuleNo in (select PRD.SaleAccPostingRuleNo
+						--									from Finance.SaleAccPostingRuleDetails PRD
+						--									where isnull(PRD.SalesCategoryNo,@SalesCategoryNo)=@SalesCategoryNo
+						--										and isnull(PRD.SalesTypeNo,@ServiceOrderTypeNo)=@ServiceOrderTypeNo
+						--										and isnull(PRD.SalesProcessingNo,ID.ProcessingTypeNo)=ID.ProcessingTypeNo)
+						--	and IR.ItemNo=IM.ItemNo
+						--union all
+						select AM.AccountNo,IR.ItemNo 
+					     from Finance.ARDItemRule IR 
+						  inner join Finance.ARDMain ARDM on ARDM.ARDNo=IR.ARDNo
+						  cross apply (select MAX(ARDMIn.EffectiveFrom) EffectiveFrom
+									 from Finance.ARDMain ARDMIn
+									 where ARDMIn.ARDNo=IR.ARDNo
+										and ARDMIn.EffectiveFrom<=@DocumentDate
+									having MAX(ARDMIn.EffectiveFrom)=ARDM.EffectiveFrom) MaxARD
+						  inner join masterdata.mAccountMaster AM on AM.AccountNo=IR.AccountNo
+															and AM.AccountTypeNo=11
+						where ARDM.ARDNo not in (select ARDNo
+													from Finance.ARDSaleAccountRule)
+							and IR.ItemNo=IM.ItemNo)tt 			
+			left join [CustomerService].ServiceOrderAccountAssignmentDetail AD on AD.Id=id.ItemNo
+															and AD.Flag=ID.Code
+															and AD.AccountTypeNo=11
+															and AD.ServiceOrderNo=@ServiceOrderNo
+		union all
+		select 'Resource Income/ Expense A/c',RM.ResourceName+ISNULL(REPLACE(AD.Flag,AD.Flag,''),' *')
+				,AD.AccountNo
+				,0,RD.ResourceNo Id,'RIM' [Flag]
+		from @ResourceDetail RD 
+			inner join masterdata.mEAMResourceMaster RM on RM.EAMResourceNo=RD.ResourceNo
+			left join [CustomerService].ServiceOrderAccountAssignmentDetail AD on AD.Id=RD.ResourceNo
+															and AD.Flag='RIM'
+															and AD.AccountTypeNo=0
+															and AD.ServiceOrderNo=@ServiceOrderNo
+		union all
+		select top 1 'Customer Receivable Account',VLD.VendorName+ISNULL(REPLACE(AD.Flag,AD.Flag,''),' *')
+				,isnull(AD.AccountNo,LR.AccountNo)
+				,7,@CustomerLocationNo Id,'CRA' [Flag]
+		from masterdata.mVendorLocationDetail VLD 
+			left join Finance.ARDVendorLocationRule LR on LR.VendorLocationNo=VLD.VendorLocationNo
+													and LR.AccountTypeNo=7
+			left join [CustomerService].ServiceOrderAccountAssignmentDetail AD on AD.Id=@CustomerLocationNo
+															and AD.Flag='CRA'
+															and AD.AccountTypeNo=7
+															and AD.ServiceOrderNo=@ServiceOrderNo
+		where vld.VendorLocationNo=@CustomerLocationNo
+		union all
+		select top 1 'Customer Prepayable Account',VLD.VendorName+ISNULL(REPLACE(AD.Flag,AD.Flag,''),' *')
+				,isnull(AD.AccountNo,LR.AccountNo)
+				,8,@CustomerLocationNo Id,'CPA' [Flag]
+		from masterdata.mVendorLocationDetail VLD 
+			left join Finance.ARDVendorLocationRule LR on LR.VendorLocationNo=VLD.VendorLocationNo
+													and LR.AccountTypeNo=8
+			left join [CustomerService].ServiceOrderAccountAssignmentDetail AD on AD.Id=@CustomerLocationNo
+															and AD.Flag='CPA'
+															and AD.AccountTypeNo=8
+															and AD.ServiceOrderNo=@ServiceOrderNo
+		where vld.VendorLocationNo=@CustomerLocationNo
+			and exists (select 1 from @PaymentTermDetail where PaymentTypeNo=2)
+		union all
+		select top 1 'Customer Deposit Account',VLD.VendorName+ISNULL(REPLACE(AD.Flag,AD.Flag,''),' *')
+				,isnull(AD.AccountNo,LR.AccountNo)
+				,9,@CustomerLocationNo Id,'CDA' [Flag]
+		from masterdata.mVendorLocationDetail VLD 
+			left join Finance.ARDVendorLocationRule LR on LR.VendorLocationNo=VLD.VendorLocationNo
+													and LR.AccountTypeNo=9
+			left join [CustomerService].ServiceOrderAccountAssignmentDetail AD on AD.Id=@CustomerLocationNo
+															and AD.Flag='CDA'
+															and AD.AccountTypeNo=9
+															and AD.ServiceOrderNo=@ServiceOrderNo
+		where vld.VendorLocationNo=@CustomerLocationNo
+			and exists (select 1 from @PaymentTermDetail where PaymentTypeNo=3)	
+		
+	END TRY
+	BEGIN CATCH
+		INSERT INTO [masterdata].[mErrorLog]
+			   ([ErrorDate]
+			   ,[ErrorNo]
+			   ,[ErrorSeverity]
+			   ,[ErrorState]
+			   ,[ErrorProcedure]
+			   ,[ErrorLine]
+			   ,[ErrorDescription]
+			   ,[UserName]
+			   ,[FormCode])
+		VALUES
+			   (getdate()
+			   ,ERROR_NUMBER()
+			   ,ERROR_SEVERITY()
+			   ,ERROR_STATE()
+			   ,ERROR_PROCEDURE()
+			   ,ERROR_LINE()
+			   ,ERROR_MESSAGE()
+			   ,SUSER_SNAME()
+			   ,'PMPO')
+	END CATCH
+END

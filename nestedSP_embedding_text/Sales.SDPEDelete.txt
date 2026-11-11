@@ -1,0 +1,338 @@
+Stored procedure Sales.SDPEDelete: Delete Script For SDPEDelete. Called from Notifications.TANRSaveUserApproval.
+Writes: Customize.EstimationOtherDetail, Customize.RevisedEstimationOtherDetail, Notifications.TATAuthorizationDetail, Sales.EstimationEROSPreCal, Sales.EstimationExpenseDetail, Sales.EstimationExportCostDetail, Sales.EstimationMain, Sales.EstimationMaterialCost, Sales.EstimationOperationalCost, Sales.EstimationOverHeads, Sales.EstimationServiceDetail, Sales.EstimationTaxDetail, Sales.RevisedEstimationEROSPreCal, Sales.RevisedEstimationExpenseDetail, Sales.RevisedEstimationExportCostDetail, Sales.RevisedEstimationMain, Sales.RevisedEstimationMaterialCost, Sales.RevisedEstimationOperationalCost, Sales.RevisedEstimationOverHeads, Sales.RevisedEstimationServiceDetail (+1 more)
+Reads: Customize.RevisedEstimationOtherDetail, Sales.RevisedEstimationExpenseDetail, Sales.RevisedEstimationExportCostDetail, Sales.RevisedEstimationMain, Sales.RevisedEstimationMaterialCost, Sales.RevisedEstimationOperationalCost, Sales.RevisedEstimationOverHeads, Sales.RevisedEstimationServiceDetail, Sales.RevisedEstimationTaxDetail
+Parameters: @EstimationNo int, @RevisedEstimationNo int, @LoginNo Smallint, @StatusNo TinyInt = Null OUTPUT, @OStatus Varchar(Max) = Null OUTPUT, @IsCopy bit = 0
+Author: Teerath, created 13 Aug 2014
+Code:
+-- =============================================
+-- Author:		Teerath
+-- Create date: 13 Aug 2014
+-- Description: Delete Script For SDPEDelete
+-- =============================================
+CREATE PROCEDURE [Sales].[SDPEDelete]
+(
+	 @EstimationNo  int
+	 ,@RevisedEstimationNo int
+	 ,@LoginNo Smallint
+	 ,@StatusNo TinyInt =Null Output
+	 ,@OStatus Varchar(Max) =Null Output
+	 ,@IsCopy bit = 0
+)
+AS
+
+BEGIN
+	SET NOCOUNT ON;
+	
+	BEGIN TRY
+
+		BEGIN Transaction 
+
+			    --- GET THE PREVIOUS Revision NO TO INSERT IN MAIN TABLE
+		If Exists (Select 1	
+				   From Sales.RevisedEstimationMain RM
+				   Where RM.EstimationNo =(Select RM1.EstimationNo	From Sales.RevisedEstimationMain RM1 Where RM1.RevisedEstimationNo=@RevisedEstimationNo)
+				   And RM.RevisionNo >(Select RM1.RevisionNo	From Sales.RevisedEstimationMain RM1 Where RM1.RevisedEstimationNo=@RevisedEstimationNo)
+				   )
+		BEGIN
+			Raiserror('Unable to delete,Next revision exists.Delete it first.',16,-1)
+			Return
+		END
+				   
+				DECLARE @prevRevisedEstimationNo int
+				SELECT @prevRevisedEstimationNo =REVM.RevisedEstimationNo 
+				FROM  Sales.RevisedEstimationMain REVM
+				WHERE RevisionNo =( SELECT RevisionNo -1
+									 FROM Sales.RevisedEstimationMain 
+									 WHERE RevisedEstimationNo = @RevisedEstimationNo 
+								  ) 
+						AND REVM.EstimationNo =( SELECT EstimationNo 
+								 FROM Sales.RevisedEstimationMain
+								 WHERE RevisedEstimationNo = @RevisedEstimationNo )
+				
+				--- DELETE MAIN TABLE IF
+	
+				IF @prevRevisedEstimationNo IS NULL -- IF ITS 0th AMENDMENT
+				OR EXISTS ( SELECT 1 FROM Sales.RevisedEstimationMain -- OR IF IT IS AUTHORIZED
+							WHERE RevisedEstimationNo = @RevisedEstimationNo
+							AND ISNULL([AuthorizedBy],0)<>0 )
+						
+				 BEGIN -- DELETE  Sales Details Table
+							
+							
+				  if @IsCopy = 1
+	              set @prevRevisedEstimationNo = @RevisedEstimationNo 
+
+				-- EROS Sapre ORder
+						Delete from Sales.EstimationExportCostDetail where EstimationNo = @EstimationNo 
+						Delete FRom [Customize].[EstimationOtherDetail]  Where EstimationNo=@EstimationNo
+						
+						Delete From [Sales].[EstimationEROSPreCal] Where EstimationNo=@EstimationNo			
+						Delete From Sales.EstimationExpenseDetail Where EstimationNo=@EstimationNo
+						Delete From Sales.EstimationMaterialCost Where EstimationNo=@EstimationNo
+						Delete From Sales.EstimationOperationalCost Where EstimationNo=@EstimationNo
+						Delete From Sales.EstimationOverHeads Where EstimationNo=@EstimationNo
+						Delete From Sales.EstimationTaxDetail Where EstimationNo=@EstimationNo
+				        Delete from Sales.EstimationServiceDetail where EstimationNo = @EstimationNo 					   					
+				END 
+				
+				-- DELETE MAIN TABLE IF	
+				
+			   IF Exists(SELECT 1 FROM Sales.RevisedEstimationMain  WHERE 
+						  RevisedEstimationNo = @prevRevisedEstimationNo AND ISNULL([AuthorizedBy],0)<>0) 
+				AND						 
+				Exists(SELECT 1 FROM Sales.RevisedEstimationMain WHERE 
+					   RevisedEstimationNo = @RevisedEstimationNo    AND ISNULL([AuthorizedBy],0)<>0) 
+				
+				BEGIN
+
+						INSERT INTO [Sales].[EstimationExportCostDetail]
+						   (
+								EstimationNo
+							   ,CostHeadNo
+							   ,Quantity
+							   ,UnitNo
+							   ,Rate
+							   ,SLNo 
+							   ,Remarks 
+							   ,Amount
+							   ,AmountInBaseCurrency
+							   ,AmountInExportCurrency
+							   ,CurrencyConversionNo
+							   ,DivisibilityRate
+							   ,MultiplicativeRate
+						   )
+						Select @EstimationNo
+							   ,REECD.CostHeadNo
+							   ,REECD.Quantity
+							   ,REECD.UnitNo
+							   ,REECD.Rate
+							   ,REECD.SLNo 
+							   ,REECD.Remarks 
+							   ,REECD.Amount
+							   ,REECD.AmountInBaseCurrency
+							   ,REECD.AmountInExportCurrency
+							   ,REECD.CurrencyConversionNo
+							   ,REECD.DivisibilityRate
+							   ,REECD.MultiplicativeRate
+						From Sales.RevisedEstimationExportCostDetail REECD 
+						Where REECD.RevisedEstimationNo = @prevRevisedEstimationNo
+
+
+						INSERT INTO  [Sales].[EstimationExpenseDetail]
+						   (
+								EstimationNo
+							   ,ExpenseHeadNo
+							   ,Quantity
+							   ,UnitNo
+							   ,Rate
+							   ,Amount
+							   ,Remarks
+						   )
+						Select @EstimationNo
+							   ,REED.ExpenseHeadNo
+							   ,REED.Quantity
+							   ,REED.UnitNo
+							   ,REED.Rate
+							   ,REED.Amount
+							   ,REED.Remarks
+						From Sales.RevisedEstimationExpenseDetail REED 
+						Where REED.RevisedEstimationNo = @prevRevisedEstimationNo
+						   
+						INSERT INTO  [Sales].[EstimationMaterialCost]
+						   (
+								EstimationNo
+							   ,ItemNo
+							   ,UnitNo
+							   ,Quantity
+							   ,Rate
+							   ,Amount
+							   ,Remarks
+							   ,MakeNo
+							   ,ExportRate 
+							   ,ExportAmount
+						   )
+						Select @EstimationNo
+							   ,REMC.ItemNo
+							   ,REMC.UnitNo
+							   ,REMC.Quantity
+							   ,REMC.Rate
+							   ,REMC.Amount
+							   ,REMC.Remarks
+							   ,REMC.MakeNo
+							   ,REMC.ExportRate
+							   ,REMC.ExportAmount
+						From Sales.RevisedEstimationMaterialCost REMC
+						Where REMC.RevisedEstimationNo = @prevRevisedEstimationNo
+						   
+						INSERT INTO  [Sales].[EstimationOperationalCost]
+						   (
+								EstimationNo
+							   ,ActivityNo
+							   ,CostElementNo
+							   ,Quantity
+							   ,UnitNo
+							   ,Rate
+							   ,Amount
+							   ,Remarks
+							   ,SequenceNo
+						   )
+						Select
+								@EstimationNo
+							   ,REOC.ActivityNo
+							   ,REOC.CostElementNo
+							   ,REOC.Quantity
+							   ,REOC.UnitNo
+							   ,REOC.Rate
+							   ,REOC.Amount
+							   ,REOC.Remarks
+							   ,REOC.SequenceNo
+						From Sales.RevisedEstimationOperationalCost REOC
+						Where REOC.RevisedEstimationNo = @prevRevisedEstimationNo
+				   
+					   INSERT INTO  [Sales].[EstimationOverHeads]
+					   (
+							EstimationNo
+						   ,CostElementNo
+						   ,Quantity
+						   ,UnitNo
+						   ,Rate
+						   ,Amount
+						   ,Remarks
+					   )
+					  Select
+							@EstimationNo
+						   ,REOH.CostElementNo
+						   ,REOH.Quantity
+						   ,REOH.UnitNo
+						   ,REOH.Rate
+						   ,REOH.Amount
+						   ,REOH.Remarks
+					   From Sales.RevisedEstimationOverHeads REOH
+						Where REOH.RevisedEstimationNo = @prevRevisedEstimationNo
+						
+					   INSERT INTO  [Sales].[EstimationTaxDetail]
+					   (
+								EstimationNo
+							   ,MiscChargeNo
+							   ,TotalValue
+					   )
+						Select
+								@EstimationNo
+							   ,RETD.MiscChargeNo
+							   ,RETD.TotalValue
+					    From Sales.RevisedEstimationTaxDetail RETD
+						Where RETD.RevisedEstimationNo = @prevRevisedEstimationNo
+						
+					   INSERT INTO  [Customize].[EstimationOtherDetail]
+					   (
+							[EstimationNo] ,
+							[Margin1Per],
+							[Margin1Amount] ,	
+							[Margin2Per] ,
+							[Margin2Amount] ,
+							[DiscountPer] ,
+							[DiscountAmount] ,
+							PurchaseDate,
+							CompletionDate,
+							DiscountCalculationOn
+					   )
+						Select
+							@EstimationNo,
+							[Margin1Per],
+							[Margin1Amount] ,	
+							[Margin2Per] ,
+							[Margin2Amount] ,
+							[DiscountPer] ,
+							[DiscountAmount] ,
+							PurchaseDate,
+							CompletionDate,
+							DiscountCalculationOn							
+					    From [Customize].[RevisedEstimationOtherDetail]
+						Where RevisedEstimationNo = @prevRevisedEstimationNo
+						
+						
+						Insert into [Sales].[EstimationServiceDetail] 
+						(
+						 EstimationNo, ServiceDescription, Amount 
+						)
+						Select 
+						@EstimationNo, ServiceDescription, Amount 
+						from Sales.RevisedEstimationServiceDetail 
+						where RevisedEstimationNo = @prevRevisedEstimationNo 
+							   
+					
+						UPDATE  [Sales].[EstimationMain]
+						SET 
+							DivisionNo = REM.DivisionNo
+						   ,DocumentNoYearly = REM.DocumentNoYearly
+						   ,DocumentDate = REM.DocumentDate
+						   ,DocumentStatusNo = REM.DocumentStatusNo
+						   ,CustomerLocationNo = REM.CustomerLocationNo
+						   ,SourceDocumentNo = REM.SourceDocumentNo
+						   ,RefDocNo = REM.RefDocNo
+						   ,ItemNo = REM.ItemNo
+						   ,Quantity = REM.Quantity
+						   ,ModifiedBy = @LoginNo
+						   ,ModifiedDate = Getdate()
+						   ,AuthorizedBy = REM.AuthorizedBy
+						   ,AuthorizedDate =  REM.AuthorizedBy 
+						   ,ReleasedBy = REM.ReleasedBy 
+						   ,ReleasedDate = REM.ReleasedDate
+						   ,RefDocumentNoYearly = REM.RefDocumentNoYearly
+						   ,RefDocumentDate = REM.RefDocumentDate
+						   ,BOMRevisionNo = REM.BOMRevisionNo
+						   ,MarginRate = REM.MarginRate
+						   ,ProductCost = REM.ProductCost
+						   ,RevisionNo = REM.RevisionNo
+						   ,isOnlyServices = REM.isOnlyservices 
+						   ,IncoTermNo = REM.IncoTermNo 
+						   ,MethodOfShipmentNo = REM.MethodOfShipmentNo 
+						   ,TypeOfDispatchNo = REM.TypeOfDispatchNo 
+						   ,PlaceOfReceiptNo = REM.PlaceOfReceiptNo 
+						   ,PortOfLoadingNo = REM.PortOfLoadingNo
+						   ,PreCarriageNo = REM.PreCarriageNo 
+						   ,BaseCurrencyNo = REM.BaseCurrencyNo 
+						   ,ExportCurrencyConversionNo = REM.ExportCurrencyConversionNo 
+						   ,ExportCurrencyMultiplicativeRate = REM.ExportCurrencyMultiplicativeRate 
+						   ,ExportCurrencyDivisibilityRate = REM.ExportCurrencyDivisibilityRate 
+					    FROM Sales.RevisedEstimationMain REM
+						WHERE REM.RevisedEstimationNo = @prevRevisedEstimationNo
+						And Sales.EstimationMain.EstimationNo = REM.EstimationNo
+				END
+				
+				if @IsCopy = 1
+				set @RevisedEstimationNo = null
+
+				Delete from Sales.RevisedEstimationExportCostDetail where RevisedEstimationNo = @RevisedEstimationNo 
+				-- Delete EROS Spare ORder
+				Delete From [Customize].[RevisedEstimationOtherDetail] Where RevisedEstimationNo=@RevisedEstimationNo
+
+				--Delete from Multi-Level Authorization
+				delete from Notifications.TATAuthorizationDetail where InternalNo = @RevisedEstimationNo And FormCode ='SPER'
+				-- DELETE REVISION DETAIL TABLES				
+				Delete From Sales.RevisedEstimationEROSPreCal Where RevisedEstimationNo=@RevisedEstimationNo
+				Delete From Sales.RevisedEstimationExpenseDetail Where RevisedEstimationNo=@RevisedEstimationNo
+				Delete From Sales.RevisedEstimationMaterialCost Where RevisedEstimationNo=@RevisedEstimationNo
+				Delete From Sales.RevisedEstimationOperationalCost Where RevisedEstimationNo=@RevisedEstimationNo
+				Delete From Sales.RevisedEstimationOverHeads Where RevisedEstimationNo=@RevisedEstimationNo
+				Delete From Sales.RevisedEstimationTaxDetail Where RevisedEstimationNo=@RevisedEstimationNo
+				Delete from Sales.RevisedEstimationServiceDetail where RevisedEstimationNo = @RevisedEstimationNo 		
+				-- DELETE Revision MAIN TABLE	
+
+				Delete From Sales.RevisedEstimationMain Where RevisedEstimationNo=@RevisedEstimationNo
+
+				-- DELETE MAIN TABLE
+			    Delete From Sales.EstimationMain Where EstimationNo=@EstimationNo
+														AND @prevRevisedEstimationNo IS NULL
+
+			Select @StatusNo =1,@OStatus ='Success'
+			Select 1
+			
+		COMMIT Transaction 
+	END TRY
+	BEGIN CATCH
+		Rollback Transaction
+			Select @StatusNo =0,@OStatus =Error_Message()
+			Select 0,Error_Message()
+	END CATCH
+END

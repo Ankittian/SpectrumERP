@@ -1,0 +1,232 @@
+Stored procedure Finance.FARPFinancePosting: -- =============================================. Called from Finance.FinancePostingFillValuesDocumentDetails.
+Reads: masterdata.mMiscCharges, masterdata.mTaxCodeMiscChargesDetail
+Parameters: @OtherDataInXml xml, @VoucherDate smalldatetime, @BasicAmount Decimal(18,6), @MiscChargeNos xml, @FBNo smallint, @ItemNos varchar
+Author: Akhil, created 25 mar 2013
+Code:
+ 
+																				-- =============================================
+-- Author:		 Akhil 
+-- Create date: 25 mar 2013
+-- Description:	
+-- =============================================
+CREATE PROCEDURE [Finance].[FARPFinancePosting]
+	@OtherDataInXml xml
+	,@VoucherDate smalldatetime
+	,@BasicAmount Decimal(18,6)
+	,@MiscChargeNos xml
+	,@FBNo smallint
+	,@ItemNos varchar(max)
+AS
+
+BEGIN
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+begin try	
+
+declare @AccountNo int  
+declare @MiscChargeTable table(MiscChargeNo [smallint],Amount Decimal(18,6),[CalculationNature] [tinyint]
+						,TaxCodeMiscChargesDetailNo int,IncludeInBasic tinyint,ChargeType tinyint)
+declare @MiscFinancePosting table(Particular varchar(500),[Debit Amount] Decimal(18,6),
+		[Credit Amount] Decimal(18,6),[Account Name] Int,[Amount] Decimal(18,6),[Type] tinyint,
+		SlNo smallint identity(1,1),MiscChargeNo int,TaxCodeMiscChargesDetailNo int,ItemNos varchar(5000),
+		IncludeInBasic tinyint)
+declare @ServicetaxDetail  as table(GSTTaxRule smallint,BasicAmount decimal(15,2))
+
+ declare @idoc int
+EXEC sp_xml_preparedocument @idoc OUTPUT, @OtherDataInXml 
+
+insert into @ServicetaxDetail 
+select  [GST Tax Rule],sum(BasicAmount)
+From OPENXML (@idoc, '/DocumentElement/Table',2)  
+	with ( [GST Tax Rule] smallint,BasicAmount decimal(15,2)) cte
+	where [GST Tax Rule] is not null
+		group by [GST Tax Rule]
+ 
+EXEC sp_xml_removedocument @idoc
+
+
+EXEC sp_xml_preparedocument @idoc OUTPUT, @OtherDataInXml 
+
+select @AccountNo=  AccountNo
+From OPENXML (@idoc, '/DocumentElement/Table',2)  
+	with (AccountNo int) cte
+	where AccountNo is not null
+ 
+EXEC sp_xml_removedocument @idoc
+
+ 
+EXEC sp_xml_preparedocument @idoc OUTPUT, @MiscChargeNos 
+
+insert into @MiscChargeTable(MiscChargeNo,Amount,[CalculationNature],TaxCodeMiscChargesDetailNo,
+				IncludeInBasic,ChargeType)
+select MiscChargeNo,Amount,CalculationNature,[TDC Account Rule],isnull(IncludeInBasic,0)
+			,[Charge Type]
+From OPENXML (@idoc, '/DocumentElement/Table',2)  
+	with (MiscChargeNo varchar(100),Amount Decimal(18,6) , CalculationNature tinyint,[TDC Account Rule] int,
+			IncludeInBasic bit,[Charge Type] Tinyint) cte
+		where ISNUMERIC(MiscChargeNo)=1	
+ 
+EXEC sp_xml_removedocument @idoc
+
+   
+			
+			delete from @MiscChargeTable where isnull(IncludeInBasic,0)=1
+			
+	insert into @MiscFinancePosting
+					(Particular ,[Debit Amount] ,[Credit Amount] ,[Account Name] 
+					,[Amount] ,[Type]
+					,MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos,IncludeInBasic)
+			select 
+				 MC.MiscChargeName+isnull(' ('+AppendAccountName+')','')
+				,convert(decimal(15,2),case(s.CalculationNature) when 2 then isnull(tt.Amount,s.Amount)
+																else null end)
+				,convert(decimal(15,2),case(s.CalculationNature) when 2 then null
+																else isnull(tt.Amount,s.Amount) end)
+				,tt.AccountNo 
+				,isnull(tt.Amount,s.Amount)
+				,case when s.CalculationNature=1 then 2 else 1 end
+				,s.MiscChargeNo
+				,tcmcd.TaxCodeMiscChargesDetailNo
+				,tt.ItemNos
+				,s.IncludeInBasic
+			from 
+				@MiscChargeTable s
+				inner join masterdata.mMiscCharges MC on MC.MiscChargeNo=s.MiscChargeNo -- and s.ChargeType =2
+				left join masterdata.mTaxCodeMiscChargesDetail tcmcd on tcmcd.TaxCodeMiscChargesDetailNo=s.TaxCodeMiscChargesDetailNo
+				outer apply (select AccountNo,Amount,AppendAccountName,ItemNos
+							 from Finance.funcTaxesPosting(tcmcd.TaxCodeMiscChargesDetailNo, 
+															s.MiscChargeNo,
+															s.Amount,
+															0,
+															@BasicAmount,
+															@ItemNos,
+															1241,
+															@VoucherDate))tt
+			Union All
+			select AP.Particular Particular 
+				,case(AP.Type) when 1 then AP.Amount else null end [Debit Amount]
+				,case(AP.Type) when 2 then AP.Amount else null end [Credit Amount] 
+				,AP.AccountNo [Account Name] 
+				,AP.Amount [Amount]
+				,AP.Type [Type] 
+				,MiscChargeNo ,TaxCodeMiscChargesDetailNo ,CAST(null as varchar(5000)) ItemNos,0
+			from 
+			@ServicetaxDetail std
+			cross apply [Finance].[funcServiceTaxAbatementPosting] (std.GSTTaxRule,std.BasicAmount,@FBNo) AP
+																
+  
+create table #Posting ([Add to Basic] bit,Particular varchar(500),[Debit Amount] decimal(15,2) , 
+		[Credit Amount] decimal(15,2),[Account Name] int, [Ref. Detail] varchar(50),[Cost Center] varchar(50),
+		[Amount] decimal(15,2), [Type] tinyint,SlNo tinyint ,MiscChargeNo int , TaxCodeMiscChargesDetailNo int,
+			ItemNos varchar(5000))
+
+ 
+
+
+--Insert into #Posting
+--select cast(IncludeInBasic as bit) [Add to Basic] ,misc.MiscChargeName  ,CONVERT(Decimal(15,2),mc.Amount) ,
+--				CONVERT(Decimal(15,2),null) , am.AccountNo  [Account Name] 
+--				,cast(null as varchar) [Ref. Detail] ,cast(null as varchar) [Cost Center] ,[Amount] ,1 [Type] 
+--				,(select isnull(max(SLNo),0) from #Posting)
+--				,mc.MiscChargeNo ,mc.TaxCodeMiscChargesDetailNo ,@ItemNos  
+--from @MiscChargeTable mc
+--inner join masterdata.mMiscCharges misc on misc.MiscChargeNo = mc.MiscChargeNo
+--inner join  masterdata.mTaxCodeMiscChargesDetail tmcd on tmcd.MiscChargeNo = mc.MiscChargeNo
+--inner join masterdata.mTaxCode tc on tc.TaxCodeNo = tmcd.TaxCodeNo
+--inner join Finance.ARDTDCAccountRule artdc on artdc.TaxCodeMiscChargesDetailNo = tmcd.TaxCodeMiscChargesDetailNo 
+--inner join masterdata.mAccountMaster am on am.AccountNo = artdc.AccountNo 
+--where TaxAccountTypeNo = 37
+
+Insert into #Posting
+			select cast(0 as bit) [Add to Basic] ,'Account 'Particular , CONVERT(Decimal(15,2),sum([Amount])),null , @AccountNo [Account Name] 
+				,cast(null as varchar) [Ref. Detail] ,cast(null as varchar) [Cost Center] ,sum([Amount]) , 1 [Type] 
+				,1
+				,null MiscChargeNo ,null TaxCodeMiscChargesDetailNo ,null ItemNos
+			from 
+			@MiscFinancePosting where @AccountNo>0
+			 
+Insert into #Posting
+			select cast(IncludeInBasic as bit) [Add to Basic] ,Particular ,CONVERT(Decimal(15,2),[Debit Amount] * (1-IncludeInBasic)) ,CONVERT(Decimal(15,2),[Credit Amount] * (1-IncludeInBasic)) ,[Account Name] 
+				,cast(null as varchar) [Ref. Detail] ,cast(null as varchar) [Cost Center] ,[Amount] ,[Type] 
+				,SlNo     + (select isnull(max(SLNo),0) from #Posting)
+				,MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos
+			from @MiscFinancePosting
+
+
+
+				
+    
+  if exists(select 1 from #Posting having abs(SUM([Credit Amount])- SUM([Debit Amount]))<= .99)
+ begin
+		update PD set [Debit Amount] = [Debit Amount] + ISNULL(diff,0)
+		from
+		#Posting PD
+		cross join (select SUM([Credit Amount])- SUM([Debit Amount]) Diff from #Posting) tt
+		where PD.SlNo  = 1
+	
+	update PD set [Credit Amount] = [Credit Amount] + ISNULL(diff,0)
+		from
+		#Posting PD
+		cross join (select SUM([Debit Amount])- SUM([Credit Amount]) Diff from #Posting) tt
+		where PD.SlNo  = 1
+	
+	update #Posting set [Debit Amount]=abs([Credit Amount]) ,[Credit Amount]=null,Type =1 ,Amount=abs([Credit Amount])
+			where SlNo = 1 and [Credit Amount]<0
+	
+	update #Posting set [Credit Amount]=abs([Debit Amount]) ,Type =2 ,Amount=abs([Debit Amount]),[Debit Amount]=null
+			where SlNo = 1 and [Debit Amount]<0
+						
+ end
+		
+ 
+ 
+select * from #Posting  where [Debit Amount]>0 or [Credit Amount]>0
+ 
+--if OBJECT_ID('tempdb..#Posting') is not null
+--	drop table #Posting
+	
+--if OBJECT_ID('tempdb..#ItemDetail') is not null
+--	drop table #itemdetail
+
+--if OBJECT_ID('tempdb..#IncludedTax') is not null
+--	drop table #IncludedTax
+
+--if OBJECT_ID('tempdb..#GRNGRAccount') is not null
+--	drop table #GRNGRAccount
+
+--if OBJECT_ID('tempdb..#StockAccount') is not null
+--	drop table #StockAccount
+
+--if OBJECT_ID('tempdb..#StockTransfer') is not null
+--	drop table #StockTransfer
+
+
+
+END TRY
+	
+	BEGIN CATCH
+		select ERROR_MESSAGE()
+		INSERT INTO [masterdata].[mErrorLog]
+			   ([ErrorDate]
+			   ,[ErrorNo]
+			   ,[ErrorSeverity]
+			   ,[ErrorState]
+			   ,[ErrorProcedure]
+			   ,[ErrorLine]
+			   ,[ErrorDescription]
+			   ,[UserName]
+			   ,[FormCode])
+		VALUES
+			   (getdate()			   
+			   ,ERROR_NUMBER()
+			   ,ERROR_SEVERITY()
+			   ,ERROR_STATE()
+			   ,ERROR_PROCEDURE()
+			   ,ERROR_LINE()
+			   ,ERROR_MESSAGE()
+			   ,SUSER_SNAME()
+			   ,'PBPB')
+	END CATCH
+	
+END 

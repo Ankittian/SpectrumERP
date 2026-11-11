@@ -1,0 +1,82 @@
+Stored procedure Information.POTotalAmendment: Total Amendment. Called from Purchase.PMPOGetVendorInfo.
+Reads: masterdata.mFYear, masterdata.MonthList, Purchase.POAmendmentMain, Purchase.POMain
+Parameters: @CompanyNo tinyint, @DocumentDate smalldatetime, @VendorLocationNo int
+Author: Monika Rajput, created 2013/10/17
+Code:
+
+-- =============================================
+-- Author:		Monika Rajput
+-- Create date: 2013/10/17
+-- Description:	Total Amendment
+-- =============================================
+-- [Information].[PRPandingPurchaseRequestForDept] 4,'2013/09/25',38
+CREATE PROCEDURE [Information].[POTotalAmendment] 
+	-- Add the parameters for the stored procedure here
+	@CompanyNo tinyint,
+	@DocumentDate smalldatetime,
+	@VendorLocationNo int
+AS
+BEGIN
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+
+    -- Insert statements for procedure here
+	
+    
+	declare @str varchar(max)
+    select @str=masterdata.JSForInformation('PMPO')
+    set @str=@str+masterdata.CSSForInformation('PMPO')
+	set @str=@str+'<table class="altrowstable" id="alternatecolorPOTotalAmendment">'
+	set @str=@str+'<Caption><Font color="Maroon"><h3 align="Left"><b>Total Amendment</b></h3></Font></Caption>'
+    set @str=@str+'<tr><th>Sl. No.</th><th>Month</th><th>Total PO</th><th>Total Amendment</th></tr>'
+	set @str=@str
+				 +(
+				   replace(
+				   replace(
+				   replace(
+				   replace((  
+					
+					Select    ROW_NUMBER() over (Order by ML.SortingMonth) as td1
+					         ,ML.MonthName td2
+							 ,Isnull(Max(PO.PONo),0) td3
+							 ,Isnull(Max(PO.POANO),0) td4 
+					From masterdata.mFYear YR
+					Inner Join masterdata.MonthList ML ON YR.YearNo=ML.YearNo
+					LEFT Join
+					(    
+				 	Select Month(PO.DocumentDate) [Month]
+				 		 ,PO.YearNo
+				         ,count(PONo) [PONo]
+				         ,0 [POANO]
+				         ,Month(PO.DocumentDate) M
+					From Purchase.POMain PO
+					Where PO.VendorLocationNo=@VendorLocationNo
+								And PO.CompanyNo=@CompanyNo
+								And Po.DocumentDate<=@DocumentDate
+					Group By Month(PO.DocumentDate),PO.YearNo
+					Union all
+					Select Month(PO.DocumentDate)
+						  ,PO.YearNo
+					      ,0 PONo
+					      ,count(POAmendmentNo) [POAmendmentNo]
+					      ,Month(PO.DocumentDate) M
+					From Purchase.POAmendmentMain PO 
+					where AmendmentNo>0
+						And PO.VendorLocationNo=@VendorLocationNo
+						And PO.CompanyNo=@CompanyNo
+						And Po.DocumentDate<=@DocumentDate
+					Group By Month(PO.DocumentDate),PO.YearNo
+					)PO ON PO.Month=ML.MonthNo
+								And YR.YearNo=PO.YearNo
+					Where @DocumentDate between YR.StartDate and YR.EndDate
+					Group By ML.MonthName ,YR.YearNo,ML.MonthNo,ML.SortingMonth		
+					
+					Order by ML.SortingMonth	
+					For xml path('tr')),'<td1>','<td style="text-align: Center;">')
+					                   ,'<td2>','<td>')
+					                   ,'<td3>','<td style="text-align: Right;">')
+								       ,'<td4>','<td style="text-align: Right;">'))
+	set @str=@str+'</table>'
+	select @str
+END

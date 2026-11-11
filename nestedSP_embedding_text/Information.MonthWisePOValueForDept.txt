@@ -1,0 +1,69 @@
+Stored procedure Information.MonthWisePOValueForDept: Get Month Wise PO Value For Dept. Called from Purchase.PMPOGetDeptInfo.
+Reads: masterdata.mFYear, masterdata.MonthList, Purchase.POItemDetail, Purchase.POMain
+Parameters: @CompanyNo tinyint, @DocumentDate smalldatetime, @DeptNo int
+Author: Arvinder Kaur, created 2013/09/26
+Code:
+
+-- =============================================
+-- Author:		Arvinder Kaur
+-- Create date: 2013/09/26
+-- Description:	Get Month Wise PO Value For Dept
+-- =============================================
+-- [Information].[PRPandingPurchaseRequestForDept] 4,'2013/09/25',31
+CREATE PROCEDURE [Information].[MonthWisePOValueForDept] 
+	-- Add the parameters for the stored procedure here
+	@CompanyNo tinyint,
+	@DocumentDate smalldatetime,
+	@DeptNo int
+AS
+BEGIN
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+
+    -- Insert statements for procedure here
+	
+    
+	declare @str varchar(max)
+    select @str=masterdata.JSForInformation('PMPO')
+    set @str=@str+masterdata.CSSForInformation('PMPO')
+	set @str=@str+'<table class="altrowstable" id="alternatecolorPOMonthWiseValInfo">'
+	set @str=@str+'<Caption><Font color="Maroon"><h3 align="Left"><b>PO Value</b></h3></Font></Caption>'
+    set @str=@str+'<tr><th>Sl. No.</th><th>Month</th><th>Value</th></tr>'
+	set @str=@str
+				 +(
+				    replace(
+				    replace(
+					replace((
+					
+						   Select ROW_NUMBER() over (Order by ML.SortingMonth) as td1
+						          ,ML.MonthName td2
+								  ,isnull(Po.td2,0) td3 
+						   From masterdata.mFYear YR
+						   Inner Join masterdata.MonthList ML ON YR.YearNo=ML.YearNo
+						   LEFT Join
+						   (  
+							Select    Month(PO.DocumentDate) [Month]
+									 ,PO.YearNo
+									 ,Cast(SUM(POI.BasicAmount) as Decimal(15,2)) td2
+							 From Purchase.POMain PO
+							 Inner Join Purchase.POItemDetail POI ON PO.PONo=POI.PONo
+							 Where PO.AuthorizedBy is not Null 
+							 And PO.DeptNo=@DeptNo 
+							 And PO.DocumentDate<=@DocumentDate 
+							 And CompanyNo=@CompanyNo
+							 Group by Month(PO.DocumentDate),PO.YearNo
+							 )PO ON PO.Month=ML.MonthNo
+								And YR.YearNo=PO.YearNo
+							 
+							 Where @DocumentDate between YR.StartDate and YR.EndDate
+							 Order by ML.SortingMonth
+							 
+							 For xml path('tr')
+							),'<td1>','<td style="text-align: center;">'),'<td2>','<td>')
+							  ,'<td3>','<td style="text-align: Right;">')
+				)		   
+	set @str=@str+'</table>'
+	
+	select @str
+END

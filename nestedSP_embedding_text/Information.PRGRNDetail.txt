@@ -1,0 +1,99 @@
+Stored procedure Information.PRGRNDetail: GRN Detail Of Indent. Called from Inventory.MMPRGetDocumentInfo.
+Reads: GateEntry.InvGateEntryItemDetail, Inventory.GRNItemDetail, Inventory.GRNItemIndentDetail, Inventory.GRNMain, masterdata.mItemMaster, masterdata.mWarehouse
+Parameters: @IndentNo int
+Author: Arvinder Kaur Vadrah, created 21/11/2013
+Code:
+
+-- =============================================
+-- Author:		Arvinder Kaur Vadrah
+-- Create date: 21/11/2013
+-- Description:	GRN Detail Of Indent
+-- =============================================
+CREATE PROCEDURE [Information].[PRGRNDetail] 
+	-- Add the parameters for the stored procedure here
+	@IndentNo int
+	
+AS
+BEGIN
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+
+    -- Insert statements for procedure here
+	
+
+	declare @str varchar(max)
+    select @str=masterdata.JSForInformation('MMPR')
+    set @str=@str+masterdata.CSSForInformation('MMPR')
+	set @str=@str+'<table class="altrowstable" id="alternatecolorPRGRNDetail">'
+	set @str=@str+'<Caption><Font color="Maroon"><h3 align="Left"><b>GRN Detail</b></h3></Font></Caption>'
+    set @str=@str+'<tr><th>Sl. No.</th><th>Doc. No.</th><th>Doc. Date</th><th>WareHouse</th><th>Item Name</th><th>Challan Qty.</th><th>Received Qty.</th><th>Accepted Qty.</th><th>Rate</th><th>Amount</th><th> Rejected Qty.</th> <th>FOC Qty.</th><th>Excess Qty.</th><th>Shortage Qty.</th><th>Route Id</th></tr>'
+	set @str=@str
+				 +( 
+					replace(
+					replace( 
+					replace(
+					replace(
+					replace( 
+					replace(
+					replace(
+					replace( 
+					replace(
+					replace(
+					replace(
+					replace( 
+					replace(
+					replace(
+					replace( 
+							(
+								Select 	 Row_number() over (order by GRNM.DocumentDate desc) as td1
+								        ,GRNM.DocumentNoYearly td2
+										,Convert(varchar(20), GRNM.DocumentDate,103) td3
+										,ISNULL( MWH.WareHouseName,'') td4
+										,IMM.ItemDescription td5
+										,ISNULL(GRID.ChallanQty,0) td6
+										, GRID.ReceivedQty td7
+										,GRIN.AcceptedQty td8
+										,ISNULL( CONVERT(decimal(15,2) ,GRID.Rate),0) td9
+										,ISNULL( CONVERT(decimal(15,2), GRIN.AcceptedQty * GRID.Rate),0) td10
+										,ISNULL( GRID.RejectedQty,0) td11
+										,ISNULL(GRID.FOCQty,0)  td12
+										,ISNULL(GRID.ExcessQty,0) td13
+										,Case When (isnull(GEID.ChallanQty,0)-isnull(GRID.ReceivedQty,0)) >=0 
+										      then (isnull(GRID.ChallanQty,0)-isnull(GRID.ReceivedQty,0)) 
+										      else 0 end as td14
+										,ISNULL( CAST( GRID.RouteIdentity as varchar(100)),'') td15
+										
+								From Inventory.GRNMain GRNM
+								INNER JOIN Inventory.GRNItemDetail GRID	ON GRID.GRNNo=GRNM.GRNNo
+								Left JOIN GateEntry.InvGateEntryItemDetail GEID ON GEID.GateEntryNo=GRID.GateEntryNo
+																			   AND IsNull(GEID.POAmendmentNo,0)=IsNull(GRID.POAmendmentNo,0)
+																			   AND GEID.ItemNo=GRID.ItemNo
+																			   AND IsNull(GEID.MakeNo,0)=IsNull(GRID.MakeNo,0)
+																			   And IsNull(GEID.TechnicalGradeNo,0)=IsNull(GRID.TechnicalGradeNo,0)
+								Inner Join Inventory.GRNItemIndentDetail GRIN ON GRIN.GRNItemDetailNo=GRID.GRNItemDetailNo
+								Inner Join masterdata.mItemMaster IMM on IMM.ItemNo=GRID.ItemNo
+								LEFT JOIN masterdata.mWarehouse MWH ON MWH.WareHouseNo=GRID.WareHouseNo
+								Where GRIN.IndentNo=@IndentNo
+							for xml path('tr')),'<td1>','<td style="text-align: Center;">')
+							                   ,'<td2>','<td>')
+		   									   ,'<td3>','<td style="text-align: Center;">')				
+											   ,'<td4>','<td>')
+											   ,'<td5>','<td>')
+		   									   ,'<td6>','<td style="text-align: Right;">')				
+											   ,'<td7>','<td style="text-align: Right;">')
+											   ,'<td8>','<td style="text-align: Right;">')
+											   ,'<td9>','<td style="text-align: Right;">')
+											   ,'<td10>','<td style="text-align: Right;">')
+											   ,'<td11>','<td style="text-align: Right;">')
+											   ,'<td12>','<td style="text-align: Right;">')												   									 			
+											   ,'<td13>','<td style="text-align: Right;">')
+											   ,'<td14>','<td style="text-align: Right;">')
+											   ,'<td15>','<td>')
+									    	)
+								
+				   
+	set @str=@str+'</table>'
+	
+	select @str
+END

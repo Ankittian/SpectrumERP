@@ -1,0 +1,775 @@
+Stored procedure Purchase.PMPODelete: DELETE PO MAIN AND AMENDMENT. Called from Notifications.TANRSaveUserApproval.
+Writes: Customize.POItemHanne, Notifications.TATAuthorizationDetail, Purchase.AgreementItemDetail, Purchase.AgreementMain, Purchase.CSBooking, Purchase.FreightOrderOrderDetail, Purchase.POAccountAssignmentDetail, Purchase.POAdvanceDetail, Purchase.POAmendmentAdvanceDetail, Purchase.POAmendmentAuthorizationDetail, Purchase.POAmendmentConsigneeDetail, Purchase.POAmendmentCustomFieldDetail, Purchase.POAmendmentExpenseHead, Purchase.POAmendmentExpenseHeadOutputDetail, Purchase.POAmendmentIndentDetail, Purchase.POAmendmentIndentReserveDetail, Purchase.POAmendmentItemConsigneeDetail, Purchase.POAmendmentItemDetail, Purchase.POAmendmentItemLRate, Purchase.POAmendmentItemQCParameterDetail (+33 more)
+Reads: Finance.AdvanceRequestMain, Finance.BGReceiptDetail, Purchase.AgreementItemDetail, Purchase.AgreementMain, Purchase.FreightOrderOrderDetail, Purchase.POAmendmentAdvanceDetail, Purchase.POAmendmentConsigneeDetail, Purchase.POAmendmentCustomFieldDetail, Purchase.POAmendmentExpenseHead, Purchase.POAmendmentExpenseHeadOutputDetail, Purchase.POAmendmentIndentDetail, Purchase.POAmendmentIndentReserveDetail, Purchase.POAmendmentItemConsigneeDetail, Purchase.POAmendmentItemDetail, Purchase.POAmendmentItemLRate, Purchase.POAmendmentItemQCParameterDetail, Purchase.POAmendmentItemScheduleDetail, Purchase.POAmendmentItemSizeDetail, Purchase.POAmendmentItemTaxDetail, Purchase.POAmendmentItemTechSpecificationDetail, Purchase.POAmendmentMain, Purchase.POAmendmentNotesDetail, Purchase.POAmendmentPaymentTermsDetail, Purchase.POAmendmentTaxConcessionFormDetail, Purchase.POAmendmentTaxDetail (+7 more)
+Parameters: @PONo int, @POAmendmentNo int, @Formtag char(4), @OutputStatusNo bit = null OUTPUT, @OutputStatusRemarks varchar(4000) = null OUTPUT, @IsCopy bit = 0
+Calls procedures: Inventory.IndentStatus, Purchase.QuotationChangeStatus
+Author: NIDHI DUBEY, created 3 JAN 2012
+Code:
+					
+-- =============================================
+-- Author:		NIDHI DUBEY
+-- Create date: 3 JAN 2012
+-- Description:	DELETE PO MAIN AND AMENDMENT
+-- =============================================
+-- alter by akhil
+-- PROCEDURE [Purchase].[PMPODelete] 
+CREATE PROCEDURE [Purchase].[PMPODelete] 
+
+ @PONo int,
+ @POAmendmentNo int,
+ @Formtag char(4)
+ ,@OutputStatusNo bit = null output
+ ,@OutputStatusRemarks varchar(4000) = null output
+ ,@IsCopy bit = 0 -- Used for Multi Level Authorization 
+ AS
+BEGIN
+	SET NOCOUNT ON;
+	BEGIN TRY
+	
+	Begin Transaction
+		--Transaction Begins from here
+		
+		if @FormTag ='PMPO'
+		begin
+			if exists (select 1 from Purchase.POAmendmentMain where PONo = @PoNo and AmendmentNo>0)
+				RaisError('PO Amendment is done againt this PO,so you can''t delete this entry.',16,-1)		
+		end	
+		
+		if exists (select 1 from Purchase.POAmendmentMain where RefDocumentNo = @POAmendmentNo
+					and PORefDocumentTypeNo= 4 )
+		BEGIN				
+			RaisError('PO is Prepared against this LOI,so you can''t delete this entry.',16,-1)			
+		end
+
+		if exists (select 1 from Finance.AdvanceRequestMain where SourceDocumentNo = @POAmendmentNo
+					and AdvanceSourceDocumentNo = 1 )
+		BEGIN				
+			RaisError('Advance request is prepared against this PO,so you can''t delete this entry.',16,-1)			
+		end
+
+		if exists (select 1 from Finance.BGReceiptDetail rd
+						inner join Purchase.POAmendmentMain poam on poam.PONo = @PoNo and AmendmentNo=0
+					where rd.SourceDocumentNo = @PoNo
+					and rd.AdvanceSourceDocumentNo = 1 )
+		BEGIN				
+			RaisError('BG is prepared against this PO,so you can''t delete this entry.',16,-1)			
+		end
+	 
+	 declare @TempRefDocumentNo int,@PORefDocumentTypeNo tinyint
+	 
+declare @IsCS bit ,@tempPOAMendmentNo int,@QuotationNo int
+		select @TempRefDocumentNo  = RefDocumentNo ,@QuotationNo= QuotationNo , @IsCS= IsCSAgainstAgreement ,@tempPOAMendmentNo = POAmendmentNo from 
+			Purchase.POAmendmentMain pm 
+			left join Purchase.RevisedQuotationMain qm on qm.RevisedQuotationNo = pm.RefDocumentNo and pm.IsCSAgainstAgreement =0
+			where PONo = @PONo and AmendmentNo = (select MAX(AmendmentNo ) from Purchase.POAmendmentMain where PONo = pm.PONo)
+			and PORefDocumentTypeNo  = 8 
+	
+	-- Agreement Reset	 
+	if exists(select 1 from purchase.POMain where (PORefDocumentTypeNo=2 or (PORefDocumentTypeNo=8  and IsCSAgainstAgreement =1)) and PONO = @PONo)
+	begin
+		select @TempRefDocumentNo  = RefDocumentNo,@PORefDocumentTypeNo = PORefDocumentTypeNo
+		from Purchase.POMain where PONo= @PONo
+
+		
+		update ad set StatusNo = 1
+		from Purchase.POAmendmentMain pm
+		inner join Purchase.POAmendmentItemDetail pd on 
+					pm.POAmendmentNo = pd.POAmendmentNo
+			inner join Purchase.AgreementItemDetail ad  on pm.refDocumentNo = ad.AgreementNo
+					and ad.ItemNo = pd.itemno and isnull(ad.MakeNo,0) = isnull(pd.MakeNo,0)
+			where PORefDocumentTypeNo=2 and pm.POAmendmentNo = @POAmendmentNo and ad.statusNo = 2
+		
+		update am set StatusNo = 1
+		from Purchase.POAmendmentMain pm 
+		inner join Purchase.AgreementMain am on pm.refDocumentNo = am.AgreementNo
+			where PORefDocumentTypeNo=2 and pm.POAmendmentNo = @POAmendmentNo		
+			and am.statusNo = 2
+	end
+	 
+	 select @TempRefDocumentNo  = RefDocumentNo from Purchase.POAmendmentMain where POAmendmentNo=@POAmendmentNo
+	 -- LOI reset
+	 if exists(select 1 from purchase.POAmendmentMain where PORefDocumentTypeNo=4 and POAmendmentNo=@POAmendmentNo)
+	begin
+		
+		
+		
+		update PM set StatusNo = 1
+		from Purchase.POAmendmentMain PM 
+			where  PONo in (select PONo from Purchase.POAmendmentMain where POAmendmentNo = @TempRefDocumentNo)
+			
+		update pd set StatusNo = 1
+		from Purchase.POAmendmentMain PM 
+			inner join Purchase.POAmendmentItemDetail pd on pm.POAmendmentNo = pd.PoAmendmentNo
+			where  PONo in (select PONo from Purchase.POAmendmentMain where POAmendmentNo = @TempRefDocumentNo)
+			
+		update PM set StatusNo = 1
+		from Purchase.POMain PM 
+			where  PONo in (select PONo from Purchase.POAmendmentMain where POAmendmentNo = @TempRefDocumentNo)
+			
+		update pd set StatusNo = 1
+		from Purchase.POItemDetail pd
+			where  PONo in (select PONo from Purchase.POAmendmentMain where POAmendmentNo = @TempRefDocumentNo)
+	end
+	
+	
+	-- quotatation reset
+	Declare @RevisedQuotationNo int = 0,@CompanyNo tinyint = 0
+	Declare @RFQNo int = 0,@iRow int = 0 ,@iCount int = 0
+	IF exists(
+	
+	          select 1 
+			  from purchase.POMain 
+			  where PONo = @PONo 
+				  and (PORefDocumentTypeNo = 1 or (PORefDocumentTypeNo=8 and IsCSAgainstAgreement =0)) 
+				  and PODocumentTypeNo<>1
+			)
+	BEGIN
+		Select @RFQNo = RQM.RFQNo
+		,@CompanyNo = PAM.CompanyNo
+		,@RevisedQuotationNo =  RQM.RevisedQuotationNo
+		From Purchase.POAmendmentMain PAM
+		Inner Join Purchase.RevisedQuotationMain RQM on RQM.RevisedQuotationNo = PAM.RefDocumentNo
+		Where  POAmendmentNo = @POAmendmentNo
+			
+		Declare @RevisedQuotationDetail as table(id int,RevisedQuotationNo int )	
+		Insert into @RevisedQuotationDetail
+		Select 1,@RevisedQuotationNo 
+		Union 
+		Select row_number() over (Order By RevisedQuotationNO) + 1,RevisedQuotationNO 
+		From Purchase.RevisedQuotationMain Where RFQNo = @RFQNo and RevisedQuotationNO <> @RevisedQuotationNo
+		
+		set @iRow = @@rowcount
+		set @iCount = 0
+		while @iRow >@iCount
+		Begin
+		      Select @RevisedQuotationNo = RevisedQuotationNo
+		      From @RevisedQuotationDetail Where id = @iCount + 1
+		      
+			  Exec [Purchase].[QuotationChangeStatus]  @RevisedQuotationNo,@POAmendmentNo,1,@CompanyNo,0,0
+			  
+			  set @iCOunt = @iCOunt + 1
+		End		       
+	END
+	
+	
+		        DECLARE @prevPOAmendmentNo int
+				--- GET THE PREVIOUS AMENDMENT NO TO INSERT IN MAIN TABLE
+				
+				SELECT @prevPOAmendmentNo = POAmendmentNo 
+				FROM  [Purchase].[POAmendmentMain]
+				WHERE AmendmentNo =( SELECT AmendmentNo -1
+				                     FROM [Purchase].[POAmendmentMain] 
+				                     WHERE POAmendmentNo = @POAmendmentNo ) 
+					
+				AND PONo =(SELECT PONo 
+				           FROM [Purchase].[POAmendmentMain] 
+				           WHERE POAmendmentNo = @POAmendmentNo)
+		
+		
+		       IF ISNULL(@prevPOAmendmentNo ,0) = 0 OR EXISTS ( SELECT 1 
+		                                                        FROM [Purchase].[POAmendmentMain]
+		                                                        WHERE POAmendmentNo=@POAmendmentNo
+		                                                        AND ISNULL([AuthorizedBy],0)<>0
+		                                                       )
+	          BEGIN
+	          
+	          	if @IsCopy = 1
+	          	BEGIN
+					set @prevPOAmendmentNo = @POAmendmentNo
+				END	
+	  
+			  -- Delete PO Details Table
+			  -- not in case of LOI type of Purchase Order
+			Declare @IndentDetail as table (IDNo tinyint ,IndentNo int, ItemNo int, MakeNo smallint,TechnicalGradeNo tinyint)
+			Set  @iRow = 0 
+			Set @iCount  =0 
+			if not exists(select 1 from Purchase.POMain where PODocumentTypeno=1 and PONO=@PONo)
+			begin
+				Insert into @IndentDetail select row_Number() over (order by IndentNo), IndentNo ,
+					ItemNo ,IndentMakeNo ,IndentTechnicalGradeNo from 
+						Purchase.POIndentDetail where PONO = @PoNo
+				set @iRow= @@rowcount		
+			end		
+					Delete from Purchase.POAdvanceDetail where PONo = @PONo
+					Delete from Purchase.POExpenseHeadOutputDetail where POExpenseDetailNo
+							in (select POExpenseDetailNo from Purchase.POExpenseHead where PONo = @PONo)
+					
+					Delete From Purchase.POItemTechSpecificationDetail Where PONo = @PONo
+					Delete from Purchase.POItemLRate  where PONo = @PONo		
+					Delete from Purchase.POExpenseHead  where PONo = @PONo
+					Delete from Purchase.POTransportationRoute   where PONo = @PONo
+					
+					Delete from Purchase.POItemConsigneeDetail where POItemDetailNo in(
+					select POItemDetailNo  FROM Purchase.POItemDetail WHERE PONo = @PONo)
+					
+					Delete from Purchase.POConsigneeDetail where PONo = @PONo
+					Delete from Purchase.POPaymentTermsDetail where PONo = @PONo
+					DELETE FROM Purchase.POItemTaxDetail WHERE PONo = @PONo
+					DELETE FROM Purchase.POItemSizeDetail WHERE PONo = @PONo
+					DELETE FROM Purchase.POItemScheduleDetail WHERE PONo = @PONo
+					
+					DELETE FROM Purchase.POItemQCParameterDetail WHERE POItemDetailNo in(
+					select POItemDetailNo  FROM Purchase.POItemDetail WHERE PONo = @PONo)
+					
+					DELETE FROM Purchase.POCustomFieldDetail WHERE PONo = @PONo
+					DELETE FROM Purchase.POTaxConcessionFormDetail WHERE PONo = @PONo
+					
+					Delete from Purchase.POIndentReserveDetail where POIndentDetailNo in (
+					select POIndentDetailNo from  Purchase.POIndentDetail WHERE PONo = @PONo)
+					
+					DELETE FROM Purchase.POIndentDetail WHERE PONo = @PONo
+					
+					DELETE FROM Purchase.POItemDetail WHERE PONo = @PONo
+					DELETE FROM Purchase.POTaxDetail WHERE PONo = @PONo
+					DELETE FROM Purchase.POTermsNConditionDetail WHERE PONo = @PONo
+					Delete from [Purchase].[PONotesDetail] where PONo = @PONo
+					
+					Delete A From Purchase.FreightOrderOrderDetail  A 
+					where PONo = @PONo  and @IsCopy = 0
+					and (select count(1) from Purchase.FreightOrderOrderDetail FOOD where FOOD .PONo = A.PONo 
+					and isnull(FOOD.RouteIdentity,0) = isnull(A.RouteIdentity,0))=1
+					
+			
+			Declare @IndentNo int,@ItemNo int,@MakeNo smallint,@OutputStatus bit, @result varchar(100)
+			,@TechnicalGradeNo tinyint
+			
+			select @iCOunt = 0
+			while @iRow > @iCount
+			begin
+				select @IndentNo = IndentNo , @ItemNo = ItemNo , @MakeNo = MakeNo,
+					@TechnicalGradeNo =TechnicalGradeNo 
+					from @IndentDetail where 
+					IDNo = @iCount +1
+				
+				exec Inventory.IndentStatus @IndentNo,@ItemNo,@MakeNo ,	2,@OutputStatus output,@Result output
+						,@TechnicalGradeNo 
+				
+				if @OutputStatus =0
+				   raiserror (@Result,16,-1)
+				   
+				set @iCount = @iCount + 1			
+			end
+			
+			  END -- DELETE MAIN TABLE IF	
+		      
+		      
+	 IF Exists(SELECT 1 FROM [Purchase].[POAmendmentMain] WHERE POAmendmentNo = @prevPOAmendmentNo 
+		               AND ISNULL([AuthorizedBy],0)<>0 ) AND						 
+		        Exists(SELECT 1 FROM [Purchase].[POAmendmentMain] WHERE POAmendmentNo = @POAmendmentNo  
+		               AND ISNULL([AuthorizedBy],0)<>0 ) 
+		     BEGIN
+				
+				Insert into Purchase.POAdvanceDetail(PONo, ReferenceNo,AdvanceAmount)
+				select @PONo ,ReferenceNo,AdvanceAmount
+				from Purchase.POAmendmentAdvanceDetail
+				where POAmendmentNo = @prevPOAmendmentNo
+
+				
+				Insert into Purchase.poitemlrate	(PONo, ItemNo,MakeNo,TechnicalGradeNo ,RouteIdentity ,LRate)
+				select @PONo, ItemNo,MakeNo,TechnicalGradeNo ,RouteIdentity ,LRate
+				from Purchase.POAmendmentItemLRate
+				where POAmendmentNo = @prevPOAmendmentNo
+				
+				Insert into Purchase.POConsigneeDetail	(PONo, ConsigneeLocationNo)
+				select @PONo ,ConsigneeLocationNo
+				from Purchase.POAmendmentConsigneeDetail
+				where POAmendmentNo = @prevPOAmendmentNo	
+				
+				INSERT INTO Purchase.POPaymentTermsDetail(PONo, PaymentTypeNo, BaseDateTypeNo, PaymentPayOnNo,
+				TermsValue, PayValue, NoOfDays, Date, AdditionalMonth, Discount, IsBGApplicable, BGAmount, 
+				IsProgressBased, Progress, Tolerance, Remark,SequenceNo)
+			select @PONo, PaymentTypeNo, BaseDateTypeNo, PaymentPayOnNo,
+				TermsValue, PayValue, NoOfDays, Date, AdditionalMonth, Discount, IsBGApplicable, BGAmount, 
+				IsProgressBased, Progress, Tolerance, Remark,SequenceNo
+				from Purchase.POAmendmentPaymentTermsDetail where POAmendmentNo = @prevPOAmendmentNo
+				
+				 Insert into Purchase.POItemTaxDetail(PONo, Selected, ItemNo, MakeNo, MiscChargeNo, ChargeType, 
+					Nature, ChargeOn, ChargeValue, TotalAmount,TechnicalGradeNo)
+				 select @PONo, Selected, ItemNo, MakeNo, MiscChargeNo, ChargeType, 
+					Nature, ChargeOn, ChargeValue, TotalAmount,TechnicalGradeNo 
+					from Purchase.POAmendmentItemTaxDetail
+					where POAmendmentNo = @prevPOAmendmentNo
+				 
+				 insert into Purchase.POItemSizeDetail(PONo,ItemNo,MakeNo,Length,Width,Pcs,UnitWeight,TechnicalGradeNo,TotalWeight)
+				 select @PONo, ItemNo, MakeNo, Length, Width, Pcs, UnitWeight,TechnicalGradeNo,TotalWeight from
+				 Purchase.POAmendmentItemSizeDetail where POAmendmentNo = @prevPOAmendmentNo
+				 
+				 Insert into Purchase.POItemScheduleDetail(PONo, ItemNo, MakeNo, ScheduleDate, ScheduleQty,TechnicalGradeNo)
+				 select @PONo, ItemNo, MakeNo, ScheduleDate, ScheduleQty,TechnicalGradeNo FROM
+				 Purchase.POAmendmentItemScheduleDetail where POAmendmentNo = @prevPOAmendmentNo
+				 
+				 Insert into Purchase.POCustomFieldDetail(PONo, CustomFieldNo, FieldValue)
+				  select @PONo, CustomFieldNo, FieldValue from
+				  Purchase.POAmendmentCustomFieldDetail  where POAmendmentNo = @prevPOAmendmentNo
+				  
+				  Insert into Purchase.POTaxConcessionFormDetail(PONo, IssueReceiveNo, TaxConcessionFormNo, PartyNo, PartyLocationNo)
+					SELECT     @PONo , IssueReceiveNo, TaxConcessionFormNo, PartyNo, PartyLocationNo
+					FROM         Purchase.POAmendmentTaxConcessionFormDetail
+					WHERE     (POAmendmentNo = @prevPOAmendmentNo)
+				  
+				  Insert into Purchase.POIndentDetail(PONo, IndentNo, ItemNo, IndentMakeNo, MakeNo, FirstCF, 
+					POUnitNo, SecondCF, POQty, PORate, ScheduleDate,TaskNo,UID ,PRSAmendmentNo,SalesOrderAmendmentNo
+					,TechnicalGradeNo ,IndentTechnicalGradeNo)
+					select @PONo, IndentNo, ItemNo, IndentMakeNo, MakeNo, FirstCF, 
+					POUnitNo, SecondCF, POQty, PORate, ScheduleDate,TaskNo,UID ,PRSAmendmentNo , 
+					SalesOrderAmendmentNo,TechnicalGradeNo ,IndentTechnicalGradeNo from
+					Purchase.POAmendmentIndentDetail where POAmendmentNo = @prevPOAmendmentNo
+			
+				Insert into Purchase.POIndentReserveDetail (POIndentDetailNo ,IndentItemReserveNo ,POQty )  
+				  select pd.POIndentDetailNo  , pid.IndentItemReserveNo ,pid.POQty 
+				from Purchase.POAmendmentMain pam
+				Inner join Purchase.POAmendmentIndentDetail piid on piid.POAmendmentNo = pam.POAmendmentNo 
+				inner join purchase.POAmendmentIndentReserveDetail pid on pid.POAmendmentIndentDetailNo = piid.POAmendmentIndentDetailNo 
+				inner join Purchase.POIndentDetail pd on pd.PONo = pam.PONo and pd.IndentNo = piid.IndentNo 
+					and pd.ItemNo = piid.ItemNo and ISNULL(pd.IndentMakeNo,0)= ISNULL(piid.IndentMakeNo ,0)
+					and ISNULL(pd.IndentTechnicalGradeNo ,0) = ISNULL(piid.IndentTechnicalGradeNo,0)
+				where pam.POAmendmentNo = @prevPOAmendmentNo
+				
+				  
+				 Insert into Purchase.POItemDetail(PONo, ItemNo, MakeNo, TechSpecification, Quantity, UnitNo, 
+				 Rate, BasicAmount, NetAmount, Remark, StatusNo,TechnicalGradeNo ,ToleranceBasisNo,ToleranceMinus
+				  ,TolerancePlus ,ChapterHeadingNo,AgreementItemScheduleDetailNo,HSNSACCodeNo  
+				  ,CustomItemBasedPriceNo,CustomBaseRate,CustomDiscountPercentage,CustomDiscountAmount)
+				 select @PONo, ItemNo, MakeNo, TechSpecification, Quantity, UnitNo, Rate, BasicAmount,
+				  NetAmount, Remark, StatusNo,TechnicalGradeNo,ToleranceBasisNo,ToleranceMinus 
+				  ,TolerancePlus ,ChapterHeadingNo ,AgreementItemScheduleDetailNo,HSNSACCodeNo 
+				 ,CustomItemBasedPriceNo,CustomBaseRate,CustomDiscountPercentage,CustomDiscountAmount
+				  from Purchase.POAmendmentItemDetail  where POAmendmentNo = @prevPOAmendmentNo
+				 
+
+				Insert into Purchase.POItemTechSpecificationDetail   ([PONo] ,[POItemDetailNo] ,[TechSpecificationHeadNo] ,[Description])
+				Select @PONo,PD.POItemDetailNo,TD.TechSpecificationHeadNo,TD.[Description]
+				FROM  purchase.POAmendmentItemDetail pid  
+				Inner Join Purchase.POAmendmentItemTechSpecificationDetail TD on TD.POAmendmentNo=PID.POAmendmentNo
+				inner join Purchase.POItemDetail pd On pd.PONo =@PONo and pid.ItemNo = pd.ItemNo  
+													And isnull(pid.MakeNo,0) = isnull(pd.MakeNo,0) 
+													And  isnull(pid.TechnicalGradeNo,0) = isnull(pd.TechnicalGradeNo ,0)
+				where pid.POAmendmentNo = @prevPOAmendmentNo	
+				 
+				Insert into Purchase.POItemConsigneeDetail(POItemDetailNo, ConsigneeLocationNo, Qty)
+				select pd.POItemDetailNo  , pcd.ConsigneeLocationNo, pcd.Qty
+				from Purchase.POAmendmentMain pam
+				inner join purchase.POAmendmentItemDetail pid on pam.POAmendmentNo = pid.POAmendmentNo 
+				inner join Purchase.POAmendmentItemConsigneeDetail pcd on 
+				pid.POAmendmentItemDetailNo = pcd.POAmendmentItemDetailNo
+				inner join Purchase.POItemDetail pd on pd.PONo = pam.PONo and pid.ItemNo = pd.ItemNo 
+				and isnull(pid.MakeNo,0) = isnull(pd.MakeNo,0) and 
+				isnull(pid.TechnicalGradeNo,0) = isnull(pd.TechnicalGradeNo ,0)
+				where pam.POAmendmentNo = @prevPOAmendmentNo	
+				 
+				 Insert into Purchase.POItemQCParameterDetail(POItemDetailNo, QCParameterNo, StandardValue,
+				  ToleranceValue, DeductionRate, DeductionType, DoubleDeductionFrom,StandardValue2)
+					select pd.POItemDetailNo , QCParameterNo, StandardValue,
+					ToleranceValue, DeductionRate, DeductionType, DoubleDeductionFrom,StandardValue2 
+					FROM  Purchase.POAmendmentMain pam
+					inner join purchase.POAmendmentItemDetail pid on pid.POAmendmentNo = pam.POAmendmentNo
+					inner join Purchase.POAmendmentItemQCParameterDetail pcd on pid.POAmendmentItemDetailNo = pcd.POAmendmentItemDetailNo
+					inner join Purchase.POItemDetail pd on pd.PONo = pam.PONo and pid.ItemNo = pd.ItemNo 
+					and isnull(pid.MakeNo,0) = isnull(pd.MakeNo,0) and 
+					isnull(pid.TechnicalGradeNo,0) = isnull(pd.TechnicalGradeNo ,0)
+					where pam.POAmendmentNo = @prevPOAmendmentNo	
+				
+				 
+				 Insert into Purchase.POTaxDetail(PONo, MiscChargeNo, ChargeType, Nature, ChargeOn, ChargeValue,
+				  TotalValue,TaxCodeMiscChargesDetailNo) 
+				  select @PONo, MiscChargeNo, ChargeType, Nature, ChargeOn, ChargeValue,
+				  TotalValue ,TaxCodeMiscChargesDetailNo 
+				  from Purchase.POAmendmentTaxDetail where POAmendmentNo = @prevPOAmendmentNo
+				  
+				  Insert into Purchase.POTermsNConditionDetail(PONo, TermsNConditionHeadNo, TermsNCondition)
+				  select @PONo, TermsNConditionHeadNo, TermsNCondition from
+				  Purchase.POAmendmentTermsNConditionDetail where POAmendmentNo = @prevPOAmendmentNo
+				  
+				  INSERT INTO Purchase.PONotesDetail(PONo, PrintAreaNo, Notes, IsDefault)
+					select @PONo, PrintAreaNo, Notes, IsDefault from 
+					[Purchase].[POAmendmentNotesDetail] where POAmendmentNo = @prevPOAmendmentNo
+				
+				 INSERT INTO Purchase.POTransportationRoute
+                      (PONo, RouteId, ItemNo, MakeNo, TechnicalGradeNo, DeliveryModeNo, FreightTypeNo,
+                      FreightRateTypeNo, FreightAmount, FromLocationNo, ToLocationNo, WarehouseNo, 
+                      ToleranceBasisNo, ToleranceMinus, TolerancePlus, Receipient,IsGateEntry,ReceipientPartyNo
+                      ,RouteIdentity ,SenderPartyNo ,NoOfTrips ,ParentRouteId )
+				 select @PONo, RouteId, ItemNo, MakeNo, TechnicalGradeNo, DeliveryModeNo, FreightTypeNo,
+                      FreightRateTypeNo, FreightAmount, FromLocationNo, ToLocationNo, WarehouseNo, 
+                      ToleranceBasisNo, ToleranceMinus, TolerancePlus, Receipient,IsGateEntry,ReceipientPartyNo
+                      ,RouteIdentity ,SenderPartyNo ,NoOfTrips,ParentRouteId
+                  from   Purchase.POAmendmentTransportationRoute where POAmendmentNo = @prevPOAmendmentNo
+                     	      
+				
+				INSERT INTO Purchase.POExpenseHead
+                      (PONo, ItemNo, MakeNo, TechnicalGradeNo, ExpenseheadNo, BillingLocationNo, BillingQtyNo,
+                       FreightRateTypeNo , Rate, PartyNo, InputItemQty, Yield, Rejection, Loss, IncludeInValuation
+                       ,RouteIdentity,SCAgreementNo)
+                 select @PONo, ItemNo, MakeNo, TechnicalGradeNo, ExpenseheadNo, BillingLocationNo, BillingQtyNo,
+                      FreightRateTypeNo, Rate, PartyNo, InputItemQty, Yield, Rejection, Loss, IncludeInValuation
+                      ,RouteIdentity,SCAgreementNo
+                   from    Purchase.POAmendmentExpenseHead where POAmendmentNo = @prevPOAmendmentNo
+				
+				INSERT INTO Purchase.POExpenseHeadOutputDetail(POExpenseDetailNo, ItemNo, Quantity)
+				select pd.POExpenseDetailNo  , pcd.ItemNo , pcd.Quantity 
+				from Purchase.POAmendmentMain pam
+				inner join purchase.POAmendmentExpenseHead pid on pam.POAmendmentNo = pid.POAmendmentNo 
+			inner join Purchase.POAmendmentExpenseHeadOutputDetail pcd on 
+						pid.POAmendmentExpenseDetailNo = pcd.POAmendmentExpenseDetailNo
+			inner join Purchase.POExpenseHead pd on pd.PONo = pam.PONo and pid.ItemNo = pd.ItemNo 
+					and isnull(pid.MakeNo,0) = isnull(pd.MakeNo,0) and 
+						isnull(pid.TechnicalGradeNo,0) = isnull(pd.TechnicalGradeNo ,0)
+				where pam.POAmendmentNo = @prevPOAmendmentNo	
+				
+				 
+				  
+				  
+			if not exists(select 1 from Purchase.POMain where PODocumentTypeno=1 and PONO=@PONo)
+			begin
+				Insert into @IndentDetail select row_Number() over (order by IndentNo), IndentNo ,
+					ItemNo ,IndentMakeNo ,IndentTechnicalGradeNo from 
+						Purchase.POIndentDetail where PONO = @PoNo
+				set @iRow= @@rowcount		
+			end		
+			
+			 
+			select @iCOunt = 0
+			while @iRow > @iCount
+			begin
+				select @IndentNo = IndentNo , @ItemNo = ItemNo , @MakeNo = MakeNo,@TechnicalGradeNo =TechnicalGradeNo
+				  from @IndentDetail where  IDNo = @iCount +1
+				
+				exec Inventory.IndentStatus @IndentNo,@ItemNo,@MakeNo ,	2,@OutputStatus output,@Result output
+						,@TechnicalGradeNo 
+				
+				if @OutputStatus =0
+				   raiserror (@Result,16,-1)
+				   
+				set @iCOunt = @iCount + 1			
+			end
+			
+		     END
+			
+                      
+					UPDATE    POM SET
+					CompanyNo = pam.CompanyNo, 
+					--YearNo = pam.yearNo,  commented on 12 04 2019
+					AmendmentNo = pam.AmendmentNo, 
+					DivisionNo = pam.DivisionNo, 
+					DocumentNoYearly = pam.DocumentNoYearly, 
+					DocumentDate = pam.DocumentDate , 
+                    PODocumentTypeNo = pam.PODocumentTypeNo , 
+                    IndentTypeNo = pam.IndentTypeNo  , 
+                    POPurchaseCategoryNo = pam.POPurchaseCategoryNo , 
+                    PORefDocumentTypeNo =pam.PORefDocumentTypeNo , 
+                    RefDocumentNo = pam.RefDocumentNo , 
+                    VendorNo = pam.VendorNo , 
+                    VendorLocationNo = pam.VendorLocationNo , 
+                    VendorContactNo = pam.VendorContactNo , 
+                    ValidityDate = pam.ValidityDate , 
+                    CurrencyConversionNo =pam.CurrencyConversionNo , 
+					DivisibilityRate =pam.DivisibilityRate ,
+					MultiplicativeRate=pam.MultiplicativeRate, 
+                    WayBillNo = pam.WayBillNo , 
+                    WaybillDate = pam.WaybillDate , 
+                    ConsigneeNo = pam.ConsigneeNo , 
+                    ConsigneeLocationNo = pam.ConsigneeLocationNo , 
+                    FreightTypeNo = pam.FreightTypeNo , 
+                    FreightRateTypeNo  = pam.FreightRateTypeNo  , 
+                    FreightAmount = pam.FreightAmount , 
+                    ToLocationNo  = pam.ToLocationNo  , 
+                    PayToPartyNo = pam.PayToPartyNo , 
+                    PayToPartyLocationNo = pam.PayToPartyLocationNo , 
+                    BillToPartyNo = pam.BillToPartyNo , 
+                    BillTopartyLocationNo = pam.BillTopartyLocationNo , 
+                    PaymentModeNo = pam.PaymentModeNo , 
+                    Remarks = pam.Remarks ,
+                    NetAmount = pam.netAmount ,
+                    POAgainst= PAM.POAgainst,
+                    IsTransportationRouteApplicable = PAM.IsTransportationRouteApplicable 
+                    , PaymentTerms = PAM.PaymentTerms 
+                    , FromLocationNo= pam.FromLocationNo
+                    , ReferenceNo = PAM.ReferenceNo 
+                    ,ReferenceDate =PAM.ReferenceDate 
+                    , GSTDNo = PAM.GSTDNo
+                    ,IsManuallyClosing = PAM.IsManuallyClosing
+                    ,NoOfTrips = PAM.NoOfTrips
+                    ,PortalRevisedQuotationNo=PAM.PortalRevisedQuotationNo
+                    ,IsPORateValidationRequired = PAM.IsPORateValidationRequired
+					,POM.WareHouseNo = PAM.WareHouseNo 
+                FROM Purchase.POMain POM 
+                inner join [Purchase].[POAmendmentMain] PAM on pom.PONo = Pam.PONo
+				WHERE POAmendmentNo = @prevPOAmendmentNo
+				
+				if @prevPOAmendmentNo is null
+					delete from Customize.POItemHanne where PONo = @PONo 					
+					
+				If @IsCopy = 1
+					Set @POAmendmentNo = null
+				
+			 -- Delete Amendment Details Table
+
+				Delete from Purchase.POAmendmentAdvanceDetail Where POAmendmentNo = @POAmendmentNo
+
+				delete from Notifications.TATAuthorizationDetail where InternalNo = @POAmendmentNo And FormCode ='PMPA'
+				Delete From Purchase.POAmendmentAuthorizationDetail where POAmendmentNo  = @POAmendmentNo
+				Delete from Purchase.POAmendmentExpenseHeadOutputDetail where POAmendmentExpenseDetailNo 
+							in (select POamendmentExpenseDetailNo from Purchase.POAmendmentExpenseHead  
+								where POAmendmentNo  = @POAmendmentNo)
+				
+				Delete from Purchase.POAmendmentItemTechSpecificationDetail  where POAmendmentNo  = @POAmendmentNo 
+				Delete from Purchase.POAmendmentItemLRate  where POAmendmentNo  = @POAmendmentNo
+				Delete from Purchase.POAmendmentExpenseHead  where POAmendmentNo  = @POAmendmentNo 
+				Delete from Purchase.POAmendmentTransportationRoute where POAmendmentNo  = @POAmendmentNo 
+				
+				Delete from Purchase.POAmendmentItemConsigneeDetail where  POAmendmentItemDetailNo in(
+				select POAmendmentItemDetailNo  FROM Purchase.POAmendmentItemDetail WHERE POAmendmentNo = @POAmendmentNo)
+				
+				Delete from Purchase.POAmendmentConsigneeDetail where POAmendmentNo =@POAmendmentNo 
+				Delete from Purchase.POAmendmentPaymentTermsDetail where POAmendmentNo =@POAmendmentNo 
+				DELETE FROM Purchase.POAmendmentItemTaxDetail WHERE POAmendmentNo = @POAmendmentNo
+				DELETE FROM Purchase.POAmendmentItemSizeDetail WHERE POAmendmentNo = @POAmendmentNo
+				DELETE FROM Purchase.POAmendmentItemScheduleDetail WHERE POAmendmentNo = @POAmendmentNo
+				
+				DELETE FROM Purchase.POAmendmentItemQCParameterDetail WHERE POAmendmentItemDetailNo in(
+				select POAmendmentItemDetailNo  FROM Purchase.POAmendmentItemDetail WHERE POAmendmentNo = @POAmendmentNo)
+				
+				DELETE FROM Purchase.POAmendmentCustomFieldDetail WHERE POAmendmentNo = @POAmendmentNo
+				DELETE FROM Purchase.POAmendmentTaxConcessionFormDetail WHERE POAmendmentNo = @POAmendmentNo
+				DELETE FROM Purchase.POAmendmentIndentReserveDetail where POAmendmentIndentDetailNo in(
+				select POAmendmentIndentDetailNo from  Purchase.POAmendmentIndentDetail WHERE POAmendmentNo = @POAmendmentNo)
+				
+				DELETE FROM Purchase.POAmendmentIndentDetail WHERE POAmendmentNo = @POAmendmentNo
+				DELETE FROM Purchase.POAmendmentItemDetail WHERE POAmendmentNo = @POAmendmentNo
+				DELETE FROM Purchase.POAmendmentTaxDetail WHERE POAmendmentNo = @POAmendmentNo
+				DELETE FROM Purchase.POAmendmentTermsNConditionDetail WHERE POAmendmentNo = @POAmendmentNo
+				Delete from [Purchase].[POAmendmentNotesDetail] where POAmendmentNo  =@POAmendmentNo
+				
+				DELETE FROM [Purchase].[POAmendmentMain] WHERE POAmendmentNo = @POAmendmentNo
+				-- Delete Amendment MAIN TABLE	
+				
+				 -- Delete Main Table
+ 
+	
+	-- Agreement Reset
+	if exists(select 1 from purchase.POAmendmentMain where (PORefDocumentTypeNo=2 or (PORefDocumentTypeNo=8 and IsCSAgainstAgreement =1)) and 
+					POAmendmentNo = @prevPOAmendmentNo)
+	begin
+		select @TempRefDocumentNo  = RefDocumentNo from Purchase.POAmendmentMain where POAmendmentNo = @prevPOAmendmentNo
+		
+			update ad set Statusno = 2
+			from Purchase.AgreementItemDetail ad 
+			inner join  Purchase.AgreementMain am on
+								ad.AgreementNo = am.AgreementNo 
+				inner join (select RefDocumentNo ,ItemNo ,MakeNo,sum(Quantity) POQty from
+							Purchase.POAmendmentMain pm inner join 
+							Purchase.POAmendmentItemDetail pd on pd.POAmendmentNo = pm.POAmendmentNo
+							where PORefDocumentTypeNo=2 and refDocumentNo = @TempRefDocumentNo
+							and AmendmentNo = (select max(AmendmentNo) from Purchase.POAmendmentMain where
+												PONo = pm.PONo)
+							group by RefDocumentNo, ItemNo,MakeNo) tt
+							on tt.ItemNo = ad.ItemNo and isnull(tt.MakeNo,0) = isnull(ad.MakeNo,0)
+										and tt.RefDocumentno = am.AgreementNo
+				where AgreementTypeNo = 2 and am.AgreementNo= @TempRefDocumentNo
+				and ad.Quantity <= isnull(POQty,0)
+			
+			update ad set Statusno = 2
+			from Purchase.AgreementItemDetail ad 
+			inner join  Purchase.AgreementMain am on
+								ad.AgreementNo = am.AgreementNo 
+				inner join (select RefDocumentNo ,ItemNo ,MakeNo,sum(pd.NetAmount) PONetAmount from
+							Purchase.POAmendmentMain pm 
+							inner join Purchase.POAmendmentItemDetail pd on pd.POAmendmentNo = pm.POAmendmentNo
+							where PORefDocumentTypeNo=2 and refDocumentNo = @TempRefDocumentNo
+							and AmendmentNo = (select max(AmendmentNo) from Purchase.POAmendmentMain where
+												PONo = pm.PONo)
+							group by RefDocumentNo, ItemNo,MakeNo) tt
+							on tt.ItemNo = ad.ItemNo and isnull(tt.MakeNo,0) = isnull(ad.MakeNo,0)
+										and tt.RefDocumentno = am.AgreementNo
+				where AgreementTypeNo = 3 and am.AgreementNo= @TempRefDocumentNo
+				and ad.Amount <= isnull(PONetAmount,0)
+					
+			if not exists(select 1 from Purchase.AgreementItemDetail where AgreementNo=@TempRefDocumentNo
+							and StatusNo =1 )
+			begin				
+				Update Purchase.AgreementMain set StatusNo = 2 where 	AgreementNo= @TempRefDocumentNo
+							and statusNo = 1
+			end
+	end
+
+	---Agreement reset when IsAllowAlternateItemInPO
+	Declare @AgreementQty decimal(10,3)
+	Declare @POQty decimal(10,3), @AgreementType tinyint
+
+	if exists(Select 1
+				from Purchase.AgreementMain
+				Where AgreementNo = @TempRefDocumentNo
+				And IsAllowAlternateItemInPO = 1
+				And @PORefDocumentTypeNo = 2
+			)
+	begin
+		select @POQty =sum(Quantity) 
+		from Purchase.POAmendmentItemdetail  pd 
+		inner join purchase.POAmendmentMain pm on 
+		pd.PoAmendmentNo = pm.POAmendmentNo
+		and AmendmentNo = (
+							select max(AmendmentNo) 
+							from Purchase.POAmendmentMain 
+							where PONo = pm.PONo
+						)
+		where PORefDocumentTypeNo=2 and RefDocumentNo=@TempRefDocumentNo
+			
+		select @AgreementQty = SUM(Quantity + 
+		Case When ToleranceBasisNo = 1 Then ad.TolerancePlus 
+			When ToleranceBasisNo = 2 Then Cast(Quantity * (TolerancePlus/100) as decimal(12,3))
+			Else 0 End)
+		,  @AgreementType = AgreementTypeNo
+		from Purchase.AgreementItemDetail ad 
+		inner join Purchase.AgreementMain am on ad.AgreementNo = am.AgreementNo
+		where ad.AgreementNo = @TempRefDocumentNo
+		Group by AgreementTypeNo
+		
+		if 	@AgreementType=2  -- Quantity Agreement
+		begin
+			if isnull(@POQty,0) = @AgreementQty
+			begin
+				Update Purchase.AgreementItemDetail 
+				set StatusNo = 2 
+				where AgreementNo = @TempRefDocumentNo 
+
+				update Purchase.AgreementMain set Statusno = 2 where AgreementNo  = @TempRefDocumentNo 
+			end
+			else if isnull(@POQty,0) = 0
+			begin
+				Update Purchase.AgreementItemDetail 
+				set StatusNo = 1
+				where AgreementNo = @TempRefDocumentNo 
+
+				update Purchase.AgreementMain set Statusno = 1 where AgreementNo  = @TempRefDocumentNo 
+			end
+			else if isnull(@POQty,0) < @AgreementQty
+			begin
+				Update Purchase.AgreementItemDetail 
+				set StatusNo = 8 
+				where AgreementNo = @TempRefDocumentNo 
+
+				update Purchase.AgreementMain set Statusno = 8 where AgreementNo  = @TempRefDocumentNo 
+			end
+
+		end		
+			 
+	end   
+	
+	-- LOI reset			 
+	if exists(select 1 from purchase.POAmendmentMain where PORefDocumentTypeNo=4 and 
+					POAmendmentNo=@prevPOAmendmentNo)
+	begin
+		select @TempRefDocumentNo  = RefDocumentNo from Purchase.POAmendmentMain where 
+					POAmendmentNo=@prevPOAmendmentNo
+					
+		update PM set StatusNo = 2
+		from Purchase.POAmendmentMain PM 
+			where  PONo in (select PONo from Purchase.POAmendmentMain where POAmendmentNo = @TempRefDocumentNo)
+			
+		update pd set StatusNo = 2
+		from Purchase.POAmendmentMain PM 
+			inner join Purchase.POAmendmentItemDetail pd on pm.POAmendmentNo = pd.PoAmendmentNo
+			where  PONo in (select PONo from Purchase.POAmendmentMain where POAmendmentNo = @TempRefDocumentNo)
+			
+		update PM set StatusNo = 2
+		from Purchase.POMain PM 
+			where  PONo in (select PONo from Purchase.POAmendmentMain where POAmendmentNo = @TempRefDocumentNo)
+			
+		update pd set StatusNo = 2
+		from Purchase.POItemDetail pd
+			where  PONo in (select PONo from Purchase.POAmendmentMain where POAmendmentNo = @TempRefDocumentNo)
+	end
+	
+	-- quotation Status
+	
+	if exists(select 1 from purchase.POAmendmentMain where POAmendmentNo = @prevPOAmendmentNo 
+					and (PORefDocumentTypeNo = 1 or (PORefDocumentTypeNo =8 and IsCSAgainstAgreement =0)) and PODocumentTypeNo<>1)
+	BEGIN	
+		Select @RevisedQuotationNo = 0,@RFQNo = 0,@iRow = 0 ,@iCount = 0	
+
+		 Select @RFQNo = RQM.RFQNo
+		,@CompanyNo = PAM.CompanyNo
+		,@RevisedQuotationNo =  RQM.RevisedQuotationNo
+		From Purchase.POAmendmentMain PAM
+		Inner Join Purchase.RevisedQuotationMain RQM on RQM.RevisedQuotationNo = PAM.RefDocumentNo
+		Where  POAmendmentNo = @prevPOAmendmentNo
+			
+		Delete From @RevisedQuotationDetail
+		
+		Insert into @RevisedQuotationDetail
+		Select 1,@RevisedQuotationNo 
+		Union 
+		Select row_number() over (Order By RevisedQuotationNO) + 1,RevisedQuotationNO 
+		From Purchase.RevisedQuotationMain Where RFQNo = @RFQNo and RevisedQuotationNO <> @RevisedQuotationNo
+		
+		
+		set @iRow = @@rowcount
+		set @iCount = 0
+		while @iRow >@iCount
+		Begin
+		      Select @RevisedQuotationNo = RevisedQuotationNo
+		      From @RevisedQuotationDetail Where id = @iCount + 1
+		      
+			  Exec [Purchase].[QuotationChangeStatus]  @RevisedQuotationNo,@prevPOAmendmentNo,7,@CompanyNo,0,0
+			  
+			  set @iCOunt = @iCOunt + 1
+		End
+		
+	END
+	
+	
+	-- csbooking reseting		
+    
+	begin
+			
+		if @IsCS =0
+			update cb set POQty = tt.Quantity 
+			from Purchase.CSBooking cb
+			inner join Purchase.RevisedQuotationMain rqm on rqm.RevisedQuotationNo = cb.RevisedQuotationNo 
+			cross apply (
+			 select sum(pd.Quantity) Quantity from Purchase.POAmendmentMain pm 
+			 inner join Purchase.POAmendmentItemDetail pd on pd.POAmendmentNo = pm.POAmendmentNo 
+			 left join Purchase.RevisedQuotationMain qm on qm.RevisedQuotationNo = pm.RefDocumentNo 
+			 where pm.AmendmentNo = (select MAX(AmendmentNo ) from Purchase.POAmendmentMain where PONo = pm.PONo)
+			 and qm.QuotationNo = @QuotationNo and pm.RefDocumentNo = cb.RevisedQuotationNo  and cb.ItemNo = pd.ItemNo and ISNULL(cb.MakeNo,0)= ISNULL(pd.MakeNo,0)) tt
+			 where cb.RevisedQuotationNo = @TempRefDocumentNo 
+		 
+		else
+		 
+			update cb set POQty = tt.Quantity 
+			from Purchase.CSBooking cb
+			cross apply (
+			 select sum(pd.Quantity) Quantity from Purchase.POAmendmentMain pm 
+			 inner join Purchase.POAmendmentItemDetail pd on pd.POAmendmentNo = pm.POAmendmentNo 
+			 where pm.AmendmentNo = (select MAX(AmendmentNo ) from Purchase.POAmendmentMain where PONo = pm.PONo)
+			 and RefDocumentNo =@TempRefDocumentNo  and cb.ItemNo = pd.ItemNo and ISNULL(cb.MakeNo,0)= ISNULL(pd.MakeNo,0)) tt
+			 where cb.AgreementNo  = @TempRefDocumentNo 
+		 		
+	 
+		
+	end
+
+		Delete from [Purchase].[POFollowUpMain] Where PONo = @PONo AND isnull(@prevPOAmendmentNo ,0)=0
+		Delete from [Purchase].POAccountAssignmentDetail where PONo = @PONo AND isnull(@prevPOAmendmentNo ,0)=0
+					
+		Delete From [Purchase].[POMain] WHERE PONo=@PONo AND isnull(@prevPOAmendmentNo ,0)=0
+		
+		Select 1,'Success'
+		set @OutputStatusNo  = 1
+		set @OutputStatusRemarks ='Success'
+					
+		--Transaction Ends here
+			Commit Transaction
+		
+	END TRY
+	--Try Block ends here
+	
+	--Catch Block starts here
+	BEGIN CATCH
+		Rollback Transaction
+		select 0, error_message()-- 'Can''t be deleted as some record exist against this entry.'
+		set @OutputStatusNo  = 0
+		set @OutputStatusRemarks = ERROR_MESSAGE ()
+	END CATCH
+	--Catch Block ends here
+END

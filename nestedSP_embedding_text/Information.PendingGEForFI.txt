@@ -1,0 +1,89 @@
+Stored procedure Information.PendingGEForFI. Called from GateEntry.IMGEGetTransporterInfo.
+Reads: Finance.FreightInvoiceItemDetail, Finance.FreightInvoiceMain, GateEntry.InvGateEntryMain, GateEntry.InvGateEntryOrderDetail, GlobalData.GateEntrySourceDocument, Inventory.InvStockTransferMain, payroll.tblDivisionMaster, Purchase.POAmendmentMain, Purchase.SCOrderAmendmentMain, Sales.DispatchChallan, Sales.SalesOrderMain, Sales.SalesReturnItemDetail, Sales.SalesReturnMain, Security.Login
+Parameters: @CompanyNo tinyint, @DocumentDate smalldatetime, @TransporterNo int, @ModuleNo tinyint
+Code:
+
+-- =============================================
+-- Author:		<Arvinder Kaur>
+-- Create date: <2013/09/01>
+-- Description:	<Pending GateEntry For Freight Invoice>
+-- =============================================
+---[Information].[PendingGEForFI] 4,'2013/09/05',38
+CREATE PROCEDURE [Information].[PendingGEForFI]  
+	-- Add the parameters for the stored procedure here
+	@CompanyNo tinyint,
+	@DocumentDate smalldatetime,
+	@TransporterNo int,
+	@ModuleNo tinyint
+AS
+BEGIN
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+
+    -- Insert statements for procedure here
+	declare @str varchar(max)
+    select @str=masterdata.JSForInformation('IMGE')
+    set @str=@str+masterdata.CSSForInformation('IMGE')
+	set @str=@str+'<table class="altrowstable" id="alternatecolorPendingGEForFI">'
+	set @str=@str+'<Caption><Font color="Maroon"><h3 align="Left"><b>Pending GateEntry For Freight Invoice</b></h3></Font></Caption>'
+    set @str=@str+'<tr><th>Sl. No.</th><th>Division</th><th>Document No.</th><th>Document Date</th><th>Source Document</th><th>Source Doc. No.</th><th>Source Doc. Date</th><th>Created By</th><th>Authorized By</th></tr>'
+	set @str=@str
+				 +( 
+					replace(
+					replace(
+					replace(
+					replace(
+					replace(
+					replace(
+					replace(
+					replace(
+					replace((Select  ROW_NUMBER() over ( Order by GE.DocumentDate desc) as td1
+					                ,Isnull(DM.DivisionName,'') td2
+									,GE.DocumentNoYearly  td3
+									,convert(varchar(20),GE.DocumentDate,103) td4
+									,SRC.SourceDocument  td5
+									,Isnull(Isnull(Isnull(Isnull(Isnull(Isnull(Isnull(POA.DocumentNoYearly,ST.DocumentNoYearly),DC.DocumentNoYearly),SCM.DocumentNoYearly),SR.DocumentNoYearly),SR1.DocumentNoYearly),SO.DocumentNoYearly),'') td6
+									,Isnull(Convert(Varchar(20),Isnull(Isnull(Isnull(Isnull(Isnull(Isnull(POA.DocumentDate,ST.DocumentDate),DC.DocumentDate),SCM.DocumentDate),SR.DocumentDate),SR1.DocumentDate),SO.DocumentDate),103),'') td7
+									,L.PrintingName td8
+									,Isnull(L1.PrintingName,'') td9
+							From  GateEntry.InvGateEntryMain GE
+							INNER JOIN GlobalData.GateEntrySourceDocument SRC ON  GE.GateEntrySourceNo = SRC.GateEntrySourceNo
+							LEFT JOIN payroll.tblDivisionMaster DM on GE.CompanyNo = DM.CompanyNo  
+															       And GE.DivisionNo=DM.DivisionNo								       
+						    Inner Join GateEntry.InvGateEntryOrderDetail GEI ON GE.GateEntryNo=GEI.GateEntryNo -----Group by Clause For this
+							Left Join Inventory.InvStockTransferMain ST ON ST.InvStockTransferNo=GEI.InvStockTransferNo
+							Left Join Purchase.POAmendmentMain POA ON POA.POAmendmentNo=GEI.POAmendmentNo
+							Left Join Sales.DispatchChallan DC ON DC.DispatchChallanNo=GEI.DispatchChallanNo
+							Left Join Purchase.SCOrderAmendmentMain SCM ON SCM.SCOrderAmendmentNo=GEI.SCOrderAmendmentNo
+							Left Join Sales.SalesReturnItemDetail SRI ON SRI.CommercialInvoiceNo=GEI.CommercialInvoiceNo
+							Left Join Sales.SalesReturnMain SR ON SR.SalesReturnNo=SRI.SalesReturnNo
+							Left Join Sales.SalesReturnItemDetail SRI1 ON SRI1.InvoiceNo=GEI.InvoiceNo
+							Left Join Sales.SalesReturnMain SR1 ON SR1.SalesReturnNo=SRI1.SalesReturnNo
+							LEFT Join Sales.SalesOrderMain SO ON SO.SalesOrderNo=GEI.SalesOrderNo
+							Left Join Finance.FreightInvoiceItemDetail FBI ON FBI.RefDocNo=GE.GateEntryNo
+							Left Join Finance.FreightInvoiceMain FIM On FBI.FreightInvoiceNo = FIM.FreightInvoiceNo
+																		And FIM.FreightDocumentNo = 1 
+							Inner Join Security.Login L ON L.LoginNo=GE.CreatedBy
+							Left Join Security.Login L1 ON L1.LoginNo=GE.AuthorizedBy
+							Where GE.TransporterNo=@TransporterNo
+									And GE.DocumentDate<=@DocumentDate
+									And GE.CompanyNo=@CompanyNo
+									And (FBI.FreightInvoiceNo Is Null)
+									And GE.ModuleNo=@ModuleNo------For Inventory/Raw Material 
+							For xml path('tr')),'<td1>','<td style="text-align: center;">')
+							                   ,'<td2>','<td>')
+											   ,'<td3>','<td>')
+											   ,'<td4>','<td style="text-align: center;">')
+										       ,'<td5>','<td>')
+										       ,'<td6>','<td>')
+										       ,'<td7>','<td style="text-align: center;">')
+										       ,'<td8>','<td>')
+										       ,'<td9>','<td>')
+										   )
+				   
+	set @str=@str+'</table>'
+	
+	select @str
+	
+END

@@ -1,0 +1,73 @@
+Stored procedure Information.PendingMaterialRequestForDept: Get Pending matarial Request For Department. Called from Inventory.IMMIGetDeptInfo, Inventory.MMPRGetDeptInfo, Inventory.IDMRGetDeptInfo, Purchase.PMPOGetDeptInfo.
+Reads: GlobalData.IndentType, Inventory.IndentRequisitionMain, payroll.tblDivisionMaster, Security.Login
+Parameters: @CompanyNo tinyint, @DocumentDate smalldatetime, @DeptNo int
+Author: Monika Rajput, created 2013/09/24
+Code:
+
+-- =============================================
+-- Author:		Monika Rajput
+-- Create date: 2013/09/24
+-- Description:	Get Pending matarial Request For Department
+-- =============================================
+
+CREATE PROCEDURE [Information].[PendingMaterialRequestForDept] 
+	-- Add the parameters for the stored procedure here
+	@CompanyNo tinyint,
+	@DocumentDate smalldatetime,
+	@DeptNo int
+AS
+BEGIN
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+
+    -- Insert statements for procedure here
+
+    
+	declare @str varchar(max)
+    select @str=masterdata.JSForInformation('MMPR')
+    set @str=@str+masterdata.CSSForInformation('MMPR')
+	set @str=@str+'<table class="altrowstable" id="alternatecolorPMRInfo">'
+	set @str=@str+'<Caption><Font color="Maroon"><h3 align="Left"><b>Pending Material Request</b></h3></Font></Caption>'
+    set @str=@str+'<tr><th>Sl. No.</th><th>Division</th><th>Document No.</th><th>Document Date</th><th>Request Type</th><th>Requested By</th><th>Created By</th><th>Authorized By</th></tr>'
+	set @str=@str
+				 +( REPLACE(
+				    REPLACE(
+				    REPLACE(
+				    replace(
+					replace(
+					replace(
+					replace(
+					replace((    
+							select ROW_NUMBER() over ( Order by irm.DocumentDate desc) as td1
+							       ,isnull(DM.DivisionName,'') td2      
+							       ,irm.DocumentNoYearly as td3
+								   ,convert(varchar(20),irm.DocumentDate,103) td4
+								   ,IT.IndentType  td5
+							       , isnull(irm.RequestedBy,'') td6
+							       ,L1.PrintingName  td7
+							       ,isnull(L2.PrintingName,'') td8
+							from 
+							Inventory.IndentRequisitionMain irm 
+							Inner Join GlobalData.IndentType IT ON IT.IndentTypeNo=irm.IndentTypeNo
+							Left Join payroll.tblDivisionMaster DM ON DM.DivisionNo=irm.DivisionNo
+							Inner Join Security.Login L1 on L1.LoginNo=irm.CreatedBy
+							Left Join Security.Login L2 On L2.LoginNo=irm.AuthorizedBy
+							where
+									irm.CompanyNo = @CompanyNo 
+									And irm.StatusNo in(1,8,5,6) ------Pending Material Request
+									And irm.DeptNo=@DeptNo	
+									and irm.DocumentDate <= @DocumentDate	
+
+							for xml path('tr')),'<td1>','<td style="text-align: center;">')
+							     ,'<td2>','<td>')
+								 ,'<td3>','<td>')
+								 ,'<td4>','<td  style="text-align: center;">')
+								 ,'<td5>','<td>')
+								 ,'<td6>','<td>')
+								 ,'<td7>','<td>')
+								 ,'<td8>','<td>'))
+	set @str=@str+'</table>'
+	
+	select @str
+END

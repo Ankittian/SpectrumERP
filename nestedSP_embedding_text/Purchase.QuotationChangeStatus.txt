@@ -1,0 +1,309 @@
+Stored procedure Purchase.QuotationChangeStatus: To Change Status OF Quotation. Called from Purchase.PMPOAuthorize.
+Writes: Purchase.QuotationItemDetail, Purchase.QuotationMain, Purchase.RevisedQuotationItemDetail, Purchase.RevisedQuotationMain
+Reads: Purchase.POAmendmentItemDetail, Purchase.POAmendmentMain, Purchase.QuotationItemDetail, Purchase.QuotationMain, Purchase.RevisedQuotationMain, Purchase.Setting
+Parameters: @RevisedQuotationNo int, @POAmendmentNo int, @StatusNo tinyint, @CompanyNo tinyint, @ItemNo int, @MakeNo smallint
+Author: Himanshu, created 13 Jun 2022
+Code:
+-- =============================================
+-- Author:		Himanshu
+-- Create date: 13 Jun 2022
+-- Description:	To Change Status OF Quotation 
+-- =============================================
+CREATE PROCEDURE [Purchase].[QuotationChangeStatus] 	
+	 @RevisedQuotationNo int 
+	,@POAmendmentNo int 
+	,@StatusNo tinyint
+	,@CompanyNo  tinyint
+	,@ItemNo int
+	,@MakeNo smallint
+AS
+BEGIN
+BEGIN TRY
+
+	Declare @QuotationNo int = 0 ,@RFQNo int=0 
+
+	Select @QuotationNo  = RQM.QuotationNo
+		  ,@RFQNo = RQM.RFQNo
+	From  Purchase.RevisedQuotationMain RQM 
+	Where RQM.RevisedQuotationNo = @RevisedQuotationNo
+	
+    
+    --Managed Against Tkt : 201119001 - 13/06/2022 
+	IF exists(Select 1 From Purchase.Setting Where QuotationClosingOn = 'Quotation'  and CompanyNo = @CompanyNo)
+	Begin
+		 IF @StatusNo = 7
+		 Begin
+			-- short- closing other quotations
+			Update Purchase.RevisedQuotationMain 
+			set StatusNo = 7
+			Where RevisedQuotationNo <> @RevisedQuotationNo and StatusNo <> 7
+				  And RFQNo = @RFQNo
+				  And RevisedQuotationNo <> (select RefDocumentNo from Purchase.POAmendmentMain Where POAmendmentNo = @POAmendmentNo)
+				  
+			Update RQID
+			Set RQID.StatusNo = 7
+			From Purchase.RevisedQuotationMain RQM
+			Inner Join Purchase.RevisedQuotationItemDetail RQID on RQID.RevisedQuotationNo = RQM.RevisedQuotationNo
+			Where RQM.RevisedQuotationNo <> @RevisedQuotationNo and RQID.StatusNo <> 7
+				  And RFQNo = @RFQNo
+				  And RQM.RevisedQuotationNo <> (select RefDocumentNo from Purchase.POAmendmentMain Where POAmendmentNo = @POAmendmentNo)
+
+			Update Purchase.QuotationMain 
+			set StatusNo = 7
+			Where QuotationNo <> @QuotationNo and StatusNo <> 7
+				 And RFQNo = @RFQNo
+				 and QuotationNo <> (	select RQM.QuotationNo
+										from Purchase.POAmendmentMain  PAM
+										Inner join Purchase.RevisedQuotationMain RQM on PAM.RefDocumentNo = RQM.RevisedQuotationNo
+																						and PAM.PORefDocumentTypeNo = 1		
+										Where POAmendmentNo = @POAmendmentNo
+									)
+				 
+			Update QID
+			Set QID.StatusNo = 7
+			From Purchase.QuotationMain QM
+			Inner Join Purchase.QuotationItemDetail QID on QID.QuotationNo = QM.QuotationNo
+			Where QM.QuotationNo <> @QuotationNo and QID.StatusNo <> 7
+				 And RFQNo = @RFQNo	
+				 and QM.QuotationNo <> (	select RQM.QuotationNo
+										from Purchase.POAmendmentMain  PAM
+										Inner join Purchase.RevisedQuotationMain RQM on PAM.RefDocumentNo = RQM.RevisedQuotationNo
+																						and PAM.PORefDocumentTypeNo = 1		
+										Where POAmendmentNo = @POAmendmentNo
+									) 
+			  
+		 End 
+		 
+		 IF @StatusNo = 1
+		 Begin
+		 -- if status is short close then change to authorized
+			Update Purchase.RevisedQuotationMain 
+			set StatusNo = 1
+			Where RevisedQuotationNo <> @RevisedQuotationNo and StatusNo = 7
+				  And RFQNo = @RFQNo
+				  
+
+			Update RQID
+			Set RQID.StatusNo = 1
+			From Purchase.RevisedQuotationMain RQM
+			Inner Join Purchase.RevisedQuotationItemDetail RQID on RQID.RevisedQuotationNo = RQM.RevisedQuotationNo
+			Where RQM.RevisedQuotationNo <> @RevisedQuotationNo and RQID.StatusNo = 7
+				  And RFQNo = @RFQNo
+
+			Update Purchase.QuotationMain 
+			set StatusNo = 1
+			Where QuotationNo <> @QuotationNo and StatusNo = 7
+				 And RFQNo = @RFQNo	
+				 
+			Update QID
+			Set QID.StatusNo = 1
+			From Purchase.QuotationMain QM
+			Inner Join Purchase.QuotationItemDetail QID on QID.QuotationNo = QM.QuotationNo
+			Where QM.QuotationNo <> @QuotationNo and QID.StatusNo = 7
+				 And RFQNo = @RFQNo		 
+		 End 
+	End	
+
+	IF exists( Select 1 From Purchase.Setting Where QuotationClosingOn = 'Item' and CompanyNo = @CompanyNo)		
+	Begin
+
+		 IF @StatusNo = 7 
+		 Begin
+				-- short- closing other quotations items
+			Update RQID1
+			Set RQID1.StatusNo = 7
+			From Purchase.POAmendmentMain POM
+			Inner Join Purchase.POAmendmentItemDetail POID on POID.POAmendmentNo = POM.POAmendmentNo
+			Inner Join Purchase.RevisedQuotationMain RQM on RQM.RevisedQuotationNo = POM.RefDocumentNo
+												 and POM.PORefDocumentTypeNo = 1
+			Inner Join Purchase.RevisedQuotationMain RQM1 on RQM1.RFQNo = RQM.RFQNo
+			Inner Join Purchase.RevisedQuotationItemDetail RQID1 on RQID1.RevisedQuotationNo = RQM1.RevisedQuotationNo	
+																	and POID.ItemNo = RQID1.ItemNo
+																	and ISNULL(POID.MakeNo,0) = ISNULL(RQID1.MakeNo,0)
+			Where RQM.RevisedQuotationNo = @RevisedQuotationNo 
+			    and POID.POAmendmentNo = @POAmendmentNo
+			    and RQM1.RevisedQuotationNo <> @RevisedQuotationNo
+				  and RQID1.StatusNo <> 7	  
+				      
+			
+			Update QID
+			Set  QID.StatusNo = 7
+			From Purchase.POAmendmentMain POM
+			Inner Join Purchase.POAmendmentItemDetail POID on POID.POAmendmentNo = POM.POAmendmentNo
+			Inner Join Purchase.RevisedQuotationMain RQM on RQM.RevisedQuotationNo = POM.RefDocumentNo
+												 and POM.PORefDocumentTypeNo = 1
+			Inner Join Purchase.QuotationMain RQM1 on RQM1.RFQNo = RQM.RFQNo
+			Inner Join Purchase.QuotationItemDetail QID on QID.QuotationNo = RQM1.QuotationNo
+												and POID.ItemNo = QID.ItemNo
+												and ISNULL(POID.MakeNo,0) = ISNULL(QID.MakeNo,0)	
+			Where RQM.QuotationNo = @QuotationNo
+					 and POID.POAmendmentNo = @POAmendmentNo
+					 and RQM1.QuotationNo <> @QuotationNo
+					 and QID.StatusNo <> 7 	 
+			   
+		 End
+		 
+		 IF @StatusNo = 1
+		 Begin
+
+			 -- opening other quotations items
+			Update RQID1
+			Set RQID1.StatusNo = 1
+			From Purchase.POAmendmentMain POM
+			Inner Join Purchase.POAmendmentItemDetail POID on POID.POAmendmentNo = POM.POAmendmentNo
+			Inner Join Purchase.RevisedQuotationMain RQM on RQM.RevisedQuotationNo = POM.RefDocumentNo
+												 and POM.PORefDocumentTypeNo = 1
+			Inner Join Purchase.RevisedQuotationMain RQM1 on RQM1.RFQNo = RQM.RFQNo
+			Inner Join Purchase.RevisedQuotationItemDetail RQID1 on RQID1.RevisedQuotationNo = RQM1.RevisedQuotationNo	
+																	and POID.ItemNo = RQID1.ItemNo
+																	and ISNULL(POID.MakeNo,0) = ISNULL(RQID1.MakeNo,0)
+			Where RQM.RevisedQuotationNo = @RevisedQuotationNo
+				  and POID.POAmendmentNo = @POAmendmentNo 
+				  and RQM1.RevisedQuotationNo <> @RevisedQuotationNo
+				  and RQID1.StatusNo=7
+
+			
+			Update QID
+			Set  QID.StatusNo = 1
+			From Purchase.POAmendmentMain POM
+			Inner Join Purchase.POAmendmentItemDetail POID on POID.POAmendmentNo = POM.POAmendmentNo
+			Inner Join Purchase.RevisedQuotationMain RQM on RQM.RevisedQuotationNo = POM.RefDocumentNo
+												 and POM.PORefDocumentTypeNo = 1
+			Inner Join Purchase.QuotationMain RQM1 on RQM1.RFQNo = RQM.RFQNo
+			Inner Join Purchase.QuotationItemDetail QID on QID.QuotationNo = RQM1.QuotationNo
+												and POID.ItemNo = QID.ItemNo
+												and ISNULL(POID.MakeNo,0) = ISNULL(QID.MakeNo,0)	
+			Where RQM.QuotationNo = @QuotationNo
+					 and POID.POAmendmentNo = @POAmendmentNo 
+					 and RQM1.QuotationNo <> @QuotationNo
+					 and QID.StatusNo = 7
+		  End
+			
+	End
+	
+   -- Previously Managed to change the status of main and item detail
+   
+   Begin
+    update qd set StatusNo = 1
+	from Purchase.RevisedQuotationItemDetail qd 
+	Inner Join Purchase.RevisedQuotationMain RQM on qd.RevisedQuotationNo = RQM.RevisedQuotationno
+	Inner Join Purchase.POAmendmentMain POAM on POAM.POAmendmentNo = @POAmendmentNo
+										 and POAM.PORefDocumentTypeNo = 1 
+										 and POAM.RefDocumentNo = RQM.RevisedQuotationNo 	
+	where qd.StatusNo =2 
+	   and RQM.RevisedQuotationNo =@RevisedQuotationNo
+	   and qd.ItemNo in (		
+							Select ItemNo from Purchase.POAmendmentMain pm 
+							Inner Join Purchase.POAmendmentItemDetail pd on pd.POAmendmentNo = pm.POAmendmentNo 
+							Inner Join Purchase.RevisedQuotationMain qm on qm.RevisedQuotationNo = pm.refDocumentNo 
+							Where pd.POAmendmentNo = @POAmendmentNo 
+							          and PORefDocumentTypeNo = 1
+							          and qm.QuotationNo = RQM.QuotationNo 
+							          and pd.Itemno = qd.ItemNo
+									  and isnull(pd.MakeNo,0) = isnull(qd.MakeNo,0)
+						)
+	
+	 
+	update qd set StatusNo = 1
+	from Purchase.QuotationItemDetail qd 
+	Inner Join Purchase.RevisedQuotationMain RQM on
+			qd.QuotationNo = RQM.Quotationno 
+    Inner Join Purchase.POAmendmentMain POAM on POAM.POAmendmentNo = @POAmendmentNo 
+										and POAM.PORefDocumentTypeNo = 1 
+										and POAM.RefDocumentNo = RQM.RevisedQuotationNo 	 
+	where qd.StatusNo =2 
+		and QD.QuotationNo =@QuotationNo
+		and qd.ItemNo in (		
+							Select ItemNo from Purchase.POAmendmentMain pm 
+							inner join Purchase.POAmendmentItemDetail pd on pd.POAmendmentNo = pm.POAmendmentNo 
+							inner join Purchase.RevisedQuotationMain qm on qm.RevisedQuotationNo = pm.refDocumentNo 
+							where pd.POAmendmentNo = isnull(@POAmendmentNo,0) 
+									and PORefDocumentTypeNo = 1 
+									and qm.QuotationNo = RQM.QuotationNo 
+									and pd.Itemno = qd.ItemNo
+									and isnull(pd.MakeNo,0) = isnull(qd.MakeNo,0)
+					 )				
+   End 
+   
+  IF @StatusNo = 7 
+  Begin
+		
+			Update qd set StatusNo = 2
+			From Purchase.RevisedQuotationItemDetail qd 
+			inner join Purchase.RevisedQuotationMain RQM on
+					qd.RevisedQuotationNo = RQM.RevisedQuotationno 
+					and RQM.RevisedQuotationNo = @RevisedQuotationNo
+			Where qd.ItemNo in (		
+								select ItemNo from Purchase.POAmendmentMain pm 
+								inner join Purchase.POAmendmentItemDetail pd on pd.POAmendmentNo = pm.POAmendmentNo 
+								inner join Purchase.RevisedQuotationMain qm on qm.RevisedQuotationNo = pm.refDocumentNo 
+								where
+								pd.POAmendmentNo =  @POAmendmentNo and
+								PORefDocumentTypeNo = 1 and qm.QuotationNo = RQM.QuotationNo and pd.Itemno = qd.ItemNo
+										and isnull(pd.MakeNo,0) = isnull(qd.MakeNo,0)
+							)
+			
+			Update qd set StatusNo = 2
+			From Purchase.QuotationItemDetail qd 
+			inner join Purchase.RevisedQuotationMain RQM on
+					qd.QuotationNo = RQM.Quotationno 
+					and RQM.QuotationNo = @QuotationNo
+			Where qd.ItemNo in (		
+								select ItemNo from Purchase.POAmendmentMain pm 
+								inner join Purchase.POAmendmentItemDetail pd on pd.POAmendmentNo = pm.POAmendmentNo 
+								inner join Purchase.RevisedQuotationMain qm on qm.RevisedQuotationNo = pm.refDocumentNo 
+								where
+								pd.POAmendmentNo =  @POAmendmentNo and
+								PORefDocumentTypeNo = 1 and qm.QuotationNo = RQM.QuotationNo and pd.Itemno = qd.ItemNo
+										and isnull(pd.MakeNo,0) = isnull(qd.MakeNo,0)
+							)				
+			
+  End   
+
+   If Exists(select 1 from Purchase.quotationItemdetail where QuotationNo = @QuotationNo and statusNo =2)
+		And Exists(select 1 from Purchase.quotationItemdetail where QuotationNo = @QuotationNo and statusNo =1)
+    begin						
+	  update Purchase.QuotationMain set StatusNo = 8 where  QuotationNo = @QuotationNo
+	  update Purchase.RevisedQuotationMain set StatusNo = 8 where  RevisedQuotationNo = @RevisedQuotationNo
+	end
+	Else
+	Begin
+		IF exists(select 1 from Purchase.QuotationItemDetail where QuotationNo = @QuotationNo and statusNo =1) -- Authorize
+		 begin
+				update Purchase.QuotationMain set StatusNo = 1 where  QuotationNo = @QuotationNo
+				update Purchase.RevisedQuotationMain set StatusNo = 1 where  RevisedQuotationNo = @RevisedQuotationNo
+		 end
+		 else if exists(select 1 from Purchase.QuotationItemDetail where QuotationNo = @QuotationNo and statusNo =8) -- in progress
+			 begin
+				  update Purchase.QuotationMain set StatusNo = 8 where  QuotationNo = @QuotationNo
+				  update Purchase.RevisedQuotationMain set StatusNo = 8 where  RevisedQuotationNo = @RevisedQuotationNo
+			 end	
+		 else if exists(select 1 from Purchase.QuotationItemDetail where  QuotationNo = @QuotationNo and Statusno = 3 )-- Hold 
+			 begin
+				update Purchase.QuotationMain set StatusNo = 3 where  QuotationNo = @QuotationNo
+				update Purchase.RevisedQuotationMain set StatusNo = 3 where  RevisedQuotationNo = @RevisedQuotationNo
+			 end
+		 else if exists(select 1 from Purchase.QuotationItemDetail where  QuotationNo = @QuotationNo and Statusno = 4 )--cancel
+			begin
+				update Purchase.QuotationMain set StatusNo = 4 where  QuotationNo = @QuotationNo
+				update Purchase.RevisedQuotationMain set StatusNo = 4 where  RevisedQuotationNo = @RevisedQuotationNo
+			end
+		else if exists(select 1 from Purchase.QuotationItemDetail where  QuotationNo = @QuotationNo and Statusno=7)--shortclose
+			begin
+				update Purchase.QuotationMain set StatusNo = 7 where  QuotationNo = @QuotationNo
+				update Purchase.RevisedQuotationMain set StatusNo = 7 where  RevisedQuotationNo = @RevisedQuotationNo
+			end				
+		else if exists(select 1 from Purchase.QuotationItemDetail where  QuotationNo = @QuotationNo and Statusno=2)--completed
+			begin
+				update Purchase.QuotationMain set StatusNo = 2 where  QuotationNo = @QuotationNo
+				update Purchase.RevisedQuotationMain set StatusNo =  2 where  RevisedQuotationNo = @RevisedQuotationNo
+			end
+	End
+		
+  
+END TRY
+
+begin catch
+		select 0, error_message()
+end Catch
+END

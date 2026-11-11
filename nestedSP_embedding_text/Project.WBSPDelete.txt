@@ -1,0 +1,148 @@
+Stored procedure Project.WBSPDelete: Delete Script For WBSPDelete. Called from Notifications.TANRSaveUserApproval.
+Writes: Notifications.TATAuthorizationDetail, Project.PrjWBSDetail, Project.PrjWBSMain, Project.PrjWBSRevisionDetail, Project.PrjWBSRevisionMain
+Reads: Project.PrjWBSRevisionDetail, Project.PrjWBSRevisionMain
+Parameters: @WBSNo int, @WBSRevisionNo int, @LoginNo int, @IsCopy bit = 0, @OutputStatusNo Bit = Null OUTPUT, @OutputStatusRemarks Varchar(1000) = Null OUTPUT
+Author: kirti, created 28 Jun 2018
+Code:
+-- =============================================
+-- Author:		kirti
+-- Create date: 28 Jun 2018
+-- Description: Delete Script For WBSPDelete
+-- =============================================
+CREATE PROCEDURE [Project].[WBSPDelete]
+(
+ @WBSNo  int
+ ,@WBSRevisionNo int
+ ,@LoginNo int
+ , @IsCopy bit = 0
+ ,@OutputStatusNo Bit = Null output
+ ,@OutputStatusRemarks Varchar(1000) = Null output
+)
+AS
+
+BEGIN
+	SET NOCOUNT ON;
+	
+	BEGIN TRY
+
+		BEGIN Transaction 
+
+			    --Delete From Project.DODetail Where DONo=@WBSNo
+			    --Delete From Project.DOMain Where DONo=@WBSNo
+       Declare @PrevWBSRevisionNo int 
+
+	--- GET THE PREVIOUS REVISION NO TO INSERT IN MAIN TABLE
+				SELECT @PrevWBSRevisionNo =WBSRevisionNo
+				FROM  Project.PrjWBSRevisionMain
+				WHERE RevisionNo =(
+								SELECT RevisionNo -1
+								FROM Project.PrjWBSRevisionMain 
+								WHERE WBSRevisionNo=@WBSRevisionNo ) 
+				AND WBSNo=(
+								SELECT WBSNo 
+								FROM Project.PrjWBSRevisionMain
+								WHERE WBSRevisionNo=@WBSRevisionNo)
+								
+			-- DELETE MAIN TABLE IF
+		IF @PrevWBSRevisionNo  IS NULL -- IF ITS 0th AMENDMENT
+		OR EXISTS ( SELECT 1 FROM Project.[PrjWBSRevisionMain] -- OR IF IT IS AUTHORIZED
+					WHERE WBSRevisionNo = @WBSRevisionNo
+					AND ISNULL([AuthorizedBy],0)<>0
+					   )
+			 BEGIN
+			 	if @IsCopy = 1
+				set @PrevWBSRevisionNo = @WBSRevisionNo 
+			 
+			 -- Delete  Quotation Details Table					
+					DELETE FROM Project.PrjWBSDetail WHERE WBSNo=@WBSNo
+							
+			 END -- DELETE MAIN TABLE IF				
+				
+		IF Exists(SELECT 1 FROM Project.PrjWBSRevisionMain WHERE 
+		    		WBSRevisionNo = @PrevWBSRevisionNo AND ISNULL([AuthorizedBy],0)<>0) 
+			        AND						 
+			        Exists(SELECT 1 FROM Project.PrjWBSRevisionMain WHERE 
+								WBSRevisionNo = @WBSRevisionNo  AND ISNULL([AuthorizedBy],0)<>0) 
+				BEGIN
+				
+						  INSERT INTO [Project].[PrjWBSDetail]
+											   (
+											   [WBSSerialNo] 
+											   ,[WBSNo]
+											   ,[WBSID]
+											   ,[WBSName]
+											   ,[Description]
+											   ,[WBSTypeNo]
+											   ,[ParentWBSNo]
+											   ,[ParentWBSSerialNo] 
+											   ,[EstimatedStartDate]
+											   ,[EstimatedEndDate]
+											   ,[CostCenterNo]
+											   ,[SequenceNo]
+											   ,[Remarks]
+											   ,[StatusNo])
+										
+										 SELECT 
+											    [WBSRevisionSerialNo] 
+											   ,@WBSNo
+											   ,[WBSID]
+											   ,[WBSName]
+											   ,[Description]
+											   ,[WBSTypeNo]
+											   ,PWRM.WBSNo 
+											   ,[WBSRevisionSerialNo] 
+											   ,[EstimatedStartDate]
+											   ,[EstimatedEndDate]
+											   ,[CostCenterNo]
+											   ,[SequenceNo] 
+											   ,PWRD.[Remarks]
+											   ,PWRD.[StatusNo]
+										 FROM [Project].[PrjWBSRevisionDetail] PWRD 
+										 left join [Project].[PrjWBSRevisionMain] PWRM on PWRM.WBSRevisionNo = PWRD.ParentWBSRevisionNo 
+										 WHERE PWRD.WBSRevisionNo=@PrevWBSRevisionNo					
+		             
+		        UPDATE  [Project].[PrjWBSMain]
+				SET 
+				    DocumentStatusNo = WAM.DocumentStatusNo
+				   ,RevisionNo = WAM.RevisionNo
+				   ,ProjectNo = WAM.ProjectNo
+				   ,ModifiedBy = @LoginNo
+				   ,ModifiedDate = Getdate()
+				   ,AuthorizedBy = WAM.AuthorizedBy
+				   ,AuthorizedDate = WAM.AuthorizedDate 
+				   ,ReleasedBy = WAM.ReleasedBy
+				   ,ReleasedDate = WAM.ReleasedDate
+				   ,StatusNo = WAM.StatusNo
+				   ,DivisionNo = WAM.DivisionNo 
+				   ,Remarks = WAM.Remarks 
+				 FROM Project.PrjWBSRevisionMain  WAM
+				 WHERE WAM.WBSRevisionNo = @PrevWBSRevisionNo
+				 And [Project].[PrjWBSMain].WBSNo=WAM.WBSNo
+			End 
+			
+
+			if @IsCopy = 1
+			set @WBSRevisionNo = null
+
+			Delete from Notifications.TATAuthorizationDetail where InternalNo = @WBSRevisionNo And FormCode ='WBSR'
+			Delete from [Project].[PrjWBSRevisionDetail] where WBSRevisionNo = @WBSRevisionNo 
+		
+		
+		-- Delete Amendment MAIN TABLE	
+			Delete From Project.PrjWBSRevisionMain WHERE WBSRevisionNo=@WBSRevisionNo
+	   			
+
+		-- Delete Main Table
+	       Delete From [Project].[PrjWBSMain] WHERE WBSNo=@WBSNo AND @PrevWBSRevisionNo IS NULL
+		
+			Select 1
+
+			Select @OutputStatusNo = 1,@OutputStatusRemarks = 'Success'
+		COMMIT Transaction 
+	END TRY
+	BEGIN CATCH
+		Rollback Transaction
+			Select 0,Error_Message()
+			Select @OutputStatusNo = 0,@OutputStatusRemarks = ERROR_MESSAGE()
+	END CATCH
+END

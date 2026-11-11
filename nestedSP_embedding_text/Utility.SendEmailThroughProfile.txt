@@ -1,0 +1,57 @@
+Stored procedure Utility.SendEmailThroughProfile: Send Email. Called from Purchase.SCSOSendAuthorizationMail, Inventory.MMPRSendAuthorizationMail, Purchase.PMPOSendAuthorizationMail, Inventory.IGRNSendAuthorizationMail.
+Writes: Utility.EmailHistory
+Parameters: @To Varchar(300), @Body Varchar(max), @Subject Varchar(100), @MailProfile varchar
+Author: Alok, created 14 Aug 2017
+Code:
+ 
+-- =============================================
+-- Author:		Alok
+-- Create date: 14 Aug 2017
+-- Description:	Send Email
+-- =============================================
+
+CREATE PROCEDURE [Utility].[SendEmailThroughProfile]
+	@To Varchar(300),
+	@Body Varchar(max),
+	@Subject Varchar(100),
+	@MailProfile varchar(300)
+AS
+BEGIN
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;			
+		BEGIN TRy
+		
+			Declare @ToList as Table(Id Int, ToEmail Varchar(300))
+			Declare @Index int =1, @RCount int,@ToEmailId Varchar(300)
+			
+			Insert into @ToList
+			Select ID,Data from masterdata.Split(@To,',')tt
+			
+			Select @RCount= @@ROWCOUNT
+			
+			While @Index<=@RCount
+			BEGIN
+				Select @ToEmailId=ToEmail
+				From @ToList
+				Where Id=@Index
+				
+				EXEC MSDB.DBO.SP_SEND_DBMAIL @PROFILE_NAME = @MailProfile, @RECIPIENTS=@ToEmailId,
+				@SUBJECT = @Subject,
+				@BODY = @Body,
+				@BODY_FORMAT = 'HTML';
+				
+				Insert into [Utility].[EmailHistory]([SenderMailID] ,	[Profile] ,	[Subject] ,	[EmailText] ,	[EmailType] ,[SentDateTime],EmailTo )
+				Select Null,@MailProfile,@Subject,@Body,Null,GETDATE(),@ToEmailId
+				
+				Select @Index = @Index+1
+			END
+							
+		END TRy
+		BEGIN CATch
+		END CAtch			
+END
+
+ 
+ 
+ 

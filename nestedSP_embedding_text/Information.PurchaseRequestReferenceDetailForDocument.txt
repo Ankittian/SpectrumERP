@@ -1,0 +1,124 @@
+Stored procedure Information.PurchaseRequestReferenceDetailForDocument: Purchase Request  Reference Detail. Called from Inventory.MMPRGetDocumentInfo.
+Reads: Inventory.IndentMain, Inventory.IndentRequisitionItemDetail, Inventory.IndentRequisitionMain, Inventory.MaterialPlanningDetail, Inventory.MaterialPlanningMain, masterdata.mCostCenterMaster, masterdata.mItemMaster, masterdata.mUnitMaster, payroll.tblDeptMaster, Purchase.SCOrderAmendmentItemDetail, Purchase.SCOrderAmendmentMain
+Parameters: @CompanyNo tinyint, @IndentNo int
+Author: Arvinder Kaur Vadrah, created 2013/11/15
+Code:
+
+-- =============================================
+-- Author:		Arvinder Kaur Vadrah
+-- Create date: 2013/11/15
+-- Description:	Purchase Request  Reference Detail
+-- =============================================
+CREATE PROCEDURE [Information].[PurchaseRequestReferenceDetailForDocument] 
+	-- Add the parameters for the stored procedure here
+	@CompanyNo tinyint,
+	@IndentNo int
+AS
+BEGIN
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+
+    -- Insert statements for procedure here
+	
+    
+    
+	declare @str varchar(max)
+    select @str=masterdata.JSForInformation('MMPR')
+    set @str=@str+masterdata.CSSForInformation('MMPR')
+	set @str=@str+'<table class="altrowstable" id="alternatecolorPurchaseRequestReferenceDetailForDocument">'
+	set @str=@str+'<Caption><Font color="Maroon"><h3 align="Left"><b>Reference Detail</h3></Font></Caption>'
+    set @str=@str+'<tr><th>Sl. No.</th><th>Item Description</th><th>Unit</th><th>Ref. No.</th><th>Ref. Date</th><th>Department</th><th>Qty.</th><th>CostCenter</th></tr>'
+	set @str=@str
+				 +(	REPLACE(
+				    REPLACE(
+					REPLACE( 
+				    REPLACE(
+				    REPLACE(
+				    REPLACE(
+				    REPLACE(
+				    replace(
+						   (    Select ROW_NUMBER() over (Order by td5 desc) as td1,* From 
+								(Select									
+										ITM.ItemDescription td2
+										,UM.Alias td3
+										,IR.DocumentNoYearly td4
+										,Convert(varchar(20),IR.DocumentDate,103) td5
+										,DT.DeptName td6
+										,Isnull(IRID.Quantity,0) td7
+										,Isnull(CC.CostCenterName,'') td8
+								From Inventory.IndentRequisitionMain IR
+								Inner Join Inventory.IndentRequisitionItemDetail IRID ON IR.IndentRequisitionNo=IRID.IndentRequisitionNo
+								Inner Join payroll.tblDeptMaster DT ON DT.DeptNo=IR.DeptNo
+								Inner Join masterdata.mItemMaster ITM ON ITM.ItemNo=IRID.ItemNo
+								Inner Join masterdata.mUnitMaster UM ON UM.UnitNo=ITM.UnitNo
+								LEFT Join masterdata.mCostCenterMaster CC ON CC.CostCenterNo=IRID.CostCenterNo
+								Inner Join Inventory.IndentMain IM ON IR.IndentRequisitionNo=IM.RefDocumentNo
+														And IM.IndentAgainstNo=3---Against Material Request
+								Where IM.CompanyNo=@CompanyNo 
+										And IM.IndentNo=@IndentNo
+
+								Union all 
+
+								Select									
+										ITM.ItemDescription td1
+										,UM.Alias td2
+										,SCO.DocumentNoYearly td3
+										,Convert(varchar(20),SCO.DocumentDate,103) td4
+										,DT.DeptName td5
+										,Isnull(SCI.Quantity,0) td6
+										,'' td7  
+								From Purchase.SCOrderAmendmentMain SCO
+								Inner Join Purchase.SCOrderAmendmentItemDetail SCI ON SCO.SCOrderAmendmentNo=SCI.SCOrderAmendmentNo
+								Inner Join payroll.tblDeptMaster DT ON DT.DeptNo=SCO.DeptNo
+								Inner Join masterdata.mItemMaster ITM ON ITM.ItemNo=SCI.ItemNo
+								Inner Join masterdata.mUnitMaster UM ON UM.UnitNo=ITM.UnitNo
+								Inner Join Inventory.IndentMain IM ON SCO.SCOrderAmendmentNo=IM.RefDocumentNo
+																	And IM.IndentAgainstNo=4
+								   
+								Where IM.CompanyNo=@CompanyNo 
+								And IM.IndentNo=@IndentNo		
+
+
+								Union all
+
+								Select					
+										ITM.ItemDescription td1
+										,UM.Alias td2
+										,MP.DocumentNoYearly td3
+										,Convert(varchar(20),MP.DocumentDate,103) td4
+										,'' td5
+										,MPD.IndentQty td6
+										,'' td7  
+								From Inventory.MaterialPlanningMain MP
+								Inner Join 
+								(Select MPD.MaterialPlanningNo,Sum(MPD.IndentQty)IndentQty,MPD.ItemNo,MPD.MakeNo,MPD.TechGradeNo 
+								 From Inventory.MaterialPlanningDetail MPD
+								 Group by MPD.MaterialPlanningNo,MPD.ItemNo,MPD.MakeNo,MPD.TechGradeNo
+								 )MPD ON MPD.MaterialPlanningNo=MP.MaterialPlanningNo
+								Inner Join masterdata.mItemMaster ITM ON ITM.ItemNo=MPD.ItemNo
+								Inner Join masterdata.mUnitMaster UM ON UM.UnitNo=ITM.UnitNo
+								Inner Join Inventory.IndentMain IM ON MP.MaterialPlanningNo=IM.RefDocumentNo
+																   And IM.IndentAgainstNo=2---Against Planning
+
+								Where IM.CompanyNo=@CompanyNo 
+								And IM.IndentNo=@IndentNo
+								)tt		
+	 							
+								for xml path('tr')
+			              ),'<td1>','<td style="text-align: Center;">')
+			                       ,'<td2>','<td>')
+								   ,'<td3>','<td>')
+								   ,'<td4>','<td>')
+								   ,'<td5>','<td style="text-align: Center;">')
+								   ,'<td6>','<td>')
+								   ,'<td7>','<td style="text-align: Right;">')
+								   ,'<td8>','<td>')
+								  
+						)
+								
+				   
+	set @str=@str+'</table>'
+	
+	select @str
+END

@@ -1,0 +1,75 @@
+Stored procedure masterdata.COAStructure: Create COA Structure. Called from masterdata.FCOALoadData.
+Reads: masterdata.COAAccountGroupDetail, masterdata.COAMain, masterdata.mAccountGroup, masterdata.mAccountMaster
+Parameters: @COANo smallint
+Author: Yusuf, created 28-Dec-12
+Code:
+-- =============================================
+-- Author:		Yusuf
+-- Create date: 28-Dec-12
+-- Description:	Create COA Structure
+-- =============================================
+CREATE PROCEDURE [masterdata].[COAStructure] 
+	-- Add the parameters for the stored procedure here
+	@COANo smallint
+AS
+BEGIN
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+
+    -- Insert statements for procedure here
+    declare @Group table (AccountNo Int,ParentGroupNo smallint,GroupNo smallint,[Particular] varchar(100)
+							,[Type] varchar(10),[Level] varchar(100))
+	declare @Class table (GroupNo smallint,ParentGroupNo smallint,[Particular] varchar(100)
+							,[Type] varchar(10),[Level] varchar(100),NewLevel tinyint,ParentLevel tinyint)
+							
+    if exists (select 1 from masterdata.COAMain where COATypeNo=1)
+    begin
+		insert into @Group
+		select AM.AccountNo,ParentGroupNo,GroupNo,AM.AccountName [Particular],'Account' [Type]
+				,cast('.'+convert(varchar(10),REPLICATE('0',6-LEN(ROW_NUMBER() over (Order by AM.AccountName)))+convert(varchar(5),ROW_NUMBER() over (Order by AM.AccountName))) as varchar(60))
+		from masterdata.COAAccountGroupDetail AGD
+			inner join masterdata.mAccountMaster AM on AM.AccountNo=AGD.ReportingAccountNo
+			inner join masterdata.mAccountGroup GM on GM.GroupNo=AGD.ReportingGroupNo
+		where AGD.COANo=@COANo
+		group by AM.AccountNo,ParentGroupNo,GroupNo,AM.AccountName
+	end
+	else if exists (select 1 from masterdata.COAMain where COATypeNo=2)
+    begin
+		insert into @Group
+		select AM.AccountNo,ParentGroupNo,GroupNo,AM.AccountName [Particular],'Account' [Type]
+				,cast('.'+convert(varchar(10),REPLICATE('0',6-LEN(ROW_NUMBER() over (Order by AM.AccountName)))+convert(varchar(5),ROW_NUMBER() over (Order by AM.AccountName))) as varchar(60))
+		from masterdata.COAAccountGroupDetail AGD
+			inner join masterdata.mAccountMaster AM on AM.AccountNo=AGD.PostingAccountNo
+			inner join masterdata.mAccountGroup GM on GM.GroupNo=AGD.PostingGroupNo
+		where AGD.COANo=@COANo
+	end
+
+	;with cte (GroupNo,ParentGroupNo,[Particular],[Type],[Level],NewLevel,ParentLevel)
+	as
+	(select ACM.GroupNo,ParentGroupNo,GroupName,convert(varchar(8),'Group')
+				,cast(1 as varchar(60)),0,0
+		from masterdata.mAccountGroup ACM 
+		where ACM.COANo=@COANo and ParentGroupNo is null
+		union all
+		select ACM.GroupNo,ACM.ParentGroupNo,GroupName,'Subgroup'
+				,cast([Level]+'.'+convert(varchar(10),REPLICATE('0',6-LEN(ROW_NUMBER() over (Order by ACM.GroupName)))+convert(varchar(5),ROW_NUMBER() over (Order by ACM.GroupName))) as varchar(60))
+				,NewLevel+1,NewLevel
+			from masterdata.mAccountGroup ACM 
+			inner join cte on cte.GroupNo=ACM.ParentGroupNo
+		where ACM.COANo=@COANo
+	)
+	--0
+	insert into @Class
+	select GroupNo,ParentGroupNo,[Particular],[Type],[Level],NewLevel,ParentLevel from cte
+
+	select replicate('  ',ParentLevel*3)+[Particular] [Particular],[Type],[Level]
+	from @Class c
+	where Level<>'1'
+	union all
+	select replicate('  ',NewLevel*3)+g.[Particular] [Particular],g.[Type],c.[Level]+g.Level 
+	from @group g
+		inner join @Class c on c.GroupNo=g.GroupNo
+	order by [Level]
+	
+END

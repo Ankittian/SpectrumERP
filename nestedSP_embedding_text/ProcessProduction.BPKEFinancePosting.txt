@@ -1,0 +1,125 @@
+Stored procedure ProcessProduction.BPKEFinancePosting: -- =============================================. Called from Finance.FinancePostingFillValuesDocumentDetails.
+Reads: Finance.ARDItemRule, Finance.Setting, masterdata.mItemMaster
+Parameters: @OtherDataInXml xml, @CompanyNo tinyint, @ItemNos varchar
+Author: Akhil, created 04 01 2020
+Code:
+										
+-- =============================================
+-- Author:		Akhil
+-- Create date: 04 01 2020
+-- Description:	 
+-- =============================================
+---  [ProcessProduction].[BPKEFinancePosting] null, 4, '5108~21212232.40~~1090.000~19460.76366972`'
+CREATE PROCEDURE  [ProcessProduction].[BPKEFinancePosting] 
+	@OtherDataInXml xml ,
+	@CompanyNo tinyint ,
+	@ItemNos varchar(max)
+	
+as
+BEGIN
+begin try
+declare @IsManagingExpenseAccount bit
+ 
+Create table #ItemDetail (ItemNo int, Amount decimal(15,2))
+
+declare @idoc int
+EXEC sp_xml_preparedocument @idoc OUTPUT, @OtherDataInXml 
+-- SELECT statement that uses the OPENXML rowset provider. 
+Insert into #ItemDetail (ItemNo ,Amount)
+	select ItemNo , Amount
+		FROM OPENXML (@idoc, '/DocumentElement/Table',2)  
+		with (ItemNo int,Amount Decimal(15,2)) cte
+	where  cte.ItemNo is not null
+
+EXEC sp_xml_removedocument @idoc
+
+
+create table #Posting ([Add to Basic] bit,Particular varchar(500),[Debit Amount] decimal(15,2) , 
+		[Credit Amount] decimal(15,2),[Account Name] int, [Ref. Detail] varchar(50),[Cost Center] varchar(50),
+		[Amount] decimal(15,2), [Type] tinyint,SlNo tinyint identity(1,1) ,MiscChargeNo int , TaxCodeMiscChargesDetailNo int,
+			ItemNos varchar(200),GroupNo smallint, GroupTypeNo tinyint, NatureNo  tinyint, AccountTypeNo tinyint)
+
+		declare @ItemTable table (ItemNo int,BasicAmount money,Id int,Qty decimal(12,3),Rate money)
+		insert into @ItemTable
+		select Col1, sum(convert(money,Col2)), Col3, sum(CONVERT(decimal(12,3),Col4)), sum(CONVERT(money,Col5))
+		from masterdata.Split_RowColumn(@ItemNos,'`','~')
+		group by Col1, Col3
+		
+  if exists (select 1 from Finance.Setting where CompanyNo = @CompanyNo  and ProcessProductionEntryPostingInApp =0)
+  begin
+		 Insert into #Posting ([Add to Basic] ,Particular,[Debit Amount]  , [Credit Amount],[Account Name] , 
+						[Amount], [Type])		
+			select cast(0 as bit) [Add to Basic] ,'Consumption A/C' Particular 
+				,CAST(null as money) [Debit Amount] ,sum(I.Amount)  [Credit Amount] 
+				,IR.AccountNo [Account Name] 
+				,sum(I.Amount) Amount ,2 [Type] 
+			from #ItemDetail I
+				left join (select ItemNo,IR.AccountNo
+							from Finance.ARDItemRule IR
+							where IR.AccountTypeNo=15) IR on IR.ItemNo=I.ItemNo
+			group by  IR.AccountNo
+			Union All
+			select cast(0 as bit) [Add to Basic] ,'Stock A/C' Particular 
+				,sum(I.BasicAmount) [Debit Amount] , CAST(null as money) [Credit Amount] 
+				,IR.AccountNo [Account Name] 
+				,sum(I.BasicAmount) Amount ,1 [Type] 
+			from @ItemTable I
+				inner join masterdata.mItemMaster IM on IM.ItemNo=I.ItemNo
+				left join (select ItemNo,IR.AccountNo--,AM.AccountName
+							from Finance.ARDItemRule IR
+							--inner join masterdata.mAccountMaster AM on AM.AccountNo=IR.AccountNo
+							where IR.AccountTypeNo=14) IR on IR.ItemNo=I.ItemNo
+			group by IR.AccountNo		 
+	  end
+
+	 
+
+ if exists(select 1 from #Posting having abs(SUM([Credit Amount])- SUM([Debit Amount]))<=.5)
+ begin
+	update PD set [Debit Amount] = [Debit Amount] + ISNULL(diff,0)
+		from
+		#Posting PD
+		cross join (select SUM([Credit Amount])- SUM([Debit Amount]) Diff from #Posting) tt
+		where PD.SlNo  = 1
+	
+	update PD set [Credit Amount] = [Credit Amount] + ISNULL(diff,0)
+		from
+		#Posting PD
+		cross join (select SUM([Debit Amount])- SUM([Credit Amount]) Diff from #Posting) tt
+		where PD.SlNo  = 1
+			
+ end
+ 
+ 
+select * from #Posting
+ where isnull([Debit Amount],0) >0 or isnull([Credit Amount],0) >0
+   
+  
+  drop table #Posting 
+   
+END TRY
+	
+	BEGIN CATCH
+		select ERROR_MESSAGE()
+		INSERT INTO [masterdata].[mErrorLog]
+			   ([ErrorDate]
+			   ,[ErrorNo]
+			   ,[ErrorSeverity]
+			   ,[ErrorState]
+			   ,[ErrorProcedure]
+			   ,[ErrorLine]
+			   ,[ErrorDescription]
+			   ,[UserName]
+			   ,[FormCode])
+		VALUES
+			   (getdate()
+			   ,ERROR_NUMBER()
+			   ,ERROR_SEVERITY()
+			   ,ERROR_STATE()
+			   ,ERROR_PROCEDURE()
+			   ,ERROR_LINE()
+			   ,ERROR_MESSAGE()
+			   ,SUSER_SNAME()
+			   ,'IMMI')
+	END CATCH
+END

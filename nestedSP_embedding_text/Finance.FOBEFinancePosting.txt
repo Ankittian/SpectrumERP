@@ -1,0 +1,108 @@
+Stored procedure Finance.FOBEFinancePosting: FOBE Finance Posting. Called from Finance.FinancePostingFillValuesDocumentDetails.
+Reads: masterdata.mAccountGroup, masterdata.mAccountMaster
+Parameters: @OtherDataInXml xml, @CompanyNo tinyint, @VendorLocationNo int, @NetAmount Decimal(18,6), @ServiceTaxAbatementRuleNo smallint, @BasicAmount money, @FBNo smallint, @MiscChargeNos xml, @VoucherDate smalldatetime, @ItemNos varchar
+Author: Kirti, created 18 May 2013
+Code:
+-- =============================================
+-- Author:		Kirti
+-- Create date: 18 May 2013
+-- Description:	FOBE Finance Posting
+-- =============================================
+--- [Inventory].[FOBEFinancePosting] '<DocumentElement />' 
+CREATE PROCEDURE [Finance].[FOBEFinancePosting] 
+	@OtherDataInXml xml ,
+	@CompanyNo tinyint ,
+	@VendorLocationNo int  ,
+	@NetAmount Decimal(18,6)
+	,@ServiceTaxAbatementRuleNo smallint
+	,@BasicAmount money
+	,@FBNo smallint
+	, @MiscChargeNos xml
+	,@VoucherDate smalldatetime
+	,@ItemNos varchar(max)
+AS
+
+
+BEGIN
+
+begin try
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+
+declare @Return table ([Add to Basic] bit,Particular varchar(500),[Debit Amount] money,
+								[Credit Amount] money,[Account Name] Int,Amount money,[Type] tinyint,
+								MiscChargeNo smallint,TaxCodeMiscChargesDetailNo int,ItemNos varchar(5000),
+								SlNo smallint identity(1,1))
+
+;with cte as 
+			(
+				SELECT v.value('Particular[1]','varchar(100)') AS Particular
+					,v.value('Debit_x0020_Amount[1]','money') AS DrAmount
+					,v.value('Credit_x0020_Amount[1]','money') AS CrAmount
+					,v.value('Id[1]','int') AS Id
+					,v.value('AccountNo[1]','int') AS AccountNo
+					,v.value('MiscChargeNo[1]','int') AS MiscChargeNo
+					,v.value('TaxCodeMiscChargesDetailNo[1]','int') AS TaxCodeMiscChargesDetailNo
+					,v.value('ItemNos[1]','varchar(max)') AS ItemNos
+				FROM @OtherDataInXml.nodes('/DocumentElement/Table') x(v)
+			)
+			insert into @Return([Add to Basic] ,Particular ,[Debit Amount] ,
+								[Credit Amount] ,[Account Name] ,Amount ,[Type] ,
+								MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos)
+			select 
+				cast(0 as bit) [Add to Basic]
+				,cte.Particular as Particular
+				,convert(decimal(15,2),case when IsNULL(SUM(IsNULL(DrAmount,0)),0)>0 and IsNULL(SUM(IsNULL(DrAmount,0)),0) 
+													- Case when IsNULL(SUM(IsNULL(CrAmount,0)),0)>0 then IsNULL(SUM(IsNULL(CrAmount,0)),0) 
+													  else 0 End > 0 
+									   then IsNULL(SUM(IsNULL(DrAmount,0)),0) - Case when IsNULL(SUM(IsNULL(CrAmount,0)),0)>0 then IsNULL(SUM(IsNULL(CrAmount,0)),0) 
+																				else 0 End end) [Debit Amount]
+				,convert(decimal(15,2),case when IsNULL(SUM(IsNULL(CrAmount,0)),0)>0 and IsNULL(SUM(IsNULL(CrAmount,0)),0) 
+													- Case when IsNULL(SUM(IsNULL(DrAmount,0)),0)>0 then IsNULL(SUM(IsNULL(DrAmount,0)),0) 
+													  else 0 End > 0 
+									   then IsNULL(SUM(IsNULL(CrAmount,0)),0) - Case when IsNULL(SUM(IsNULL(DrAmount,0)),0)>0 then IsNULL(SUM(IsNULL(DrAmount,0)),0) 
+																				else 0 End end) [Credit Amount]
+				,cte.AccountNo [Account Name]
+				,ABS(
+				     Case When IsNULL(SUM(IsNULL(CrAmount,0)),0) > 0 then IsNULL(SUM(IsNULL(CrAmount,0)),0) else 0 End
+				        + 
+				     Case When IsNULL(SUM(IsNULL(DrAmount,0)),0) > 0 then IsNULL(SUM(IsNULL(DrAmount,0)),0) * -1 else 0 End 
+					 ) [Amount]
+				,case when IsNULL(SUM(IsNULL(DrAmount,0) - IsNULL(CrAmount,0)),0)>0 then 1 else 2 end [Type]
+				,cte.MiscChargeNo
+				,cte.TaxCodeMiscChargesDetailNo
+				,'' ItemNos
+			from cte
+				--left join masterdata.mAccountMaster am on am.AccountNo=cte.AccountNo
+			Group by cte.Particular,cte.AccountNo,cte.MiscChargeNo,cte.TaxCodeMiscChargesDetailNo --,ItemNos 
+			having ABS(
+				     Case When IsNULL(SUM(IsNULL(CrAmount,0)),0) > 0 then IsNULL(SUM(IsNULL(CrAmount,0)),0) else 0 End
+				        + 
+				     Case When IsNULL(SUM(IsNULL(DrAmount,0)),0) > 0 then IsNULL(SUM(IsNULL(DrAmount,0)),0) * -1 else 0 End 
+					 ) <> 0
+			order by Max(cte.Id)
+ 
+			select [Add to Basic] ,Particular 
+					,[Debit Amount] ,[Credit Amount] 
+					,[Account Name] 
+					,cast(null as varchar) [Ref. Detail] ,cast(null as varchar) [Cost Center] 
+					,Amount ,[Type] 
+					,SlNo
+					,MiscChargeNo,TaxCodeMiscChargesDetailNo,ItemNos ,ag.GroupNo , ag.GroupTypeNo , ag.NatureNo  
+					, am.AccountTypeNo 
+			from @Return rt
+			left join masterdata.mAccountMaster am on am.AccountNo = rt.[Account Name] 
+			left join masterdata.mAccountGroup ag on ag.GroupNo = am.DefaultGroupNo 
+			where (isnull([Debit Amount],0)+isnull([Credit Amount],0)>0
+				or [Add to Basic]=1)
+
+
+end try
+
+begin catch
+  select error_message()
+   
+end catch
+ 
+END 

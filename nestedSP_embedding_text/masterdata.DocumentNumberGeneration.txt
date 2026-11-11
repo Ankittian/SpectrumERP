@@ -1,0 +1,219 @@
+Stored procedure masterdata.DocumentNumberGeneration: Document Setting Duplicacy. Called from Inventory.IMMISave, Finance.VoucherSaveMain, Finance.IEIPSave, GateEntry.IMGESaveMain, Inventory.MMPRSave, Inventory.IDMRSave, Inventory.IMIESave, Inventory.GRIISave, Finance.FIPASave, Finance.FIPPSaveMain, Finance.FIPRSaveMain, Purchase.PMPOSave, Purchase.POMQSave, Purchase.PRFQSave.
+Reads: GlobalData.FormMaster, masterdata.DocumentFormDetail, masterdata.DocumentSetting, masterdata.mFYear
+Parameters: @DocumentDate smalldatetime, @DocumentSettingNo smallint, @Status tinyint OUTPUT, @Remarks nvarchar(4000) OUTPUT, @DivisionNo Int = 0
+Calls procedures: masterdata.DocumentNumberInitialization
+Author: Yusuf, created 26-Dec-11
+Code:
+-- =============================================
+-- Author:		Yusuf
+-- Create date: 26-Dec-11
+-- Description:	Document Setting Duplicacy
+-- =============================================
+-- exec [masterdata].[DocumentNumberGeneration] '28-Aug-12',1,null,null
+CREATE PROCEDURE [masterdata].[DocumentNumberGeneration]
+	-- Add the parameters for the stored procedure here
+	 @DocumentDate smalldatetime
+	,@DocumentSettingNo smallint	
+	,@Status tinyint output
+	,@Remarks nvarchar(4000) output
+	,@DivisionNo Int=0
+AS
+BEGIN
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+
+    -- Insert statements for procedure here
+  BEGIN TRY
+  
+   Select @DivisionNo=ISNULL(@DivisionNo,0)
+
+	declare @Padding tinyint,@Frequency tinyint,@CompanyNo tinyint,@NumberStartsFrom smallint
+
+	select @Padding = Padding 
+			,@Frequency = Frequency 
+			,@CompanyNo = CompanyNo
+			,@NumberStartsFrom = NumberStartsFrom
+	from masterdata.DocumentSetting 
+	where DocumentSettingNo=@DocumentSettingNo
+
+	declare @YearNo tinyint
+
+	select @YearNo = YearNo
+	from masterdata.mFYear
+	where @DocumentDate between StartDate and EndDate
+
+	declare @str nvarchar(max)
+
+	DECLARE	@StatusInit tinyint,
+			@StrMainResult nvarchar(max)
+
+	EXEC	[masterdata].[DocumentNumberInitialization]
+			@DocumentDate = @DocumentDate,
+			@DocumentSettingNo = @DocumentSettingNo,
+			@DivisionNo=@DivisionNo,
+			@Status = @StatusInit OUTPUT,
+			@Remarks = @str OUTPUT,
+			@StrMainResult = @StrMainResult OUTPUT
+
+	if @StatusInit = 0
+		raiserror(@str,16,-1)
+
+	declare @strMain nvarchar(max)
+	set @strMain=@str
+	set @strMain=replace(@strMain,'@DocumentDate','DocumentDate')
+	set @strMain=replace(@strMain,'@YearNo','mT.YearNo')
+
+	--Alt 2 9 is ↔
+	declare @strMultiTable nvarchar(max)
+	select @strMultiTable = replace(substring((select ' Union All '+N'select substring(DocumentNoYearly,charindex(''_'',@strMain,0),@Padding) [Col] from '+FormMainTableinDB+' mT 
+																where documentsettingno = @DocumentSettingNo and CompanyNo = @CompanyNo 
+																and @FrequencyQuery and patindex(replace(replace(@strMain,N'''+N'↔'+''',''_''),''↕'',''_''),DocumentNoYearly)=1' 
+										from masterdata.documentFormdetail fd
+											inner join GlobalData.FormMaster fm on fm.formno=fd.formNo
+										where documentsettingno = @documentsettingno 
+										for xml path('')),12,8000),'&#x0D;','')
+
+	declare @query nvarchar(max)
+	select @query='select isnull(max(Col),0) from ('+@strMultiTable+')tt'
+
+	declare @FrequencyQuery varchar(500)
+	IF @Frequency = 1		--Date
+	BEGIN
+		set @FrequencyQuery = ' day(cast(convert(varchar(11),DocumentDate) as smalldatetime)) = day(''@DocumentDate'')
+							 and month(cast(convert(varchar(11),DocumentDate) as smalldatetime)) = month(''@DocumentDate'')
+							 and year(cast(convert(varchar(11),DocumentDate) as smalldatetime)) = year(''@DocumentDate'')'
+	END
+	ELSE IF @Frequency = 2	--Month
+	BEGIN
+		set @FrequencyQuery = ' month(cast(convert(varchar(11),DocumentDate) as smalldatetime)) = month(''@DocumentDate'')
+							and year(cast(convert(varchar(11),DocumentDate) as smalldatetime)) = year(''@DocumentDate'')'
+	END
+	ELSE IF @Frequency = 3	--Year
+	BEGIN
+		set @FrequencyQuery = ' YearNo = @YearNo'
+	END
+
+	set @query=replace(@query,'@FrequencyQuery',@FrequencyQuery)
+
+	set @query=replace(@query,'@strMain',@strMain)
+	set @query=replace(@query,'@Padding',@Padding)
+	set @query=replace(@query,'@YearNo',isnull(@YearNo,0))
+	set @query=replace(@query,'@CompanyNo',@CompanyNo)
+	set @query=replace(@query,'@DocumentDate',@DocumentDate)
+	set @query=replace(@query,'@DocumentSettingNo',@DocumentSettingNo)
+	set @query=replace(@query,'@DivisionNo',@DivisionNo)
+	set @query=replace(@query,'''@Div''','(Select DV.DivisionCode From Payroll.tblDivisionMaster dv where dv.DivisionNo=MT.DivisionNO)')
+
+	declare @DocumentTable Table (DocumentNo int)
+	insert into @DocumentTable
+	exec(@query)
+
+	declare @MaxDocumentNo int , @MaxDocumentNoYearly varchar(30)
+
+	select @MaxDocumentNo = DocumentNo from @DocumentTable
+	
+	----- added on 03 apr 2017 by akhil --
+	declare @Checkstr as varchar(1000)
+	select @Checkstr = 'select 1 getit into #getnumber from ' + FormMainTableinDB + ' where DocumentsettingNo =' + convert(varchar(7),fd.DocumentSettingNo)
+	 from masterdata.documentFormdetail fd
+			inner join GlobalData.FormMaster fm on fm.formno=fd.formNo
+			where fd.Documentsettingno = @DocumentSettingNo
+	exec(@Checkstr)  -- check if its old Document and used in relevant tables
+	if (select @@ROWCOUNT)>0
+	  if @MaxDocumentNo =0
+	   set @MaxDocumentNo = 1
+	  else
+	   set @MaxDocumentNo= @MaxDocumentNo -- no start from Numberstartfrom if we found entries
+	else
+	 set @MaxDocumentNo=case when @NumberStartsFrom > @MaxDocumentNo then @NumberStartsFrom else @MaxDocumentNo  end
+    ----- added on 03 apr 2017 by akhil --
+    
+	declare @strNew nvarchar(max)
+
+	declare @DocumentNoYearlyTable Table (DocumentNoYearly nvarchar(30) primary key)
+	declare @DocumentNoYearly nvarchar(30)
+
+	declare @CheckExistTable Table (CheckExist tinyint)
+
+	declare @flag bit 
+
+	set @flag=1
+
+	while @flag=1
+	begin
+		select @strMultiTable = substring((select ' Union All '+'select 1 from '+FormMainTableinDB+' where masterdata.ConvertToSpecialChars(DocumentNoYearly,''@DocumentNoYearly'') like N''@DocumentNoYearly'' and CompanyNo = @CompanyNo and documentsettingno = @DocumentSettingNo and @FrequencyQuery' 
+										from masterdata.documentFormdetail fd
+											inner join GlobalData.FormMaster fm on fm.formno=fd.formNo
+										where documentsettingno = @documentsettingno 
+										for xml path('')),12,8000)
+		
+		set @strMultiTable=replace(@strMultiTable,'@FrequencyQuery',@FrequencyQuery)
+		set @strMultiTable=replace(@strMultiTable,'@CompanyNo',@CompanyNo)
+		set @strMultiTable=replace(@strMultiTable,'@DocumentDate',@DocumentDate)
+		set @strMultiTable=replace(@strMultiTable,'@DocumentNoYearly',isnull(@DocumentNoYearly,''))
+		set @strMultiTable=replace(@strMultiTable,'@YearNo',isnull(@YearNo,0))
+		set @strMultiTable=replace(@strMultiTable,'@DocumentSettingNo',@DocumentSettingNo)
+		--set @strMultiTable=replace(@strMultiTable,'@DivisionNo',@DivisionNo)
+		
+		delete from @CheckExistTable
+
+		insert into @CheckExistTable
+		exec(@strMultiTable)
+
+		if exists (select 1 from @CheckExistTable)
+			or @DocumentNoYearly is null
+		begin
+			set @MaxDocumentNoYearly = Right(Replicate('0',@Padding) + Convert(Varchar,@MaxDocumentNo  ),@Padding)
+			
+			set @strNew='Select '+@str
+			set @strNew=replace(@strNew,'@DocumentDate',''''+convert(varchar(10),@DocumentDate,110)+'''')
+			set @strNew=replace(@strNew,'@YearNo',isnull(@YearNo,0))
+			set @strNew=replace(@strNew,replicate('_',@Padding),@MaxDocumentNoYearly)
+			set @strNew=replace(@strNew,'@DivisionNo',@DivisionNo)	
+			set @strNew=replace(@strNew,'MT.DivisionNo',@DivisionNo)
+			set @strNew=replace(@strNew,'@Div','%')			
+
+			delete from @DocumentNoYearlyTable
+
+			insert into @DocumentNoYearlyTable
+			exec(@strNew)
+
+			select @DocumentNoYearly=DocumentNoYearly from @DocumentNoYearlyTable
+
+			set @MaxDocumentNo = @MaxDocumentNo + 1
+		end
+		else
+		begin
+			set @flag=0
+			--set @MaxDocumentNo = @MaxDocumentNo +  1 -- added on 13 jun 2017
+		end
+	end
+			set @MaxDocumentNo = @MaxDocumentNo - 1
+			set @MaxDocumentNoYearly = Right(Replicate('0',@Padding) + Convert(Varchar,@MaxDocumentNo),@Padding)
+			
+			set @strNew='Select '+@StrMainResult
+			set @strNew=replace(@strNew,'@DocumentDate',''''+convert(varchar(10),@DocumentDate,110)+'''')
+			set @strNew=replace(@strNew,'@YearNo',isnull(@YearNo,0))
+			set @strNew=replace(@strNew,replicate('_',@Padding),@MaxDocumentNoYearly)
+			set @strNew=replace(@strNew,'@DivisionNo',isnull(@DivisionNo,0))
+			--set @strNew=replace(@strNew,'MT.DivisionNo',isnull(@DivisionNo,0))
+			 
+			
+			delete from @DocumentNoYearlyTable
+
+			insert into @DocumentNoYearlyTable
+			exec(@strNew)
+
+			select @DocumentNoYearly=DocumentNoYearly from @DocumentNoYearlyTable
+			
+	select @Status=1,@Remarks=@DocumentNoYearly
+	from @DocumentNoYearlyTable
+
+  End Try
+
+  Begin Catch
+	select @Status=0,@Remarks=ERROR_MESSAGE()
+  End Catch
+
+END

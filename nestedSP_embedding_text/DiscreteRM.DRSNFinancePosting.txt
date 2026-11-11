@@ -1,0 +1,751 @@
+Stored procedure DiscreteRM.DRSNFinancePosting: GRN Auto Finance Posting. Called from Finance.FinancePostingFillValuesDocumentDetails.
+Reads: DiscreteRM.Setting, DiscreteRM.SINGateEntryItemDetail, DiscreteRM.SINOrderDetail, DiscreteRM.StockTransferMain, Finance.ARDFinanceBookRule, Finance.ARDIntermediatePostingAccountRule, Finance.ARDItemRule, Finance.ARDTDCAccountRule, Finance.FreightInvoiceDocumentDetails, Finance.FreightInvoiceMain, Finance.Setting, Finance.TransactionAccountMappingMain, GlobalData.FormMaster, Inventory.InvLotSummary, masterdata.mAccountMaster, masterdata.mFBMain, masterdata.mMiscCharges, masterdata.mMiscChargesCompanyDetail, masterdata.mTaxCode, masterdata.mTaxCodeMiscChargesDetail, masterdata.mVendorCard, masterdata.mVendorLocationDetail, Purchase.FreightOrderOrderDetail, Purchase.POAccountAssignmentDetail, Purchase.POAmendmentExpenseHead (+6 more)
+Parameters: @ItemDetail xml, @CompanyNo tinyint, @VendorLocationNo int
+Author: Akhli, created 23 mar 2013
+Code:
+															-- =============================================
+-- Author:		Akhli
+-- Create date: 23 mar 2013
+-- Description:	GRN Auto Finance Posting
+-- =============================================
+--- [Inventory].[IGRNFinancePosting] '<DocumentElement />' 
+CREATE PROCEDURE [DiscreteRM].[DRSNFinancePosting] 
+	@ItemDetail xml ,
+	@CompanyNo tinyint ,
+	@VendorLocationNo int  
+AS
+BEGIN
+
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+
+begin try
+
+Declare @IsInterUnit bit
+if exists (select 1 from masterdata.mVendorCard vc
+			inner join masterdata.mVendorLocationDetail vld on vld.VendorNo = vc.VendorNo 
+			where vld.VendorLocationNo =@VendorLocationNo and vc.VendorOfCompanyNo is not null)
+begin
+	select @IsInterUnit=1
+end
+
+							
+
+declare @IsManagingExpenseAccount bit  
+select @IsManagingExpenseAccount = IsManagingExpenseAccount  from Finance.Setting where CompanyNo = @CompanyNo 
+
+Create table #ItemDetail (ReferenceNo int,ReferenceType varchar(4),ItemNo int,MakeNo smallint,
+		TechnicalGradeNo tinyint,AcceptedQty decimal(18,6), Rate decimal(18,6),GateEntryNo int 
+		,RouteIdentity Decimal(10,8) , IncludedTax decimal(18,6) , ChallanQty decimal(18,6),ReceivedQty decimal(18,6)
+		,TransporterNo int,FormCode char(4))
+		
+	 ;with cte as 
+	(
+		SELECT v.value('ReferenceNo[1]','int') AS ReferenceNo,
+		v.value('ReferenceType[1]','varchar(4)') ReferenceType,
+		v.value('ItemNo[1]','int') ItemNo,
+		v.value('MakeNo[1]','smallint') MakeNo,
+		v.value('TechnicalGradeNo[1]','tinyint') TechnicalGradeNo,
+		v.value('AcceptedQty[1]','decimal(18,6)') AcceptedQty,
+		v.value('Rate[1]','decimal(18,6)') Rate,
+		v.value('GateEntryNo[1]','int') GateEntryNo,
+		v.value('RouteIdentity[1]','Decimal(10,8)') RouteIdentity,
+		v.value('IncludedTax[1]','decimal(18,6)') IncludedTax,
+		v.value('ChallanQty[1]','decimal(18,6)') ChallanQty,
+		v.value('ReceivedQty[1]','decimal(18,6)') ReceivedQty,
+		v.value('TransporterNo[1]','int') TransporterNo,
+		v.value('FormCode[1]','varchar(4)') FormCode
+		FROM @ItemDetail.nodes('/DocumentElement/Table') x(v)
+	)
+	Insert into #ItemDetail select ReferenceNo,ReferenceType,ItemNo ,MakeNo,TechnicalGradeNo
+	, case when ss.GRNPassOnQty = 2 then ChallanQty else AcceptedQty end,
+	Rate, GateEntryNo ,RouteIdentity,IncludedTax,ChallanQty,ReceivedQty,TransporterNo,FormCode
+	 from cte
+	 inner join Discreterm.Setting ss on ss.CompanyNo = @CompanyNo 
+	  where ItemNo is not null
+	
+	
+		
+  
+declare  @FormNo smallint ,@IncludedAmount money
+select @FormNo = FormNo from GlobalData.FormMaster where FormCode= 'DRSN'
+
+ Create table #IncludedTax(IncludedAmount decimal(18,6),ItemNo int,MakeNo smallint)
+ Create table #Freight(FreightAmount decimal(18,6),ItemNo int,MakeNo smallint)
+
+ Create table #Expenses(ExpenseAmount decimal(18,6),AccountNo int,ItemNo int,
+					MakeNo smallint, ExpenseAccountNo int)
+					  
+
+
+---- expense Heads
+ 
+begin
+insert into #Expenses 
+	select sum(PEH.Rate * case PEH.BillingQtyNo when 1 then Id.ChallanQty 
+						  when 2 then Id.ChallanQty 
+						  else id.ReceivedQty  end),
+			 PAAD.AccountNo ,Id.ItemNo ,Id.MakeNo , PAEAD.AccountNo 
+		from 
+		Purchase.POAmendmentMain PAM
+		inner join Purchase.POExpenseHead PEH on PAM.PONo= PEH.PONo 
+		inner join Purchase.POItemDetail PID on PID.PONo  = PEH.PONo
+		inner join #ItemDetail ID on ID.ReferenceType ='PMPO' and ID.ItemNo= PID.ItemNo and 
+						(isnull(ID.MakeNo,0) = isnull(PID.MakeNo,0) or pid.MakeNo is null ) and
+						ID.ReferenceNo = PAM.POAmendmentNo 
+		left join Purchase.POAccountAssignmentDetail PAAD on PAAD.PONo = PAM.PONo and PAAD.Flag='EH'
+					and PAAD.Id = PEH.ExpenseheadNo and PAAD.AccountTypeNo =54
+		left join Purchase.POAccountAssignmentDetail PAEAD on PAEAD.PONo = PAM.PONo and PAEAD.Flag='EH'
+					and PAEAD.Id = PEH.ExpenseheadNo and PAEAD.AccountTypeNo = 39
+		where
+		PEH.IncludeInValuation =1 and
+		PEH.FreightRateTypeNo  =1 and -- per unit
+		(peh.BillingLocationNo = pam.ToLocationNo) and
+		(PEH.itemno is null or(PEH.ItemNo = PID.ItemNo and 
+						isnull(PEH.MakeNo,0) = isnull(PID.MakeNo,0) and
+						isnull(PEH.TechnicalGradeNo,0) = isnull(PID.TechnicalGradeNo,0) ))
+		group by  PAAD.AccountNo, Id.ItemNo ,Id.MakeNo,PAEAD.AccountNo 
+
+insert into #Expenses 
+		select sum(ExpenseAmount) ,AccountNo ,ItemNo,MakeNo ,expenseAccountNo 
+		from (
+		select 		 
+		case PEH.BillingQtyNo when 1 then Id.ChallanQty 
+						  when 2 then ID.ChallanQty else   
+						  id.ReceivedQty  end * ((PEH.Rate * pid.Quantity * pid.Rate)/
+				(select  sum(pd.Quantity * pd.Rate) 
+						from Purchase.POAmendmentItemDetail pd where pd.POAmendmentNo = PAM.POAmendmentNo )
+				  )/ case when Id.AcceptedQty + ISNULL(prevQty,0)>PID.Quantity  then Id.AcceptedQty + ISNULL(prevQty,0) 
+						else pid.Quantity end ExpenseAmount	
+			,PAAD.AccountNo AccountNo ,Id.ItemNo ,Id.MakeNo 
+			,PAEAD.AccountNo expenseAccountNo
+		from 
+		Purchase.POAmendmentMain PAM
+		inner join Purchase.POAmendmentExpenseHead PEH on PAM.POAmendmentNo = PEH.POAmendmentNo
+		inner join Purchase.POAmendmentItemDetail PID on PID.POAmendmentNo= PEH.POAmendmentNo
+		outer apply (select SUM(receivedQty*SecondCF /FirstCF)prevQty from Inventory.InvLotSummary ls
+						where ls.POAmendmentNo = PID.POAmendmentNo and ls.ItemNo = PID.ItemNo 
+						and (ISNULL(ls.MakeNo,0) = ISNULL(pid.MakeNo,0) or pid.makeno is null ) ) tt
+		inner join #ItemDetail ID on ID.ReferenceType ='PMPO' and ID.ItemNo= PID.ItemNo and 
+						(isnull(ID.MakeNo,0) = isnull(PID.MakeNo,0) or PID.MakeNo is null) and
+						ID.ReferenceNo = PAM.POAmendmentNo 
+		left join Purchase.POAccountAssignmentDetail PAAD on PAAD.PONo = PAM.PONo and PAAD.Flag='EH'
+					and PAAD.Id = PEH.ExpenseheadNo and PAAD.AccountTypeNo =54
+		left join Purchase.POAccountAssignmentDetail PAEAD on PAEAD.PONo = PAM.PONo and PAEAD.Flag='EH'
+					and PAEAD.Id = PEH.ExpenseheadNo and PAEAD.AccountTypeNo = 39
+		where
+		PEH.IncludeInValuation =1 and  
+		PEH.FreightRateTypeNo  =2 and -- Fixed Amount
+		(peh.BillingLocationNo = pam.ToLocationNo) and
+		(PEH.itemno is null or(PEH.ItemNo = PID.ItemNo and 
+						isnull(PEH.MakeNo,0) = isnull(PID.MakeNo,0) and
+						isnull(PEH.TechnicalGradeNo,0) = isnull(PID.TechnicalGradeNo,0) ))
+		) tt
+		group by
+		AccountNo,ItemNo ,MakeNo,expenseAccountNo 
+
+
+insert into #Expenses 
+		select sum(ExpenseAmount) ,AccountNo ,ItemNo,MakeNo ,expenseAccountNo 
+		from (
+		select 		 
+		case PEH.BillingQtyNo when 1 then Id.ChallanQty 
+						  when 2 then ID.ChallanQty else   
+						  id.ReceivedQty  end * ((PEH.Rate * cnt * pid.Quantity * pid.Rate)/
+				(select  sum(pd.Quantity * pd.Rate) 
+						from Purchase.POAmendmentItemDetail pd where pd.POAmendmentNo = PAM.POAmendmentNo )
+				  )/  ID.AcceptedQty  ExpenseAmount	
+			,PAAD.AccountNo AccountNo ,Id.ItemNo ,Id.MakeNo 
+			,PAEAD.AccountNo expenseAccountNo
+		from 
+		Purchase.POAmendmentMain PAM
+		inner join Purchase.POAmendmentExpenseHead PEH on PAM.POAmendmentNo = PEH.POAmendmentNo
+		inner join Purchase.POAmendmentItemDetail PID on PID.POAmendmentNo= PEH.POAmendmentNo
+		inner join #ItemDetail ID on ID.ReferenceType ='PMPO' and ID.ItemNo= PID.ItemNo and 
+						(isnull(ID.MakeNo,0) = isnull(PID.MakeNo,0) or pid.makeno is null) and
+						ID.ReferenceNo = PAM.POAmendmentNo 
+		inner join (select count(distinct isnull(GateEntryNo,1)) cnt ,ReferenceNo,GateEntryNo from #ItemDetail id 
+	group by ReferenceNo ,GateEntryNo )Cid
+				  on Cid.ReferenceNo = PAM.POAmendmentNo 
+		left join Purchase.POAccountAssignmentDetail PAAD on PAAD.PONo = PAM.PONo and PAAD.Flag='EH'
+					and PAAD.Id = PEH.ExpenseheadNo and PAAD.AccountTypeNo =54
+		left join Purchase.POAccountAssignmentDetail PAEAD on PAEAD.PONo = PAM.PONo and PAEAD.Flag='EH'
+					and PAEAD.Id = PEH.ExpenseheadNo and PAEAD.AccountTypeNo = 39
+		where
+		PEH.IncludeInValuation =1 and  
+		PEH.FreightRateTypeNo  =3 and -- Per trip
+		(peh.BillingLocationNo = pam.ToLocationNo) and
+		(PEH.itemno is null or(PEH.ItemNo = PID.ItemNo and 
+						isnull(PEH.MakeNo,0) = isnull(PID.MakeNo,0) and
+						isnull(PEH.TechnicalGradeNo,0) = isnull(PID.TechnicalGradeNo,0) ))
+		) tt
+		group by
+		AccountNo,ItemNo ,MakeNo,expenseAccountNo 
+		 
+end	
+ 	
+
+-- Included Taxes
+begin
+insert into #IncludedTax 
+select sum(case when MC.calculationnature=1 then  (TotalAmount  /pid.Quantity ) * ID.ReceivedQty
+				when calculationnature =2 then  0-(TotalAmount  /pid.Quantity ) * ID.ReceivedQty else 0 end)
+				IncludedAmount, ID.ItemNo ,ID.MakeNo  
+				
+		from #ItemDetail ID
+		inner join Purchase.POAmendmentTaxDetail pd on pd.POAmendmentNo = ID.ReferenceNo 
+		inner join Purchase.POAmendmentItemTaxDetail ptd on ptd.POAmendmentNo = pd.POAmendmentNo 
+					and pd.MiscChargeNo = ptd.MiscChargeNo 
+		inner join Purchase.POAmendmentItemDetail pid on pid.POAmendmentNo = pd.POAmendmentNo 		
+		inner join purchase.POAmendmentMain pam on pam.POAmendmentno = pid.POAmendmentno
+		inner join masterdata.mMiscCharges MC on MC.MiscChargeNo = pd.MiscChargeNo 
+		 inner join masterdata.mMiscChargesCompanyDetail MCCD on MCCD.CompanyNo = 	pam.Companyno
+					and mccd.miscChargeNo	= MC.MiscChargeNo and IncludeInBasic =1
+		where ID.ItemNo = ptd.ItemNo and (ISNULL(id.MakeNo,0) = ISNULL(ptd.MakeNo,0) or  ptd.makeno is null)
+			and pid.ItemNo = ptd.ItemNo and ISNULL(pid.MakeNo,0) = ISNULL(ptd.MakeNo,0)	
+			and ISNULL(pid.TechnicalGradeNo,0) = isnull(ptd.TechnicalGradeNo ,0)
+			and ID.ReferenceType  ='PMPO'  
+			group by ID.ItemNo ,ID.MakeNo  
+
+ 
+end 			
+ 
+ 
+
+---- No Freight Route
+if not exists(select 1 from #Freight)
+begin
+
+insert into #Freight 
+select SUM(FreightAmt), ItemNo , MakeNo   from (
+select (FreightAmount- isnull(DeductionAmount ,0)) * ID.ReceivedQty  * ID.Rate 
+			/(select SUM(ReceivedQty*rate) from #ItemDetail where ReferenceNo = ID.ReferenceNo ) FreightAmt
+			, ID.ItemNo ,ID.MakeNo   
+		from [Purchase].[funcFreightOrderAmount] (@ItemDetail) foa
+		inner join #ItemDetail ID on ID.ReferenceNo = foa.POAmendmentNo and ID.ReferenceType = 'PMPO'
+		 
+		) tt group by  ItemNo , MakeNo  
+		
+  if exists(select 1 from #ItemDetail where ReferenceType ='PMPO')
+  begin
+	insert into #Freight 
+	select sum(FreightAmount * id.ReceivedQty ) ,ItemNo,MakeNo   from 
+	Purchase.POAmendmentMain  pm
+	inner join #ItemDetail id on id.ReferenceNo = pm.POAmendmentNo 
+	where pm.FreightTypeNo =1 -- To Pay only
+	and FreightRateTypeNo  =1 -- per unit
+	and ReferenceType ='PMPO'
+	and not exists(select 1 from Finance.FreightInvoiceDocumentDetails fd 
+			inner join Finance.FreightInvoiceMain fm  on fm.FreightInvoiceNO = fd.FreightInvoiceNo
+					and fm.AuthorizedBy is not null
+	where fd.GateEntryNo = id.GateEntryNo )
+	and not exists(select 1 from Purchase.FreightOrderOrderDetail fd where fd.PONo = PM.PONo)
+	group by ItemNo,MakeNo  
+	
+	insert into #Freight 
+	select sum(FreightAmount),ItemNo, MakeNo  
+	from(
+	select  id.ReceivedQty  * ((FreightAmount * pid.Quantity * pid.Rate)/
+				(select SUM(pd.Quantity * pd.Rate) 
+						from Purchase.POAmendmentItemDetail pd where pd.POAmendmentNo = pm.POAmendmentNo )
+				  )/ case when id.AcceptedQty + ISNULL(prevQty,0) > pid.Quantity then id.AcceptedQty + ISNULL(prevQty,0) else pid.Quantity  end FreightAmount
+	
+	   ,id.ItemNo,id.MakeNo  from 
+	Purchase.POAmendmentMain  pm
+	inner join #ItemDetail id on id.ReferenceNo = pm.POAmendmentNo 
+	inner join Purchase.POAmendmentItemDetail pid on pid.POAmendmentNo = pm.POAmendmentNo 
+			and pid.ItemNo =id.ItemNo and (isnull(pid.MakeNo,0) = isnull(id.MakeNo,0) or pid.makeno is null)
+	outer apply (select SUM(receivedQty*SecondCF /FirstCF)prevQty from Inventory.InvLotSummary ls
+						where ls.POAmendmentNo = PID.POAmendmentNo and ls.ItemNo = id.ItemNo 
+						and ISNULL(ls.MakeNo,0) = ISNULL(id.MakeNo,0)) tt
+	where pm.FreightTypeNo =1 -- To Pay only
+	and FreightRateTypeNo  =2 -- Fixed
+	and ReferenceType ='PMPO'
+	and not exists(select 1 from Finance.FreightInvoiceDocumentDetails fd 
+		inner join Finance.FreightInvoiceMain fm  on fm.FreightInvoiceNO = fd.FreightInvoiceNo
+					and fm.AuthorizedBy is not null
+	where fd.GateEntryNo = id.GateEntryNo )
+	and not exists(select 1 from Purchase.FreightOrderOrderDetail fd where fd.PONo = PM.PONo)
+	) tt
+	group by   ItemNo, MakeNo
+
+if exists(select 1 from #ItemDetail	where FormCode ='DRSN')
+	insert into #Freight 
+	Select sum(FreightAmount),ItemNo,MakeNo 
+	from (
+	select sum(FreightAmount * cnt * i.ReceivedQty  * i.Rate )/
+		(select sum(ReceivedQty  * Rate) from #ItemDetail where GateEntryNo is null or GateEntryNo = id.GateEntryNo)
+		 FreightAmount
+	,ItemNo,MakeNo  from 
+	Purchase.POAmendmentMain  pm
+	inner join (select count(distinct isnull(GateEntryNo,1)) cnt ,ReferenceNo,GateEntryNo from #ItemDetail id 
+	where not exists(select 1 from Finance.FreightInvoiceDocumentDetails fd 
+	inner join Finance.FreightInvoiceMain fm  on fm.FreightInvoiceNO = fd.FreightInvoiceNo
+					and fm.AuthorizedBy is not null
+	where fd.GateEntryNo = id.GateEntryNo)
+	group by ReferenceNo ,GateEntryNo )
+				id on id.ReferenceNo = pm.POAmendmentNo 
+	inner join #ItemDetail I on i.ReferenceNo = id.ReferenceNo and isnull(i.GateEntryNo,0)= isnull(id.GateEntryNo,0)
+	where pm.FreightTypeNo =1 -- To Pay only
+	and FreightRateTypeNo  =3 -- per trip
+	and ReferenceType ='PMPO'
+	and not exists(select 1 from Purchase.FreightOrderOrderDetail fd where fd.PONo = PM.PONo)
+	group by ItemNo,MakeNo ,id.GateEntryNo) tt
+	group by ItemNo,MakeNo 
+else
+	insert into #Freight 
+	Select sum(FreightAmount),ItemNo,MakeNo 
+	from (
+	select sum(FreightAmount * cnt * sod.AcceptedQty  * pid.Rate )/
+		(select SUM(sood.AcceptedQty * pid.Rate ) from DiscreteRM.SINGateEntryItemDetail sood
+					inner join DiscreteRM.SINOrderDetail sim on sim.SINNo = sood.SINNo 
+					inner join Purchase.POAmendmentItemDetail pid on pid.POAmendmentNo = sim.POAmendmentNo 
+						and pid.ItemNo=  sood.ItemNo and (ISNULL(pid.MakeNo,0) = ISNULL(sood.MakeNo,0) or pid.makeno is null)
+					where 
+				sim.POAmendmentNo = I.ReferenceNo and GateEntryNo = id.GateEntryNo )
+		 FreightAmount
+	,I.ItemNo,I.MakeNo  from 
+	Purchase.POAmendmentMain  pm
+	inner join (select count(distinct isnull(GateEntryNo,1)) cnt ,ReferenceNo,GateEntryNo from #ItemDetail id 
+	where not exists(select 1 from Finance.FreightInvoiceDocumentDetails fd 
+	inner join Finance.FreightInvoiceMain fm  on fm.FreightInvoiceNO = fd.FreightInvoiceNo
+					and fm.AuthorizedBy is not null
+	where fd.GateEntryNo = id.GateEntryNo)
+	group by ReferenceNo ,GateEntryNo )
+				id on id.ReferenceNo = pm.POAmendmentNo 
+	inner join #ItemDetail I on i.ReferenceNo = id.ReferenceNo and isnull(i.GateEntryNo,0)= isnull(id.GateEntryNo,0)
+	inner join  DiscreteRM.SINGateEntryItemDetail sod on sod.GateEntryNo = I.GateEntryNo and sod.ItemNo = I.ItemNo 
+					and isnull(sod.MakeNo,0)= ISNULL(I.MakeNo,0)
+	inner join Purchase.POAmendmentItemDetail pid on pid.POAmendmentNo = pm.POAmendmentNo 
+						and pid.ItemNo=  I.ItemNo and (ISNULL(pid.MakeNo,0) = ISNULL(I.MakeNo,0) or pid.makeno is null)
+	where pm.FreightTypeNo =1 -- To Pay only
+	and FreightRateTypeNo  =3 -- per trip
+	and ReferenceType ='PMPO'
+	and not exists(select 1 from Purchase.FreightOrderOrderDetail fd where fd.PONo = PM.PONo)
+	group by I.ItemNo,I.MakeNo ,id.GateEntryNo,I.ReferenceNo) tt
+	group by ItemNo,MakeNo 
+	
+
+	
+  end
+end
+
+create table #Posting ([Add to Basic] bit,Particular varchar(500),[Debit Amount] decimal(15,2) , 
+		[Credit Amount] decimal(15,2),[Account Name] int, [Ref. Detail] varchar(50),[Cost Center] varchar(50),
+		[Amount] decimal(15,2), [Type] tinyint,SlNo tinyint ,MiscChargeNo int , TaxCodeMiscChargesDetailNo int,
+			ItemNos varchar(5000))
+
+Insert into #Posting 
+	select cast(0 as bit) [Add to Basic]
+				,'Stock Account' as Particular
+				,convert(decimal(15,2),sum(Amount + ISNULL(IncludedAmount,0) + isnull(ExpenseAmount,0)
+								+ ISNULL(FreightAmount,0))) [Debit Amount]
+				,convert(decimal(15,2),null) [Credit Amount]
+				,  ItemAC .AccountNo [Account Name]
+				,cast(null as varchar) [Ref. Detail]
+				,cast(null as varchar) [Cost Center]
+				,SUM(Amount + ISNULL(IncludedAmount,0)+ ISNULL(FreightAmount,0) + isnull(ExpenseAmount,0))
+								[Amount]
+				,1 [Type]
+				,ROW_NUMBER()over(order by ItemAC.AccountNo ) SlNo
+				,null MiscChargeNo
+				,null TaxCodeMiscChargesDetailNo
+				,'' ItemNos
+			from (select  SUM(AcceptedQty   * Rate) Amount ,ItemNo ,MakeNo 
+							from #ItemDetail group by ItemNo,MakeNo)I
+				outer apply (SELECT pad.AccountNo FROM Purchase.POAccountAssignmentDetail pad
+						inner join Purchase.POAmendmentMain pam on pam.PONo = pad.PONo
+						inner join #ItemDetail PID on PID.ReferenceNo = pam.POAmendmentNo 
+						where PID.ReferenceType ='PMPO' and pad.Flag ='IM' and pad.Id = PID.ItemNo
+						and pad.AccountTypeNo in (14 ,16)
+						and PID.ItemNo = I.ItemNo 
+						group by pad.AccountNo 
+						union all
+						SELECT pad.AccountNo  FROM Purchase.POAccountAssignmentDetail pad
+						inner join Purchase.POAmendmentMain pam on pam.PONo = pad.PONo
+						inner join #ItemDetail PID on PID.ReferenceNo = pam.POAmendmentNo 
+						where PID.ReferenceType ='PMPO' and pad.Flag ='IM3' and pad.Id = PID.ItemNo
+						and pad.AccountTypeNo in (54)
+						and PID.ItemNo = I.ItemNo 
+						group by pad.AccountNo  
+						union all
+						select top 1 (IR.AccountNo)AccountNo 
+							from Finance.ARDItemRule IR
+							inner join masterdata.mAccountMaster AM on AM.AccountNo=IR.AccountNo
+							inner join  #ItemDetail ID on ID.ItemNo = IR.ItemNo 
+							where AM.AccountTypeNo=14 and isnull(id.ReferenceType,'') <>'PMPO'
+							and ir.ItemNo = I.ItemNo 
+							
+						) ItemAC 
+			
+			left join #IncludedTax tt on I.ItemNo = tt.ItemNo 
+							and ISNULL(I.MakeNo,0) = ISNULL(tt.MakeNo,0)	
+			left join (select sum(FreightAmount) FreightAmount ,ItemNo ,MakeNo
+					from #Freight group by ItemNo ,MakeNo ) FT on I.ItemNo = FT.ItemNo 
+							and ISNULL(I.MakeNo,0) = ISNULL(FT.MakeNo,0)	
+			left join(select SUM( ExpenseAmount) ExpenseAmount,ItemNo ,MakeNo
+							from #Expenses group by ItemNo,MakeNo
+							) EH on I.ItemNo = EH.ItemNo 
+							and ISNULL(I.MakeNo,0) = ISNULL(EH.MakeNo,0)	
+							
+		group by  ItemAC .AccountNo 
+
+Insert into #Posting
+	 select cast(0 as bit) [Add to Basic]
+				,'Freight Account' as Particular
+				,convert(decimal(15,2), null) [Debit Amount]
+				,convert(decimal(15,2),sum(I.FreightAmount)) [Credit Amount]
+				, IR.AccountNo [Account Name]
+				,cast(null as varchar) [Ref. Detail]
+				,cast(null as varchar) [Cost Center]
+				,sum(I.FreightAmount) [Amount]
+				,2 [Type]
+				,ROW_NUMBER()over(order by IR.AccountNo) + (select isnull(max(SLNo),0) from #Posting) SlNo
+				,null MiscChargeNo
+				,null TaxCodeMiscChargesDetailNo
+				,'' ItemNos
+			from #Freight I
+			left join (
+			SELECT pad.AccountNo ,PID.ItemNo FROM Purchase.POAccountAssignmentDetail pad
+						inner join Purchase.POAmendmentMain pam on pam.PONo = pad.PONo
+						inner join #ItemDetail PID on PID.ReferenceNo = pam.POAmendmentNo
+						where PID.ReferenceType ='PMPO' and pad.Flag ='IM4' and pad.Id = PID.ItemNo
+						and pad.AccountTypeNo =54
+						group by pad.AccountNo ,PID.ItemNo
+			union
+			select max(IR.AccountNo)AccountNo,ir.ItemNo
+							from Finance.ARDIntermediatePostingAccountRule IPR
+							inner join Finance.ARDItemRule IR on IPR.ARDNo = IR.ARDNo 
+								and IPR.AccountNo = IR.AccountNo  
+							inner join masterdata.mAccountMaster AM on AM.AccountNo=IPR.AccountNo
+					inner join #ItemDetail id on id.ItemNo = IR.ItemNo and isnull(id.ReferenceType,'') <>'PMPO'
+							where AM.AccountTypeNo=54-- intermeidate
+							and IPR.IntermediateAccountTypeNo =4 -- Freight
+							group by ir.ItemNo
+							having max(IR.AccountNo)>0
+							) IR on IR.ItemNo=I.ItemNo
+				group by IR.AccountNo
+
+Insert into #Posting
+	  select cast(0 as bit) [Add to Basic]
+				,'Expense Suspense Account' as Particular
+				,convert(decimal(15,2), null) [Debit Amount]
+				,convert(decimal(15,2),sum(E.ExpenseAmount)) [Credit Amount]
+				, e.AccountNo [Account Name]
+				,cast(null as varchar) [Ref. Detail]
+				,cast(null as varchar) [Cost Center]
+				,sum(E.ExpenseAmount) [Amount]
+				,2 [Type]
+				,ROW_NUMBER()over(order by E.AccountNo) + (select isnull(max(SLNo),0) from #Posting) SlNo
+				,null MiscChargeNo
+				,null TaxCodeMiscChargesDetailNo
+				,'' ItemNos
+			from #Expenses E
+			group by  e.AccountNo
+			having
+			sum(E.ExpenseAmount)<>0
+			
+			 
+							
+insert into #Posting 
+	 select cast(0 as bit) [Add to Basic]
+				,case when StockTransferTypeNo=1 then 'Inter FB Account' else 'Stock In Transit' end as Particular
+				,convert(decimal(15,2),null) [Debit Amount]
+				,convert(decimal(15,2),sum(Amount)) [Credit Amount]
+				, IR.AccountNo [Account Name]
+				,cast(null as varchar) [Ref. Detail]
+				,cast(null as varchar) [Cost Center]
+				,sum(Amount) [Amount]
+				,2 [Type]
+				,ROW_NUMBER()over(order by IR.AccountNo) + (select isnull(max(SlNo),0) from #Posting) SlNo
+				,null MiscChargeNo
+				,null TaxCodeMiscChargesDetailNo
+				,'' ItemNos
+			from (select  SUM(pid.AcceptedQty * pid.Rate) Amount ,pid.ItemNo ,pid.MakeNo,pid.TechnicalGradeNo,
+							isnull(ism.StockTransferTypeNo,0) StockTransferTypeNo
+							from #ItemDetail pid
+							left join discreteRM.StockTransferMain ism on 
+									ism.StockTransferNo = pid.ReferenceNo and pid.ReferenceType ='IMST'
+							 where 
+							ReferenceType ='IMST'
+							group by pid.ItemNo,pid.MakeNo,pid.TechnicalGradeNo,StockTransferTypeNo)I
+			  
+			 Outer apply (select max(IR.AccountNo)AccountNo
+							from 
+							Finance.ARDIntermediatePostingAccountRule AR
+							inner join Finance.ARDItemRule IR on IR.ARDNo=AR.ARDNo and IR.AccountNo = AR.AccountNo
+							inner join masterdata.mAccountMaster AM on AM.AccountNo=IR.AccountNo
+							where AM.AccountTypeNo=54 and AR.IntermediateAccountTypeNo =18
+							and ItemNo = I.ItemNo and I.StockTransferTypeNo <>1
+							group by ir.ItemNo
+							Union
+							select FBR.AccountNo 
+							from masterdata.mFBMain FBM 
+							Inner join masterdata.mVendorCard vc on FBM.CompanyNo=VC.VendorOfCompanyNo
+							inner join masterdata.mVendorLocationDetail vld on vld.VendorNo = vc.VendorNo 
+							inner join Finance.ARDFinanceBookRule FBR on FBR.FBNo=FBM.FBNo
+							where  VendorTypeNo = 8  and vld.VendorLocationNo =@VendorLocationNo
+							 and FBM.FBTypeNo=1 and FBM.IsDefault=1 and FBR.AccountTypeNo=1
+								and I.StockTransferTypeNo=1 
+								and FBR.ARDNo in (select FBRI.ARDNo from masterdata.mFBMain FBMI 
+												inner join Finance.ARDFinanceBookRule FBRI on FBRI.FBNo=FBMI.FBNo
+											where FBMI.CompanyNo=@CompanyNo
+											and FBMI.FBTypeNo=1
+											and FBMI.IsDefault=1)
+							 ) IR
+		group by IR.AccountNo ,StockTransferTypeNo
+		
+Insert into #Posting
+	 select cast(0 as bit) [Add to Basic]
+				,'GR Suspense A/c' as Particular
+				,convert(decimal(15,2), null) [Debit Amount]
+				,convert(decimal(15,2),SUM(Amount + ISNULL(tt.IncludedAmount,0) )) [Credit Amount]
+				,isnull(ItemAC.AccountNo,IR.AccountNo) [Account Name]
+				,cast(null as varchar) [Ref. Detail]
+				,cast(null as varchar) [Cost Center]
+				,SUM(Amount+ ISNULL(tt.IncludedAmount,0))  [Amount]
+				,2 [Type]
+				,ROW_NUMBER()over(order by isnull(ItemAC.AccountNo,IR.AccountNo)) + (select isnull(max(SLNo),0) from #Posting) SlNo
+				,null MiscChargeNo
+				,null TaxCodeMiscChargesDetailNo
+				,'' ItemNos
+			from (select  SUM(AcceptedQty  * Rate) Amount ,ItemNo ,MakeNo 
+							from #ItemDetail where ReferenceType <>'IMST'  group by ItemNo,MakeNo ) I
+			left join #IncludedTax tt on I.ItemNo = tt.ItemNo 
+							and ISNULL(I.MakeNo,0) = ISNULL(tt.MakeNo,0)	
+			left join (SELECT pad.AccountNo ,PID.ItemNo FROM Purchase.POAccountAssignmentDetail pad
+						inner join Purchase.POAmendmentMain pam on pam.PONo = pad.PONo
+						inner join #ItemDetail PID on PID.ReferenceNo = pam.POAmendmentNo 
+						where PID.ReferenceType ='PMPO' and pad.Flag ='IM11' and pad.Id = PID.ItemNo
+						and pad.AccountTypeNo =54
+						group by pad.AccountNo ,PID.ItemNo
+						) ItemAC on ItemAC.ItemNo= I.ItemNo 
+			left join (select ir.ItemNo,max(IR.AccountNo) AccountNo
+							from Finance.ARDItemRule IR
+							Inner join Finance.ARDIntermediatePostingAccountRule IPR on IPR.ARDNo = IR.ARDNo 
+							and IPR.AccountNo = IR.AccountNo and IPR.IntermediateAccountTypeNo =11 -- GR SUSPENSE 
+							inner join masterdata.mAccountMaster AM on AM.AccountNo=IR.AccountNo
+							inner join #ItemDetail id on id.ItemNo = IR.ItemNo and isnull(id.ReferenceType,'') <>'PMPO'
+							where AM.AccountTypeNo=54-- intermeidate
+							group by ir.ItemNo
+										) IR on IR.ItemNo=I.ItemNo
+			group by isnull(ItemAC.AccountNo,IR.AccountNo)
+
+------------------- expense Posting
+Insert into #Posting
+select cast(0 as bit) [Add to Basic]
+				,'Purchase Account' as Particular
+				,convert(decimal(15,2), SUM(Amount + ISNULL(tt.IncludedAmount,0))) [Debit Amount]
+				,convert(decimal(15,2),null) [Credit Amount]
+				, ISNULL(ItemAC.accountNo,IR.AccountNo) [Account Name]
+				,cast(null as varchar) [Ref. Detail]
+				,cast(null as varchar) [Cost Center]
+				,SUM(Amount+ ISNULL(tt.IncludedAmount,0))  [Amount]
+				,1 [Type]
+				,ROW_NUMBER()over(order by ItemAC.accountNo,IR.AccountNo) + (select isnull(max(SLNo),0) from #Posting) SlNo
+				,null MiscChargeNo
+				,null TaxCodeMiscChargesDetailNo
+				,'' ItemNos
+			from (select  SUM(AcceptedQty   * Rate) Amount ,ItemNo ,MakeNo 
+							from #ItemDetail 
+							where IsNULL(ReferenceType,'') <> 'IMST' or IsNULL(FormCode,'') not in ('DRSN','RSLE') 
+							group by ItemNo,MakeNo) I
+			left join #IncludedTax tt on I.ItemNo = tt.ItemNo 
+							and ISNULL(I.MakeNo,0) = ISNULL(tt.MakeNo,0)	
+			left join (SELECT pad.AccountNo ,PID.ItemNo FROM Purchase.POAccountAssignmentDetail pad
+						inner join Purchase.POAmendmentMain pam on pam.PONo = pad.PONo
+						inner join #ItemDetail PID on PID.ReferenceNo = pam.POAmendmentNo 
+						where PID.ReferenceType ='PMPO' and pad.Flag ='IM' and pad.Id = PID.ItemNo 
+						and pad.AccountTypeNo =20
+						group by pad.AccountNo ,PID.ItemNo
+						) ItemAC on ItemAC.ItemNo= I.ItemNo 
+			left join (select ItemNo,IR.AccountNo
+							from Finance.ARDItemRule IR
+							inner join masterdata.mAccountMaster AM on AM.AccountNo=IR.AccountNo
+							and AM.AccountTypeNo=case when @IsInterUnit is null then 20 
+													else 46 end-- Purchase Account
+							) IR on IR.ItemNo=I.ItemNo
+			where @IsManagingExpenseAccount=1
+			group by ItemAC.accountNo,IR.AccountNo
+ 			
+Insert into #Posting
+	  select cast(0 as bit) [Add to Basic]
+				,'Expenses Account a/c' as Particular
+				,convert(decimal(15,2), sum(E.ExpenseAmount)) [Debit Amount]
+				,convert(decimal(15,2),NUll) [Credit Amount]
+				, e.ExpenseAccountNo [Account Name]
+				,cast(null as varchar) [Ref. Detail]
+				,cast(null as varchar) [Cost Center]
+				,sum(E.ExpenseAmount) [Amount]
+				,1 [Type]
+				,ROW_NUMBER()over(order by E.ExpenseAccountNo) + (select isnull(max(SLNo),0) from #Posting) SlNo
+				,null MiscChargeNo
+				,null TaxCodeMiscChargesDetailNo
+				,'' ItemNos
+			from #Expenses E
+			where @IsManagingExpenseAccount=1
+			group by  e.ExpenseAccountNo
+			having
+			sum(E.ExpenseAmount)<>0 
+
+Insert into #Posting
+	 select cast(0 as bit) [Add to Basic]
+				,'Freight Expense Account' as Particular
+				,convert(decimal(15,2), sum(I.FreightAmount)) [Debit Amount]
+				,convert(decimal(15,2),null) [Credit Amount]
+				, IR.AccountNo [Account Name]
+				,cast(null as varchar) [Ref. Detail]
+				,cast(null as varchar) [Cost Center]
+				,sum(I.FreightAmount) [Amount]
+				,1 [Type]
+				,ROW_NUMBER()over(order by IR.AccountNo) + (select isnull(max(SLNo),0) from #Posting) SlNo
+				,null MiscChargeNo
+				,IR.TaxCodeMiscChargesDetailNo
+				,'' ItemNos
+			from #Freight I
+			outer apply (select top 1 AccountNo ,TaxCodeMiscChargesDetailNo
+						from
+						(select isnull(IR.AccountNo ,ARAR.AccountNo) AccountNo , 
+						TCD.TaxCodeMiscChargesDetailNo from 
+					masterdata.mTaxCode tc
+					inner join masterdata.mTaxCodeMiscChargesDetail TCD on TCD.TaxCodeNo = tc.TaxCodeNo 
+	inner join Finance.ARDTDCAccountRule ARAR on ARAR.TaxCodeMiscChargesDetailNo = TCD.TaxCodeMiscChargesDetailNo
+		inner join Finance.ARDItemRule IR on IR.ARDNo = ARAR.ARDNo and IR.ItemNo = I.ItemNo 
+					where tc.TaxCategoryNo =10 and TaxAccountTypeNo =27
+					and tc.TaxAccountBasisNo=1
+					union all
+					select AccountNo, mcd.TaxCodeMiscChargesDetailNo
+					from
+					masterdata.mTaxCode tc 
+					inner join masterdata.mTaxCodeMiscChargesDetail mcd on tc.taxcodeno=mcd.taxcodeno
+					inner join Finance.ARDTDCAccountRule ar on 
+						mcd.TaxCodeMiscChargesDetailNo=ar.TaxCodeMiscChargesDetailNo
+					where tc.TaxAccountBasisNo=2
+					 and tc.TaxCategoryNo =10 and TaxAccountTypeNo =27
+					union all
+					select top 1  am.AccountNo, null 
+				from Finance.TransactionAccountMappingMain tamm 
+					inner join masterdata.mAccountMaster am on am.AccountNo=tamm.AccountNo
+				where tamm.FormNo=450
+					) tt) IR 
+			where @IsManagingExpenseAccount=1
+				group by IR.AccountNo,IR.TaxCodeMiscChargesDetailNo
+
+Insert into #Posting
+select cast(0 as bit) [Add to Basic]
+				,'Purchase Offsetting Account' as Particular
+				,convert(decimal(15,2),Null) [Debit Amount]
+				,convert(decimal(15,2),sum(Amount + ISNULL(IncludedAmount,0)  + isnull(ExpenseAmount,0)
+								+ ISNULL(FreightAmount,0))) [Credit Amount]
+				,  IR.AccountNo [Account Name]
+				,cast(null as varchar) [Ref. Detail]
+				,cast(null as varchar) [Cost Center]
+				,SUM(Amount + ISNULL(IncludedAmount,0)+ ISNULL(FreightAmount,0)+ isnull(ExpenseAmount,0) )  
+								[Amount]
+				,2 [Type]
+				,ROW_NUMBER()over(order by IR.AccountNo) + (select isnull(max(SLNo),0) from #Posting) SlNo
+				,null MiscChargeNo
+				,null TaxCodeMiscChargesDetailNo
+				,'' ItemNos
+			from (select  SUM(AcceptedQty   * Rate) Amount ,ItemNo ,MakeNo 
+							from #ItemDetail 
+							where IsNULL(ReferenceType,'') <> 'IMST' or IsNULL(FormCode,'') not in ('DRSN','RSLE') 
+							group by ItemNo,MakeNo )I
+				left join (SELECT pad.AccountNo ,PID.ItemNo FROM Purchase.POAccountAssignmentDetail pad
+						inner join Purchase.POAmendmentMain pam on pam.PONo = pad.PONo
+						inner join #ItemDetail PID on PID.ReferenceNo = pam.POAmendmentNo 
+						where PID.ReferenceType ='PMPO' and pad.Flag ='IM' and pad.Id = PID.ItemNo 
+						and pad.AccountTypeNo =20
+						group by pad.AccountNo ,PID.ItemNo
+						) ItemAC on ItemAC.ItemNo= I.ItemNo 
+				left join (select ItemNo,max(IR.AccountNo) AccountNo
+							from Finance.ARDItemRule IR
+							Inner join Finance.ARDIntermediatePostingAccountRule IPR on IPR.ARDNo = IR.ARDNo 
+								and IPR.AccountNo = IR.AccountNo and IPR.IntermediateAccountTypeNo =17 
+								--Purchase Offsetting Account 
+							inner join masterdata.mAccountMaster AM on AM.AccountNo=IR.AccountNo
+							 where AM.AccountTypeNo=54-- intermeidate
+							 group by ItemNo) IR on IR.ItemNo=I.ItemNo
+			
+			left join #IncludedTax tt on I.ItemNo = tt.ItemNo 
+							and ISNULL(I.MakeNo,0) = ISNULL(tt.MakeNo,0)	
+			left join #Freight FT on I.ItemNo = FT.ItemNo 
+							and ISNULL(I.MakeNo,0) = ISNULL(FT.MakeNo,0)	
+			left join(select SUM( ExpenseAmount) ExpenseAmount,ItemNo ,MakeNo
+							from #Expenses group by ItemNo,MakeNo
+							) EH on I.ItemNo = EH.ItemNo 
+							and ISNULL(I.MakeNo,0) = ISNULL(EH.MakeNo,0)	
+			where @IsManagingExpenseAccount=1
+		group by IR.AccountNo,ItemAC .AccountNo 
+	 
+
+
+  if exists(select 1 from #Posting having abs(SUM([Credit Amount])- SUM([Debit Amount]))<= .99)
+ begin
+		update PD set [Debit Amount] = [Debit Amount] + ISNULL(diff,0)
+		from
+		#Posting PD
+		cross join (select SUM([Credit Amount])- SUM([Debit Amount]) Diff from #Posting) tt
+		where PD.SlNo  = 1
+	
+	update PD set [Credit Amount] = [Credit Amount] + ISNULL(diff,0)
+		from
+		#Posting PD
+		cross join (select SUM([Debit Amount])- SUM([Credit Amount]) Diff from #Posting) tt
+		where PD.SlNo  = 1
+	
+	update #Posting set [Debit Amount]=abs([Credit Amount]) ,[Credit Amount]=null,Type =1 ,Amount=abs([Credit Amount])
+			where SlNo = 1 and [Credit Amount]<0
+	
+	update #Posting set [Credit Amount]=abs([Debit Amount]) ,Type =2 ,Amount=abs([Debit Amount]),[Debit Amount]=null
+			where SlNo = 1 and [Debit Amount]<0
+						
+ end
+		
+select * from #Posting where [Debit Amount]>0 or [Credit Amount]>0
+ 
+ 
+--if OBJECT_ID('tempdb..#ItemDetail') is not null
+--	drop table #itemdetail
+
+--if OBJECT_ID('tempdb..#IncludedTax') is not null
+--	drop table #IncludedTax
+
+--if OBJECT_ID('tempdb..#Freight') is not null
+--	drop table #Freight
+
+--if OBJECT_ID('tempdb..#Posting') is not null
+--	drop table #Posting
+--if OBJECT_ID('tempdb..#Expenses') is not null
+--	drop table #Expenses
+
+
+
+	
+END TRY
+	
+	BEGIN CATCH
+		select ERROR_MESSAGE()
+		INSERT INTO [masterdata].[mErrorLog]
+			   ([ErrorDate]
+			   ,[ErrorNo]
+			   ,[ErrorSeverity]
+			   ,[ErrorState]
+			   ,[ErrorProcedure]
+			   ,[ErrorLine]
+			   ,[ErrorDescription]
+			   ,[UserName]
+			   ,[FormCode])
+		VALUES
+			   (getdate()
+			   ,ERROR_NUMBER()
+			   ,ERROR_SEVERITY()
+			   ,ERROR_STATE()
+			   ,ERROR_PROCEDURE()
+			   ,ERROR_LINE()
+			   ,ERROR_MESSAGE()
+			   ,SUSER_SNAME()
+			   ,'IGRN')
+	END CATCH
+END

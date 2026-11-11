@@ -1,0 +1,94 @@
+Stored procedure Sales.SDSOSaveExportCostProvision: Save Export Cost Provision. Called from Sales.SDSOAuthorize.
+Writes: Sales.SalesOrderAmendmentExportCostProvision, Sales.SalesOrderExportCostProvision
+Reads: masterdata.mCostHeadEROSMain, Sales.SalesOrderAmendmentExportCostDetail, Sales.SalesOrderAmendmentItemDetail, Sales.SalesOrderAmendmentMain, Sales.SalesOrderExportCostDetail, Sales.SalesOrderItemDetail, Sales.SalesOrderMain
+Parameters: @SalesOrderNo Int, @OutputStatus bit = Null OUTPUT, @Result varchar(100) = Null OUTPUT
+Author: K M Disha, created 13 May 2023
+Code:
+
+-- =============================================
+-- Author:		K M Disha
+-- Create date: 13 May 2023
+-- Description: Save Export Cost Provision
+-- =============================================
+CREATE PROCEDURE [Sales].[SDSOSaveExportCostProvision]
+(
+ @SalesOrderNo Int,
+ @OutputStatus bit = Null output,
+ @Result varchar(100) = Null output	
+)
+AS
+BEGIN
+
+	SET NOCOUNT ON;	
+	BEGIN TRY
+	
+		
+	-- 1 Update RatePerUnit For Export (Into Term)
+		If Exists( 
+				  Select 1
+				  From Sales.SalesOrderAmendmentMain SAM
+				  Inner Join (
+							   Select Max(SAM.AmendmentNo) AmendmentNo, SAM.SalesOrderNo
+							   From Sales.SalesOrderAmendmentMain SAM				   
+							   Where SAM.SalesOrderNo=@SalesOrderNo		
+							   Group By SAM.SalesOrderNo		   
+							 )SA on SA.SalesOrderNo=SAM.SalesOrderNo And SA.AmendmentNo=SAM.AmendmentNo	
+				 Where SAM.AuthorizedBy is Not Null							 
+				 And SAM.IsAdditionalCost=1
+				 )
+		BEGIN
+		
+			Declare @SalesOrderAmendmentNo Int
+			
+			 Select @SalesOrderAmendmentNo=SAM.SalesOrderAmendmentNo
+			  From Sales.SalesOrderAmendmentMain SAM
+			  Inner Join (
+						   Select Max(SAM.AmendmentNo) AmendmentNo, SAM.SalesOrderNo
+						   From Sales.SalesOrderAmendmentMain SAM				   
+						   Where SAM.SalesOrderNo=@SalesOrderNo		
+						   Group By SAM.SalesOrderNo		   
+						 )SA on SA.SalesOrderNo=SAM.SalesOrderNo And SA.AmendmentNo=SAM.AmendmentNo	
+			 Where SAM.AuthorizedBy is Not Null							 
+			 And SAM.IsAdditionalCost=1
+		
+			-- Fixed (Sales Order)
+			Insert into Sales.SalesOrderExportCostProvision
+			(SalesOrderNo ,SOExportCostNo,RatePerUnit,BaseRatePerUnit)
+			Select SO.SalesOrderNo
+			,SOEC.SOExportCostNo
+			,Case when SOEC.IsCalculateOnItemQty = 1 then 1 else SOEC.Quantity /SOID.TotSOQty End * SOEC.Rate 					
+			,Case when SOEC.IsCalculateOnItemQty = 1 then 1 else SOEC.Quantity /SOID.TotSOQty End * SOEC.Rate *SOEC.MultiplicativeRate * SOEC.DivisibilityRate		
+			from Sales.SalesOrderMain SO
+			Inner join Sales.SalesOrderExportCostDetail SOEC On SO.SalesOrderNo = SOEC.SalesOrderNo
+			Cross apply (Select SUM(SOID.Quantity) TotSOQty  from Sales.SalesOrderItemDetail SOID where SOID.SalesOrderNo = SO.SalesOrderNo) SOID
+			Inner Join masterdata.mCostHeadEROSMain CH On CH.CostHeadNo = SOEC.CostHeadNo and SO.SalesOrderNo = @SalesOrderNo
+			And SO.IsAdditionalCost=1 and SOID.TotSOQty <> 0
+			
+			-- Fixed (Sales Order Amendment)
+			Insert into Sales.SalesOrderAmendmentExportCostProvision 
+			(SalesOrderAmendmentNo ,SalesOrderAmendmentExportCostNo,RatePerUnit,BaseRatePerUnit)
+			Select SO.SalesOrderAmendmentNo,SOEC.SalesOrderAmendmentExportCostNo
+			,Case when SOEC.IsCalculateOnItemQty = 1 then 1 else SOEC.Quantity /SOID.TotSOQty End * SOEC.Rate 					
+			,Case when SOEC.IsCalculateOnItemQty = 1 then 1 else SOEC.Quantity /SOID.TotSOQty End * SOEC.Rate *SOEC.MultiplicativeRate * SOEC.DivisibilityRate		
+			from Sales.SalesOrderAmendmentMain  SO
+			Inner join Sales.SalesOrderAmendmentExportCostDetail SOEC On SO.SalesOrderAmendmentNo = SOEC.SalesOrderAmendmentNo
+			Cross apply (Select SUM(SOID.Quantity) TotSOQty  from Sales.SalesOrderAmendmentItemDetail SOID where SOID.SalesOrderAmendmentNo = SO.SalesOrderAmendmentNo) SOID
+			Inner Join masterdata.mCostHeadEROSMain CH On CH.CostHeadNo = SOEC.CostHeadNo
+			Where  SO.SalesOrderAmendmentNo  = @SalesOrderAmendmentNo and SOID.TotSOQty <> 0			
+			And SO.IsAdditionalCost=1			
+			
+		END				 
+
+		set @OutputStatus =1
+		set @Result='Success'
+
+	    Select 1
+	    
+	END TRY	
+	BEGIN CATCH
+		set @OutputStatus =0
+		set @Result=error_message()
+		
+		Select 0,Error_Message()
+	END CATCH
+END

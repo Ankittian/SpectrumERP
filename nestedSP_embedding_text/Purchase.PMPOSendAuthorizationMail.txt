@@ -1,0 +1,268 @@
+Stored procedure Purchase.PMPOSendAuthorizationMail. Called from Notifications.TANRSaveUserApproval.
+Reads: masterdata.mCategoryMaster, masterdata.mCompanyMaster, masterdata.mGroupMaster, masterdata.mItemMaster, masterdata.mSubGroupMaster, masterdata.mVendorLocationDetail, Notifications.AuthorizationPageSetting, Notifications.TATAuthorizationDetail, Notifications.TATMain, Purchase.POAmendmentItemDetail, Purchase.POAmendmentMain, Security.Login
+Parameters: @POAmendmentNo int, @LoginNo int, @LevelNo smallint, @AuthDetailNo int, @IsRejected bit = 0
+Calls procedures: Notifications.SendSMS, Utility.SendEmailThroughProfile
+Code:
+CREATE PROCEDURE [Purchase].[PMPOSendAuthorizationMail] --206,1,1,96
+	@POAmendmentNo int,
+	@LoginNo int,
+	@LevelNo smallint,
+	@AuthDetailNo int ,
+	@IsRejected bit = 0
+AS
+BEGIN
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+ 		
+	Declare @Email Varchar(100),			
+			@Body Varchar(Max),
+			@Subject VArchar(Max),
+			@CompanyName varchar(100),
+			@PortalURL varchar(500),
+			@PONo int ,
+			@LocalURL varchar(500),
+			@StaticURL varchar(500),
+			@DocumentDate smalldatetime,
+			@DocumentNoYearly varchar(30),
+			@MailProfile Varchar(50),	
+			@LoginName Varchar(100)=''
+			,@PhoneNo varchar(50)
+			,@sResponse varchar(800)
+			,@SmsSubject varchar(Max) = ''   -- Subject For Sms 
+			,@POMaxLevel tinyint
+			,@CreatorMail  varchar(100)
+			,@CreatorPhoneNo  varchar(50)
+			,@CreatorName  Varchar(100)=''
+			,@IsDisableMailToCreator bit = 0 
+			,@VendorName varchar (100)
+			,@CategoryName varchar(max)
+			 
+	Declare @SMSTable as table(col varchar(100))
+			
+	Select @CompanyName = CM.PrintingName		   
+	From Purchase.POAmendmentMain  PA
+	Inner Join masterdata.mCompanyMaster CM on CM.CompanyNo=PA.CompanyNo
+	Where POAmendmentNo = @POAmendmentNo 
+	
+	Select @LocalURL = LocalHost,
+		   @MailProfile=MailProfile,
+		   @StaticURL =StaticHost
+	From Notifications.AuthorizationPageSetting
+			
+	Select @Email = Email,@LoginName = PrintingName , @PhoneNo = Mobile
+	From Security.Login 
+	Where LoginNo = @LoginNo
+
+	Declare @URLPara Varchar(Max)='',@ForwardURL varchar(max) ='url:../PurchaseOrderAuthDetail?SCSONo=#PMPONo', @LoginDetail varchar(200)
+
+	Select @AuthDetailNo = AuthDetailNo
+	from Notifications.TATAuthorizationDetail
+	Where LevelNo = @LevelNo and 
+			LoginNo = @LoginNo and
+			InternalNo = @POAmendmentNo and
+			FormCode = 'PMPA'
+			
+	Select  @IsDisableMailToCreator = TAT.IsDisableMailToCreator
+	from Notifications.TATAuthorizationDetail TAD
+	Inner join Notifications.TATMain TAT on TAT.TATNo = TAD.TATNo
+	Where TAD.InternalNo = @POAmendmentNo And  TAD.FormCode = 'PMPA'		
+					
+	If @Email is not null and @IsRejected = 0  
+	 Begin
+			Select @PONo  = POAmendmentNo ,			   
+			@DocumentDate = DocumentDate	,
+			@DocumentNoYearly  = DocumentNoYearly,
+			@VendorName = VLD.VendorName
+			From Purchase.POAmendmentMain  POM 
+			Inner Join masterdata.mVendorLocationDetail VLD On VLD.VendorLocationNo = POM.VendorLocationNo
+			Where POAmendmentNo = @POAmendmentNo 
+			
+			Select @CategoryName = STUFF((Select + ', ' + CM.CategoryName 
+			from Purchase.POAmendmentItemDetail PAID
+			Inner Join masterdata.mItemMaster IM ON IM.ItemNo = PAID.ItemNo
+			Inner Join masterdata.mSubGroupMaster SGM On SGM.SubGroupNo = IM.SubGroupNo
+			Inner Join masterdata.mGroupMaster GM On GM.GroupNo = SGM.GroupNo
+			Inner Join masterdata.mCategoryMaster CM On CM.CategoryNo = GM.CategoryNo
+			Where POAmendmentNo = @POAmendmentNo
+			Group By CM.CategoryName
+			For xml path('')),1,2,'')
+					
+			Select @URLPara='#HostName/Authentication?q=',
+				   @ForwardURL = REPLACE(@ForwardURL,'#PMPONo',masterdata.EncodeToBase64( CONVERT(varchar,@POAmendmentNo))),
+				   @LoginDetail = 'LoginNo:'+Convert(varchar,@LoginNo)
+			
+			
+			Select @URLPara = @URLPara+masterdata.EncodeToBase64(@LoginDetail+','+@ForwardURL)
+			
+		--	Select @LoginDetail,@ForwardURL,@URLPara
+
+		   If Exists (Select 1 from masterdata.mCompanyMaster Where CompanyName like '%SAINIK%') 
+			BEGIN 
+				Declare @CategoryNameTrimmed Varchar(Max), @VendorNameTrimmed Varchar(50) 						
+
+				Set @CategoryNameTrimmed = LEFT(@CategoryName, 50) + CASE WHEN LEN(@CategoryName) > 50 THEN '..' ELSE '' END
+				Set @VendorNameTrimmed = LEFT(@VendorName, 15) + CASE WHEN LEN(@VendorName) > 15 THEN '..' ELSE '' END
+
+				Set @Subject = '[' + @CategoryNameTrimmed + '] to ' + @VendorNameTrimmed + ' - Authorization Request for PO - '  + @DocumentNoYearly
+			END
+			ELSE
+			BEGIN
+				Set @Subject = 'Authorization Request for Purchase Order-' + @DocumentNoYearly + ' (' + @CategoryName + ') -' + @VendorName
+			END		
+			Set @Body = '<p>Dear '+ @LoginName + ',</p>
+
+				<p><b>Greetings from '+ISNULL(@CompanyName,'')+' </b></p>
+
+				<p> PO No. <strong>'+ISNULL(@DocumentNoYearly,'')+'</strong>, Dated - <strong>'+CONVERT(varchar,@DocumentDate,103)+'</strong> has been created. It is pending for your approval ' + IsNull('of Level ' + CONVERT(Varchar,@LevelNo),'') +  '.</p>
+
+				<p>For more detail login at:</p>'
+				
+			If @LocalURL is not null	
+			Set @Body= @Body+'
+			         
+			        <p>If you are <strong> connected to Local  </strong> then use below link </p>
+					
+					<p><a href="'+REPLACE(@URLPara,'#HostName',@LocalURL)+'" target="_blank">'+ REPLACE(@URLPara,'#HostName',@LocalURL)+ '</a></p>'
+					
+			
+			If @StaticURL is not null
+			Begin		
+				Set @Body= @Body+'
+						
+						<p>If you are <strong>Not connected to Local </strong> then use below link </p>
+					    
+						<p><a href="'+REPLACE(@URLPara,'#HostName',@StaticURL)+'" target="_blank">'+ REPLACE(@URLPara,'#HostName',@StaticURL)+ '</a></p>'
+				
+			    Set @SmsSubject = @Subject + ','+ CHAR(10) + ' Please refer this link for more details : '+ REPLACE(@URLPara,'#HostName',@StaticURL)
+			End
+			Else						--When Static url is null ,assigning mail subject to sms subject
+			 Begin
+			    Set @SmsSubject = @Subject 
+		     End
+			  
+				   
+		   
+		  IF @MailProfile IS NOT NULL
+			exec [Utility].[SendEmailThroughProfile] @Email,@Body,@Subject,@MailProfile
+		
+		  if isnull(@PhoneNo,'') <>''
+		   insert into @SMSTable
+			exec  [Notifications].[SendSMS] @PhoneNo,@SmsSubject,@sResponse output	
+				
+		 End	
+	
+	else If @Email is not null and @IsRejected = 1
+	 Begin
+			Select @PONo  = POAmendmentNo ,			   
+			@DocumentDate = DocumentDate	,
+			@DocumentNoYearly  = DocumentNoYearly
+			From Purchase.POAmendmentMain  POM Where POAmendmentNo = @POAmendmentNo 
+
+                Select @ForwardURL = @ForwardURL + '&IsRejection=#Rejection'
+			    Select @ForwardURL = Replace(@ForwardURL,'#Rejection',masterdata.EncodeToBase64( CONVERT(varchar,1)))   
+			      
+				Select @URLPara='#HostName/Authentication?q=',
+				   @ForwardURL = REPLACE(@ForwardURL,'#PMPONo',masterdata.EncodeToBase64( CONVERT(varchar,@POAmendmentNo))),
+				   @LoginDetail = 'LoginNo:'+Convert(varchar,@LoginNo)
+			
+			
+			Select @URLPara = @URLPara+masterdata.EncodeToBase64(@LoginDetail+','+@ForwardURL)
+			
+			
+			
+			
+			select @Subject = 'Purchase Order-' + @DocumentNoYearly  + ' is rejected for Reason: ' + isnulL(LastComment ,'')
+				from Notifications.TATAuthorizationDetail where FormCode ='PMPA' and InternalNo = @POAmendmentNo 
+				and  AuthDetailNo >= @AuthDetailNo and LastComment is not null
+				
+				 
+			select @Body = '<p>Dear '+ @LoginName + ',</p>
+
+				<p><b>Greetings from '+ISNULL(@CompanyName,'')+' </b></p>
+
+				<p>We would like to inform you that PO No. ' + @DocumentNoYearly + ' has been rejected, due to Reason :"' + isnulL(LastComment,'') + '".
+					Following are the Items involved in this order : <b>' + stuff((select ',' + ItemDescription  
+																					From Purchase.POAmendmentItemDetail sid
+																					left join masterdata.mItemMaster im on im.ItemNo = sid.ItemNo 																		
+																					where sid.POAmendmentNo = @POAmendmentNo for xml path(''))
+																		,1,1,'') + '</b>'
+				 from Notifications.TATAuthorizationDetail where 
+				  AuthDetailNo >= @AuthDetailNo and LastComment is not null
+				  and FormCode ='PMPA' and InternalNo = @POAmendmentNo 
+		
+		  	Select @Body = @Body + '<p>For more detail login at:</p>'
+				
+			If @LocalURL is not null	
+			Set @Body= @Body+'
+			         
+			        <p>If you are <strong> connected to Local  </strong> then use below link </p>
+					
+					<p><a href="'+REPLACE(@URLPara,'#HostName',@LocalURL)+'" target="_blank">'+ REPLACE(@URLPara,'#HostName',@LocalURL)+ '</a></p>'
+			
+			If @StaticURL is not null
+			Begin		
+				Set @Body= @Body+'
+						
+						<p>If you are <strong>Not connected to Local </strong> then use below link </p>
+					    
+						<p><a href="'+REPLACE(@URLPara,'#HostName',@StaticURL)+'" target="_blank">'+ REPLACE(@URLPara,'#HostName',@StaticURL)+ '</a></p>'
+				
+				Set @SmsSubject = @Subject + ',' + CHAR(10) + ' Please refer this link for more details : ' + REPLACE(@URLPara,'#HostName',@StaticURL)
+			End
+			Else							--When Static url is null ,assigning mail subject to sms subject
+			 Begin
+			  Set @SmsSubject = @Subject 
+		     End
+		
+			IF @MailProfile IS NOT NULL
+				exec [Utility].[SendEmailThroughProfile] @Email,@Body,@Subject,@MailProfile
+			 
+			if isnull(@PhoneNo,'') <>''
+			 insert into @SMSTable
+			  exec [Notifications].[SendSMS] @PhoneNo,@SmsSubject,@sResponse output		
+		 End		 
+   
+   
+    if @LoginNo = 0 And @LevelNo = 0 and @POAmendmentNo is not null and @IsDisableMailToCreator = 0
+    Begin
+			Select @PONo  = POAmendmentNo ,			   
+			@DocumentDate = DocumentDate ,
+			@DocumentNoYearly  = DocumentNoYearly,
+			@CreatorMail = SL.Email,
+			@CreatorPhoneNo = SL.PhoneNo,
+			@CreatorName = SL.PrintingName 
+			From Purchase.POAmendmentMain  POM 
+			Inner Join Security.Login SL on SL.LoginNo = POM.CreatedBy
+			Where POAmendmentNo = @POAmendmentNo --and DocumentStatusNo = 30
+			
+					
+			Select @URLPara='#HostName/Authentication?q=',
+				   @ForwardURL = REPLACE(@ForwardURL,'#PMPONo',masterdata.EncodeToBase64( CONVERT(varchar,@POAmendmentNo))),
+				   @LoginDetail = 'LoginNo:'+Convert(varchar,@LoginNo)
+			
+			
+			Select @URLPara = @URLPara+masterdata.EncodeToBase64(@LoginDetail+','+@ForwardURL)
+		
+									
+			Set @Subject = 'Purchase Order-' + @DocumentNoYearly + ' has been completed all Authorizations.'
+			
+			Set @Body = '<p>Dear '+ @CreatorName + ',</p>
+
+				<p><b>Greetings from '+ISNULL(@CompanyName,'')+' </b></p>
+
+				<p> PO No. <strong>'+ISNULL(@DocumentNoYearly,'')+'</strong>, Dated - <strong>'+CONVERT(varchar,@DocumentDate,103)+'</strong> has been successfully authorized in all levels.'+'.</p>'
+					
+			 
+		  Set @SmsSubject = @Subject 
+		     
+			  
+		  IF @MailProfile IS NOT NULL and @CreatorMail is not null
+			exec [Utility].[SendEmailThroughProfile] @CreatorMail,@Body,@Subject,@MailProfile
+		
+		  if isnull(@PhoneNo,'') <>''
+		   insert into @SMSTable
+			exec  [Notifications].[SendSMS] @CreatorPhoneNo,@SmsSubject,@sResponse output	
+				
+		 End
+END

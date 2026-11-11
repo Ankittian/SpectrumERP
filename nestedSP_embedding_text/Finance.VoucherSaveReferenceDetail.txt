@@ -1,0 +1,373 @@
+Stored procedure Finance.VoucherSaveReferenceDetail: Save Script For VoucherSaveReferenceDetail. Called from Utility.CreateMissingVoucherRef.
+Writes: Finance.accVoucherReferenceDetail, Finance.ReferenceDetail, Finance.ReferenceMain
+Reads: Finance.accVoucherDetail, Finance.accVoucherMain, Finance.BankPaymentDetail, Finance.ReferenceDetail, Finance.ReferenceMain, GlobalData.FormMaster, masterdata.mCompanyMaster, masterdata.mCurrencyConversion
+Parameters: @VoucherDetailNo int, @ReferenceNo int OUTPUT, @ReferenceNoYearly varchar(50), @ReferenceDate smalldatetime, @CreditDays tinyint, @DueDate smalldatetime, @ReferenceTypeNo tinyint, @SpecificDrAmount money, @SpecificCrAmount money, @BaseDrAmount decimal(25,6), @BaseCrAmount decimal(25,6), @TransactionFormCode varchar(10), @SourceDocumentNo int, @SourceDocumentDate smalldatetime, @SourceDocumentNoYearly varchar(50), @Remarks varchar(3000), @SpecificReferenceAmount money, @BaseReferenceAmount decimal(25,6), @SourceDocumentFormCode varchar(10), @AccountNo Int, @CompanyNo tinyint, @ByToNo tinyint, @CurrencyConversionNo smallint, @DivisibilityRate decimal(9,6), @MultiplicativeRate decimal(9,6), @FBNo smallint, @OutputStatusNo tinyint = null OUTPUT, @OutputStatusRemarks varchar(4000) = null OUTPUT
+Author: Yusuf, created 09 Feb 2012
+Code:
+-- =============================================
+-- Author:		Yusuf
+-- Create date: 09 Feb 2012
+-- Description: Save Script For VoucherSaveReferenceDetail
+-- =============================================
+CREATE PROCEDURE [Finance].[VoucherSaveReferenceDetail]
+(
+@VoucherDetailNo  int
+,@ReferenceNo  int output
+,@ReferenceNoYearly  varchar(50)
+,@ReferenceDate  smalldatetime
+,@CreditDays  tinyint
+,@DueDate  smalldatetime
+,@ReferenceTypeNo  tinyint
+,@SpecificDrAmount  money
+,@SpecificCrAmount  money
+,@BaseDrAmount  decimal(25,6)
+,@BaseCrAmount  decimal(25,6)
+,@TransactionFormCode varchar(10)
+,@SourceDocumentNo int
+,@SourceDocumentDate smalldatetime
+,@SourceDocumentNoYearly varchar(50)
+,@Remarks varchar(3000)
+,@SpecificReferenceAmount money
+,@BaseReferenceAmount decimal(25,6)
+
+,@SourceDocumentFormCode varchar(10)
+,@AccountNo Int
+,@CompanyNo tinyint
+,@ByToNo tinyint
+,@CurrencyConversionNo smallint
+,@DivisibilityRate decimal(9,6)
+,@MultiplicativeRate decimal(9,6)
+
+,@FBNo smallint
+
+,@OutputStatusNo tinyint = null output
+,@OutputStatusRemarks varchar(4000) = null output
+
+)
+AS
+
+BEGIN
+	SET NOCOUNT ON;
+	
+	BEGIN TRY		
+		declare @ReferenceDetailNo int
+
+		select @ReferenceDetailNo=ReferenceDetailNo 
+		from finance.referenceDetail 
+		where ReferenceNo in (select ReferenceNo from finance.referencemain 
+								where SourceDocumentFormNo=(Select FormNo from GlobalData.FormMaster
+																where FormCode='FMOB'
+																	and @SourceDocumentFormCode='FMOB')
+								  )
+		and accountno=@AccountNo 
+		and FBNo=@FBNo
+		and (PaymentPlanPaymentDetailNo is not null
+			or VoucherDetailNo is not null)
+		
+		if @ReferenceDetailNo is not null
+		begin
+			select @OutputStatusNo=1,@OutputStatusRemarks=@ReferenceDetailNo
+			Select 1,@ReferenceDetailNo
+			
+			return
+		end
+
+--If @VoucherDetailNo is null then all handling is done for Set Opening Balance form by Yusuf
+--If any concept changes here plz take it affects if applicable in [Finance].[FIRVSaveOnDate] by Yusuf
+
+		declare @SourceDocumentFormNo smallint
+		select @SourceDocumentFormNo = FormNo from GlobalData.FormMaster
+		where formcode=@SourceDocumentFormCode
+
+		declare @TransactionFormNo smallint
+		select @TransactionFormNo = FormNo from GlobalData.FormMaster
+		where formcode=@TransactionFormCode
+
+		declare @AuthorizedBy smallint
+		select @AuthorizedBy =(select AuthorizedBy 
+								from finance.accvouchermain am
+									inner join finance.accvoucherdetail ad on ad.voucherno=am.VoucherNo
+								where ad.VoucherDetailNo=@VoucherDetailNo
+								union all
+								select 1 where @VoucherDetailNo is null)
+		
+		if (@VoucherDetailNo is not null)
+		begin
+			select @SourceDocumentFormNo = SourceDocumentFormNo 
+					,@SourceDocumentNo = SourceDocumentNo 
+					,@SourceDocumentNoYearly = SourceDocumentNoYearly 
+					,@TransactionFormNo = TransactionFormNo
+			from Finance.accVoucherMain
+			where VoucherNo in (select VoucherNo from Finance.accVoucherDetail 
+								where VoucherDetailNo=@VoucherDetailNo)
+		end
+		
+		INSERT INTO  [Finance].[accVoucherReferenceDetail]
+		   (
+		    VoucherDetailNo
+		   ,ReferenceNo
+		   ,ReferenceNoYearly
+		   ,ReferenceDate
+		   ,CreditDays
+		   ,DueDate
+		   ,ReferenceTypeNo
+		   ,SpecificDrAmount
+		   ,SpecificCrAmount
+		   ,BaseDrAmount
+		   ,BaseCrAmount
+		   )
+		select
+		    @VoucherDetailNo
+		   ,@ReferenceNo
+		   ,@ReferenceNoYearly
+		   ,@ReferenceDate
+		   ,@CreditDays
+		   ,@DueDate
+		   ,@ReferenceTypeNo
+		   ,@SpecificDrAmount
+		   ,@SpecificCrAmount
+		   ,@BaseDrAmount
+		   ,@BaseCrAmount
+		where @VoucherDetailNo is not null
+
+		set @ReferenceDetailNo=ident_current('[Finance].[accVoucherReferenceDetail]')
+
+		if (@ReferenceTypeNo=3 or @ReferenceTypeNo=4)
+		begin
+			select @ReferenceNo=ReferenceNo 
+			from [Finance].[ReferenceMain] 
+			where @VoucherDetailNo is null
+				and AccountNo=@AccountNo
+				and VendorDocumentNo=@ReferenceNoYearly
+				and ReferenceTypeNo=@ReferenceTypeNo
+				and FBNo=@FBNo
+				and SourceDocumentFormNo=(Select FormNo from GlobalData.FormMaster
+															where FormCode='FMOB')
+
+			if @ReferenceNo is not null
+			begin
+				update [Finance].[ReferenceMain]
+					set SpecificReferenceAmount=@SpecificReferenceAmount
+					   ,BaseReferenceAmount=@BaseReferenceAmount
+					   ,SpecificDrAmount=@SpecificDrAmount
+					   ,SpecificCrAmount=@SpecificCrAmount
+					   ,BaseDrAmount=@BaseDrAmount
+					   ,BaseCrAmount=@BaseCrAmount
+					   ,SpecificBalanceDrAmount=SpecificBalanceDrAmount-SpecificDrAmount
+					   ,SpecificBalanceCrAmount=SpecificBalanceCrAmount-SpecificCrAmount
+					   ,BaseBalanceDrAmount=BaseBalanceDrAmount-BaseDrAmount
+					   ,BaseBalanceCrAmount=BaseBalanceCrAmount-BaseCrAmount
+					   ,ByToNo=@ByToNo
+					   ,CreditDays=@CreditDays
+					   ,DueDate=@DueDate
+					   ,AuthorizedBy=@AuthorizedBy
+				where ReferenceNo=@ReferenceNo
+			end
+			else
+			begin
+				INSERT INTO  [Finance].[ReferenceMain]
+				   (
+					CompanyNo
+				   ,VoucherDetailNo
+				   ,AccountNo
+				   ,SourceDocumentFormNo
+				   ,SourceDocumentNo
+				   ,SourceDocumentDate
+				   ,SourceDocumentNoYearly
+				   ,VendorDocumentNo
+				   ,VendorDocumentDate
+				   ,TransactionFormNo
+				   ,SpecificReferenceAmount
+				   ,BaseReferenceAmount
+				   ,SpecificDrAmount
+				   ,SpecificCrAmount
+				   ,BaseDrAmount
+				   ,BaseCrAmount
+				   ,SpecificInprocessDrAmount
+				   ,SpecificInprocessCrAmount
+				   ,BaseInprocessDrAmount
+				   ,BaseInprocessCrAmount
+				   ,SpecificBalanceDrAmount
+				   ,SpecificBalanceCrAmount
+				   ,BaseBalanceDrAmount
+				   ,BaseBalanceCrAmount
+				   ,ByToNo
+				   ,CreditDays
+				   ,DueDate
+				   ,Remarks
+				   ,IsHold
+				   ,ReferenceTypeNo
+				   ,AuthorizedBy
+				   ,FBNo
+				   ,HoldCRAmount
+				   ,HoldDRAmount
+				   )
+				values( @CompanyNo
+					   ,@VoucherDetailNo
+					   ,@AccountNo
+					   ,@SourceDocumentFormNo
+					   ,@SourceDocumentNo
+					   ,@SourceDocumentDate
+					   ,@SourceDocumentNoYearly
+					   ,@ReferenceNoYearly
+					   ,@ReferenceDate
+					   ,@TransactionFormNo
+					   ,@SpecificReferenceAmount
+					   ,@BaseReferenceAmount
+					   ,@SpecificDrAmount
+					   ,@SpecificCrAmount
+					   ,@BaseDrAmount
+					   ,@BaseCrAmount
+					   ,0 
+					   ,0 
+					   ,0 
+					   ,0 
+					   ,0
+					   ,0
+					   ,0
+					   ,0
+					   ,@ByToNo
+					   ,@CreditDays
+					   ,@DueDate
+					   ,@Remarks
+					   ,0
+					   ,@ReferenceTypeNo
+					   ,@AuthorizedBy
+					   ,@FBNo
+					   ,0
+					   ,0)
+
+				set @ReferenceNo=ident_current('[Finance].[ReferenceMain]')
+			end
+		end
+
+		declare @ParentCurrencyConversionNo smallint
+			,@ParentDivisibilityRate decimal(9,6)
+			,@ParentMultiplicativeRate decimal(9,6)
+
+		select @ParentCurrencyConversionNo = CurrencyConversionNo 
+			,@ParentDivisibilityRate = DivisibilityRate 
+			,@ParentMultiplicativeRate = MultiplicativeRate
+		from Finance.ReferenceMain rm
+			inner join [Finance].[ReferenceDetail] rd on rm.ReferenceNo=rd.ReferenceNo
+													and rm.ReferenceTypeNo=rd.ReferenceTypeNo
+		where rm.ReferenceNo=@ReferenceNo
+		
+		select @ParentCurrencyConversionNo=ISNULL(@ParentCurrencyConversionNo,@CurrencyConversionNo)
+			,@ParentDivisibilityRate = ISNULL(@ParentDivisibilityRate,@DivisibilityRate) 
+			,@ParentMultiplicativeRate = ISNULL(@ParentMultiplicativeRate,@MultiplicativeRate)
+			
+		INSERT INTO  [Finance].[ReferenceDetail]
+		   (
+		    ReferenceNo
+		   ,VoucherDetailNo
+		   ,AccountNo
+		   ,ReferenceTypeNo
+		   ,SpecificDrAmount
+		   ,SpecificCrAmount
+		   ,BaseDrAmount
+		   ,BaseCrAmount
+		   ,CurrencyConversionNo
+		   ,DivisibilityRate
+		   ,MultiplicativeRate
+		   ,ParentCurrencyConversionNo
+		   ,ParentDivisibilityRate
+		   ,ParentMultiplicativeRate
+		   ,FBNo
+		   )
+		select 
+		    @ReferenceNo
+		   ,@VoucherDetailNo
+		   ,@AccountNo
+		   ,@ReferenceTypeNo
+		   ,@SpecificDrAmount
+		   ,@SpecificCrAmount
+		   ,@BaseDrAmount
+		   ,@BaseCrAmount
+		   ,@CurrencyConversionNo
+		   ,@DivisibilityRate
+		   ,@MultiplicativeRate
+		   ,@ParentCurrencyConversionNo
+		   ,@ParentDivisibilityRate
+		   ,@ParentMultiplicativeRate
+		   ,@FBNo
+		where @ReferenceNo is not null
+
+		UPDATE rm
+		   SET [SpecificInprocessDrAmount] = [SpecificInprocessDrAmount]+tt.DrAmt
+			  ,[SpecificInprocessCrAmount] = [SpecificInprocessCrAmount]+tt.CrAmt
+			  ,[BaseInprocessDrAmount] = BaseInprocessDrAmount+round(tt.DrAmt*@MultiplicativeRate/@DivisibilityRate,6)
+			  ,[BaseInprocessCrAmount] = BaseInprocessCrAmount+round(tt.CrAmt*@MultiplicativeRate/@DivisibilityRate,6)
+			  ,[SpecificBalanceDrAmount] = SpecificBalanceDrAmount+tt.AuthorizedDrAmt
+			  ,[SpecificBalanceCrAmount] = SpecificBalanceCrAmount+tt.AuthorizedCrAmt
+			  ,[BaseBalanceDrAmount] = BaseBalanceDrAmount+round(tt.AuthorizedDrAmt*@MultiplicativeRate/@DivisibilityRate,6)
+			  ,[BaseBalanceCrAmount] = BaseBalanceCrAmount+round(tt.AuthorizedCrAmt*@MultiplicativeRate/@DivisibilityRate,6)
+		from (select @ReferenceNo ReferenceNo
+					,case when @AuthorizedBy is null then @SpecificDrAmount else 0 end DrAmt
+					,case when @AuthorizedBy is null then @SpecificCrAmount else 0 end CrAmt
+					,case when @AuthorizedBy is not null then @SpecificDrAmount else 0 end AuthorizedDrAmt
+					,case when @AuthorizedBy is not null then @SpecificCrAmount else 0 end AuthorizedCrAmt
+			  ) tt
+			inner join [Finance].[ReferenceMain] rm on tt.ReferenceNo=rm.ReferenceNo
+	
+		Declare @IsCurrencyBaseCurrency as bit = 1
+		
+		Select @IsCurrencyBaseCurrency = case when CC.ExchangeCurrencyNo = CM.BaseCurrencyNo then 1 else 0 End 
+		from Finance.ReferenceMain RM
+		inner join masterdata.mCompanyMaster CM on CM.CompanyNo = RM.CompanyNo 
+		inner join Finance.accVoucherDetail avd on avd.VoucherDetailNo = RM.VoucherDetailNo 
+		inner join Finance.accVoucherMain avm on avm.VoucherNo = avd.VoucherNo 
+		inner join masterdata.mCurrencyConversion CC on CC.CurrencyConversionNo = avm.CurrencyConversionNo 
+		where RM.ReferenceNo = @ReferenceNo 
+
+
+		If
+		Exists (
+					Select 1
+					From [Finance].[ReferenceMain]
+					Where ReferenceNo=@ReferenceNo
+					And (BaseInprocessCrAmount<0 or BaseInprocessDrAmount<0)
+					) -- Added by Alok on 02 Feb 2023 for 280123002 (rxtra payment done as  BaseInprocessDrAmount was -ve for few entry in hira)
+		or Exists (Select 1
+					From [Finance].[ReferenceMain]
+					Where ReferenceNo=@ReferenceNo
+					And ((
+						  ((ByToNo = 1 and IsNULL(Case when @IsCurrencyBaseCurrency = 1 then Convert(decimal(25,2),
+																												 Case when Convert(decimal(25,3),BalanceAmount) in (0.005,-0.005) then 0 else BalanceAmount End) else BalanceAmount End,0) <0) 
+					   or (ByToNo = 2 and IsNULL(Case when @IsCurrencyBaseCurrency = 1 then Convert(decimal(25,2),
+																												 Case when Convert(decimal(25,3),BalanceAmount) in (0.005,-0.005) then 0 else BalanceAmount End) else BalanceAmount End,0) >0))
+					And Not Exists (Select 1 from Finance.accVoucherDetail avd 
+									inner join Finance.accVoucherMain avm on avm.VoucherNo = avd.VoucherNo 
+									Left join Finance.BankPaymentDetail BPD on BPD.VoucherNo = avm.VoucherNo 									 
+					                where avd.VoucherDetailNo = @VoucherDetailNo 
+									and avm.SourceDocumentFormNo = 231
+									and BPD.BankPaymentDetailNo is NULL)
+					And IsNULL(@TransactionFormCode,'') Not in ('SDIC') and IsNULL(@SourceDocumentFormCode,'') Not in ('ERCI') 
+						)
+						or 
+						( IsNULL(@SourceDocumentFormCode,'') = 'ERCI' 
+					      and ((ByToNo = 1 and BalanceAmount + 2.00 < 0)
+								or
+							   (ByToNo = 2 and BalanceAmount - 2.00 > 0))
+						  And Not Exists (Select 1 from Finance.accVoucherDetail avd 
+									inner join Finance.accVoucherMain avm on avm.VoucherNo = avd.VoucherNo 
+									Left join Finance.BankPaymentDetail BPD on BPD.VoucherNo = avm.VoucherNo 									 
+					                where avd.VoucherDetailNo = @VoucherDetailNo 
+									and avm.SourceDocumentFormNo = 231
+									and BPD.BankPaymentDetailNo is NULL)	
+						))
+
+					) --Added by Kirti on 12/06/2024				
+		BEGIN
+				Raiserror('Contact your vendor,Reference getting -ve',16,-1)
+		END
+
+		select @OutputStatusNo=1,@OutputStatusRemarks=@ReferenceDetailNo
+		Select 1,@ReferenceDetailNo
+
+	END TRY
+	BEGIN CATCH
+		select @OutputStatusNo=0,@OutputStatusRemarks=Error_Message()
+		Select 0,@OutputStatusRemarks
+	END CATCH
+END

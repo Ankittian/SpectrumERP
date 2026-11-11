@@ -1,0 +1,372 @@
+Stored procedure Sales.SalesAgreementStatus: To Change Status of Sales Agreement. Called from Sales.SDSODelete.
+Writes: Sales.SalesOrderAmendmentItemDetail, Sales.SalesOrderAmendmentMain, Sales.SalesOrderItemDetail, Sales.SalesOrderMain
+Reads: RCFTransport.DOMain, RCFTransport.RevisedDOMain, Sales.ChangeStatusSOItemDetail, Sales.ChangeStatusSOMain, Sales.SalesOrderAmendmentMain, Sales.SalesOrderItemDetail, Sales.SalesOrderMain
+Parameters: @SalesOrderNo int, @ItemNo int, @MakeNo smallint, @CombinationNo Int, @StatusNo tinyint, @OutputStatus bit OUTPUT, @Result varchar(100) OUTPUT
+Author: Alok, created 14 April 2013
+Code:
+-- =============================================
+-- Author:		Alok
+-- Create date: 14 April 2013
+-- Description:	To Change Status of Sales Agreement
+-- =============================================
+CREATE PROCEDURE [Sales].[SalesAgreementStatus] 	
+	@SalesOrderNo int , 
+	@ItemNo int ,
+	@MakeNo smallint,	
+	@CombinationNo Int,
+	@StatusNo tinyint,
+	@OutputStatus bit output,
+	@Result varchar(100) output	
+AS
+BEGIN
+begin try
+
+
+	Declare @SOQty Decimal(12,3),@SOCombinationNo Int,@SOAmt Money
+	,@AgreementQty Decimal(12,3),@AgreementAmt Money
+	,@AggreementTypeNo TinyInt,@AgreeValidationOn TinyInt 
+	
+	If Exists(
+				Select 1
+				From Sales.SalesOrderItemDetail SD
+				Where SD.SalesOrderNo=@SalesOrderNo
+				And SD.ItemNo=@ItemNo
+				And ISNULL(SD.MakeNo,0)=ISNULL(@MakeNo,0)
+				And SD.ItemAttributeBookingNatureNo=1
+			 ) -- Fixed
+	BEGIN
+			Set @SOCombinationNo=@CombinationNo
+	END
+	ELSE
+	BEGIN	-- Variant
+			Select @SOCombinationNo=SD.CombinationNo
+			From Sales.SalesOrderItemDetail SD
+			Where SD.SalesOrderNo=@SalesOrderNo
+			And SD.ItemNo=@ItemNo
+			And ISNULL(SD.MakeNo,0)=ISNULL(@MakeNo,0)
+	END
+	
+	
+	Select @AggreementTypeNo= AgreementTypeNo
+	,@AgreeValidationOn= AgreementQtyValidationNo
+	From Sales.SalesOrderMain
+	Where SalesOrderNo=@SalesOrderNo
+	
+	-- Agreement Type --Qty with Qty validation on - Agreement 
+	-- or Qty validation on-Agreement W/o Agreement Type - Qty
+	If (@AggreementTypeNo=2 And @AgreeValidationOn=1) Or
+	   (@AggreementTypeNo <>2 And @AgreeValidationOn=1)	
+	BEGIN
+		Select @AgreementQty=AgreementQty
+		From Sales.SalesOrderMain
+		Where SalesOrderNo=@SalesOrderNo	
+		
+		Select @SOQty= SUM(SD.Quantity)- ISNULL(SUM(LJ.ReleaseAgreementQty),0)
+		From Sales.SalesOrderMain SOM -- So againt agreement
+		Inner Join Sales.SalesOrderItemDetail SD on SD.SalesOrderNo=SOM.SalesOrderNo -- item of so
+		Inner Join Sales.SalesOrderAmendmentMain SAGM on SAGM.SalesOrderNo=@SalesOrderNo -- Sales agreement
+													And SOM.RefDocumentNo=SAGM.SalesOrderAmendmentNo
+													And SOM.SalesOrderSourceNo=3 -- agreement
+		
+		Left join (
+					Select CSSM.SalesOrderAmendmentNo,SOAM.SalesOrderNo,CSID.ItemNo
+					       ,CSID.MakeNo,CSID.CombinationNo
+					      ,CSID.ReleaseAgreementQty
+					From Sales.ChangeStatusSOMain CSSM 
+					Inner Join Sales.ChangeStatusSOItemDetail CSID on CSID.ChangeStatusSONo = CSSM.ChangeStatusSONo 
+					Inner Join Sales.SalesOrderAmendmentMain SOAM on SOAM.SalesOrderAmendmentNo = CSSM.SalesOrderAmendmentNo
+					Where CSID.IsReleaseAgreementQty = 1
+				) LJ on LJ.SalesOrderNo = SOM.SalesOrderNo
+				     and LJ.ItemNo = SD.ItemNo
+				     and ISNULL(LJ.MakeNo,0) = ISNULL(SD.MakeNo,0)
+				     and ISNULL(LJ.CombinationNo,0) = ISNULL(SD.CombinationNo,0)						
+		Where SAGM.SalesOrderNo=@SalesOrderNo	
+
+		-- DO Case of RCF (We assume that Agreement will have only one line item,so there is need not to check sum of all line item)
+		Select @SOQty=RDM.DOQty
+		From RCFTransport.RevisedDOMain RDM
+		Inner Join RCFTransport.DOMain DO on DO.DONo=RDM.DONo and RDM.RevisionNo=DO.RevisionNo
+		Inner Join Sales.SalesOrderAmendmentMain SA on SA.SalesOrderAmendmentNo=DO.RefDocumentNo and DO.SourceDocumentNo=2
+		Where SA.SalesOrderNo=@SalesOrderNo
+		And @SOQty is Null -- When no Sales order found against agreement
+		
+	END
+	-- Agreement Type --Qty with Qty validation on - Item 	
+	Else If (@AggreementTypeNo=2 And @AgreeValidationOn=2) 	
+    BEGIN
+	
+		Select @AgreementQty=Quantity + case when Sd.ToleranceBasisNo = 1 then 0 - IsNull(sd.ToleranceMinus,0)
+											 when Sd.ToleranceBasisNo = 2 then 0 - round(IsNull(sd.ToleranceMinus,0) * 0.01 * Quantity,3)
+															 else 0 end
+		From Sales.SalesOrderItemDetail Sd
+		Where SalesOrderNo=@SalesOrderNo
+		And Sd.ItemNo=@ItemNo
+		And ISNULL(Sd.MakeNo,0)=ISNULL(@MakeNo,0)
+		And ISNULL(Sd.CombinationNo,0)=ISNULL(@SOCombinationNo,0)
+		
+		Select @SOQty=SUM(SD.Quantity) - ISNULL(SUM(LJ.ReleaseAgreementQty),0)
+		From Sales.SalesOrderMain SOM -- So againt agreement
+		Inner Join Sales.SalesOrderItemDetail SD on SD.SalesOrderNo=SOM.SalesOrderNo -- item of so
+		Inner Join Sales.SalesOrderAmendmentMain SAGM on SAGM.SalesOrderNo=@SalesOrderNo -- Sales agreement
+													And SOM.RefDocumentNo=SAGM.SalesOrderAmendmentNo
+													And SOM.SalesOrderSourceNo=3 -- agreement
+		Left join (
+					Select CSSM.SalesOrderAmendmentNo,SOAM.SalesOrderNo,CSID.ItemNo
+					       ,CSID.MakeNo,CSID.CombinationNo
+					      ,CSID.ReleaseAgreementQty
+					From Sales.ChangeStatusSOMain CSSM 
+					Inner Join Sales.ChangeStatusSOItemDetail CSID on CSID.ChangeStatusSONo = CSSM.ChangeStatusSONo 
+					Inner Join Sales.SalesOrderAmendmentMain SOAM on SOAM.SalesOrderAmendmentNo = CSSM.SalesOrderAmendmentNo
+					Where CSID.IsReleaseAgreementQty = 1
+				  ) LJ on LJ.SalesOrderNo = SOM.SalesOrderNo
+				     and LJ.ItemNo = SD.ItemNo
+				     and ISNULL(LJ.MakeNo,0) = ISNULL(SD.MakeNo,0)
+				     and ISNULL(LJ.CombinationNo,0) = ISNULL(SD.CombinationNo,0)	
+		Where SAGM.SalesOrderNo=@SalesOrderNo
+		And SD.ItemNo=@ItemNo
+		And ISNULL(SD.MakeNo,0)=ISNULL(@MAkeNo,0)
+		And ISNULL(SD.QuotationCombinationNo,0)=ISNULL(@SoCombinationNo,0)
+		
+	END  
+	
+	If @AggreementTypeNo=3 -- Amount Validation
+	BEGIN			
+		Select @AgreementAmt=BasicAmount
+		From Sales.SalesOrderItemDetail Sd
+		Where SalesOrderNo=@SalesOrderNo
+		And Sd.ItemNo=@ItemNo
+		And ISNULL(Sd.MakeNo,0)=ISNULL(@MakeNo,0)
+		And ISNULL(Sd.CombinationNo,0)=ISNULL(@SOCombinationNo,0)
+		
+		Select @SOAmt=SUM(CASE WHEN LJ.ReleaseAgreementQty > 0 then 0 else SD.BasicAmount end)
+		From Sales.SalesOrderMain SOM -- So againt agreement
+		Inner Join Sales.SalesOrderItemDetail SD on SD.SalesOrderNo=SOM.SalesOrderNo -- item of so
+		Inner Join Sales.SalesOrderAmendmentMain SAGM on SAGM.SalesOrderNo=@SalesOrderNo -- Sales agreement
+													And SOM.RefDocumentNo=SAGM.SalesOrderAmendmentNo
+													And SOM.SalesOrderSourceNo=3 -- agreement
+		Left join (
+					Select CSSM.SalesOrderAmendmentNo,SOAM.SalesOrderNo,CSID.ItemNo
+					       ,CSID.MakeNo,CSID.CombinationNo
+					      ,CSID.ReleaseAgreementQty
+					From Sales.ChangeStatusSOMain CSSM 
+					Inner Join Sales.ChangeStatusSOItemDetail CSID on CSID.ChangeStatusSONo = CSSM.ChangeStatusSONo 
+					Inner Join Sales.SalesOrderAmendmentMain SOAM on SOAM.SalesOrderAmendmentNo = CSSM.SalesOrderAmendmentNo
+					Where CSID.IsReleaseAgreementQty = 1
+				) LJ on LJ.SalesOrderNo = SOM.SalesOrderNo
+				     and LJ.ItemNo = SD.ItemNo
+				     and ISNULL(LJ.MakeNo,0) = ISNULL(SD.MakeNo,0)
+				     and ISNULL(LJ.CombinationNo,0) = ISNULL(SD.CombinationNo,0)										
+		Where SAGM.SalesOrderNo=@SalesOrderNo
+		And SD.ItemNo=@ItemNo
+		And ISNULL(SD.MakeNo,0)=ISNULL(@MAkeNo,0)
+		And ISNULL(SD.QuotationCombinationNo,0)=ISNULL(@SoCombinationNo,0)
+		
+	END
+					
+
+	-- DO Created Against Sales Agreement (RCF Transport)
+	BEGIN
+		-- DO Case of RCF (We assume that Agreement will have only one line item,so there is need not to check sum of all line item)
+		Select @SOQty=RDM.DOQty
+		From RCFTransport.RevisedDOMain RDM
+		Inner Join RCFTransport.DOMain DO on DO.DONo=RDM.DONo and RDM.RevisionNo=DO.RevisionNo
+		Inner Join Sales.SalesOrderAmendmentMain SA on SA.SalesOrderAmendmentNo=DO.RefDocumentNo and DO.SourceDocumentNo=2 And SA.FormTag ='SDAG'
+		Where SA.SalesOrderNo=@SalesOrderNo
+		And @SOQty is Null -- When no Sales order found against agreement
+	END	
+
+	if @StatusNo = 2 
+	BEGIN								
+			UPDATE Sales.SalesOrderItemDetail
+			SET StatusNo =2 
+			Where SalesOrderNo=@SalesOrderNo AND ItemNo = @ItemNo And ISNULL(MakeNo,0) =ISNULL(@MakeNo,0) 
+			And ISNULL(CombinationNo,0)=ISNULL(@SOCombinationNo,0)			
+			And ((ISNULL(@AgreementAmt,0)<= ISNULL(@SoAmt,0) And @AggreementTypeNo=3 And @AggreementTypeNo<>1 )
+				Or (IsNull(@SOQty,0)>=IsNull(@AgreementQty,0) And (@AggreementTypeNo=2 Or @AgreeValidationOn=1))
+				)			
+			
+			
+			
+			UPDATE SD
+			SET StatusNo =2 
+			From Sales.SalesOrderAmendmentItemDetail SD
+			Inner Join Sales.SalesOrderAmendmentMain SM on SM.SalesOrderAmendmentNo=SD.SalesOrderAmendmentNo
+														And SM.SalesOrderNo=@SalesOrderNo
+			Where  SD.ItemNo = @ItemNo And ISNULL(SD.MakeNo,0) =ISNULL(@MakeNo,0) 
+			And ISNULL(SD.CombinationNo,0)=ISNULL(@SOCombinationNo,0)			
+			And ((ISNULL(@AgreementAmt,0)<= ISNULL(@SoAmt,0) And @AggreementTypeNo=3 And @AggreementTypeNo<>1)
+				Or (IsNull(@SOQty,0)>=IsNull(@AgreementQty,0) And (@AggreementTypeNo=2 Or @AgreeValidationOn=1))
+				)			
+			
+			
+			UPDATE Sales.SalesOrderItemDetail
+			SET StatusNo =1
+			Where SalesOrderNo=@SalesOrderNo AND ItemNo = @ItemNo And ISNULL(MakeNo,0) =ISNULL(@MakeNo,0) 
+			And ISNULL(CombinationNo,0)=ISNULL(@SOCombinationNo,0)			
+			And ((ISNULL(@AgreementAmt,0)> ISNULL(@SoAmt,0) And @AggreementTypeNo=3 And @AggreementTypeNo<>1)
+				Or (IsNull(@SOQty,0)<IsNull(@AgreementQty,0) And (@AggreementTypeNo=2 Or @AgreeValidationOn=1))
+				)									
+			And StatusNo in (8,2)
+			
+
+			UPDATE SD
+			SET StatusNo =1 
+			From Sales.SalesOrderAmendmentItemDetail SD
+			Inner Join Sales.SalesOrderAmendmentMain SM on SM.SalesOrderAmendmentNo=SD.SalesOrderAmendmentNo
+														And SM.SalesOrderNo=@SalesOrderNo
+			Where  SD.ItemNo = @ItemNo And ISNULL(SD.MakeNo,0) =ISNULL(@MakeNo,0) 
+			And ISNULL(SD.CombinationNo,0)=ISNULL(@SOCombinationNo,0)			
+			And ((ISNULL(@AgreementAmt,0)> ISNULL(@SoAmt,0) And @AggreementTypeNo=3 And @AggreementTypeNo<>1)
+				Or (IsNull(@SOQty,0)<IsNull(@AgreementQty,0) And (@AggreementTypeNo=2 Or @AgreeValidationOn=1))
+				)
+			And SD.StatusNo in (8,2)
+			
+			
+			UPDATE Sales.SalesOrderItemDetail
+			SET StatusNo =8
+			Where SalesOrderNo=@SalesOrderNo AND ItemNo = @ItemNo And ISNULL(MakeNo,0) =ISNULL(@MakeNo,0) 
+			And ISNULL(CombinationNo,0)=ISNULL(@SOCombinationNo,0)			
+			And ((0<ISNULL(@SoAmt,0) And @AggreementTypeNo=3 And @AggreementTypeNo<>1)
+				Or (IsNull(@SOQty,0)>0 And (@AggreementTypeNo=2 Or @AgreeValidationOn=1))
+				)						
+			And StatusNo=1
+			
+
+			UPDATE SD
+			SET StatusNo =8 
+			From Sales.SalesOrderAmendmentItemDetail SD
+			Inner Join Sales.SalesOrderAmendmentMain SM on SM.SalesOrderAmendmentNo=SD.SalesOrderAmendmentNo
+														And SM.SalesOrderNo=@SalesOrderNo
+			Where  SD.ItemNo = @ItemNo And ISNULL(SD.MakeNo,0) =ISNULL(@MakeNo,0) 
+			And ISNULL(SD.CombinationNo,0)=ISNULL(@SOCombinationNo,0)			
+			And ((0<ISNULL(@SoAmt,0) And @AggreementTypeNo=3 And @AggreementTypeNo<>1)
+				Or (IsNull(@SOQty,0)>0 And (@AggreementTypeNo=2 Or @AgreeValidationOn=1))
+				)			
+			And SD.StatusNo=1
+			
+			
+			-- Single DO 
+			
+			
+	END -- if @StatusNo = 2 
+
+	 if @StatusNo <> 2
+	 begin
+	 
+		Update ID		
+		Set StatusNo=@StatusNo
+		From Sales.SalesOrderAmendmentItemDetail ID
+		Inner Join Sales.SalesOrderAmendmentMain SAM on SAM.SalesOrderAmendmentNo=ID.SalesOrderAmendmentNo
+		Where SAM.SalesOrderNo=@SalesOrderNo AND ItemNo = @ItemNo And ISNULL(MakeNo,0) =ISNULL(@MakeNo,0) 
+		And ISNULL(CombinationNo,0)=ISNULL(@SOCombinationNo,0)					
+		
+		Update Sales.SalesOrderItemDetail
+		Set StatusNo=@StatusNo
+		Where SalesOrderNo=@SalesOrderNo AND ItemNo = @ItemNo And ISNULL(MakeNo,0) =ISNULL(@MakeNo,0) 
+		And ISNULL(CombinationNo,0)=ISNULL(@SOCombinationNo,0)					
+	 end
+	 
+
+	 If exists(Select 1 
+			   From Sales.SalesOrderItemDetail 
+			   Where SalesOrderNo = @SalesOrderNo And statusNo In (1,8)
+			   )
+	 Begin
+	   if Exists ( 
+				   	Select 1
+					From RCFTransport.DOMain DO
+					Inner Join Sales.SalesOrderAmendmentMain SAM on SAM.SalesOrderAmendmentNo=DO.RefDocumentNo and DO.SourceDocumentNo=2
+					Where SAM.SalesOrderNo=@SalesOrderNo
+				  ) -- If DO created against agreement then status should be in progress
+	   BEGIN
+			  update Sales.SalesOrderMain set StatusNo = 8 where  SalesOrderNo = @SalesOrderNo
+			  update Sales.SalesOrderAmendmentMain set StatusNo = 8 where  SalesOrderNo = @SalesOrderNo		
+	   END	 
+	   Else if Exists ( 
+				   	Select 1
+					From Sales.SalesOrderMain SOM -- So againt agreement
+					Inner Join Sales.SalesOrderItemDetail SD on SD.SalesOrderNo=SOM.SalesOrderNo -- item of so
+					Inner Join Sales.SalesOrderAmendmentMain SAGM on SAGM.SalesOrderNo=@SalesOrderNo -- Sales agreement
+																And SOM.RefDocumentNo=SAGM.SalesOrderAmendmentNo
+																And SOM.SalesOrderSourceNo=3 -- agreement
+					Where SAGM.SalesOrderNo=@SalesOrderNo				   
+				  ) 
+		BEGIN
+			  update Sales.SalesOrderMain set StatusNo = 8 where  SalesOrderNo = @SalesOrderNo
+			  update Sales.SalesOrderAmendmentMain set StatusNo = 8 where  SalesOrderNo = @SalesOrderNo		
+		END
+		ELSE
+		BEGIN
+			   update Sales.SalesOrderMain set StatusNo = 1 where  SalesOrderNo = @SalesOrderNo
+			   update Sales.SalesOrderAmendmentMain set StatusNo = 1 where  SalesOrderNo = @SalesOrderNo
+		END		
+	END
+	 Else if exists(select 1 from Sales.SalesOrderItemDetail where  SalesOrderNo = @SalesOrderNo and Statusno = 3 )-- Hold 
+		begin
+			update Sales.SalesOrderMain set StatusNo = 3 where  SalesOrderNo = @SalesOrderNo
+			update Sales.SalesOrderAmendmentMain set StatusNo = 3 where  SalesOrderNo = @SalesOrderNo
+		end
+		
+	 else if exists(select 1 from Sales.SalesOrderItemDetail where  SalesOrderNo = @SalesOrderNo and Statusno = 4 )--cancel
+	 	begin
+			update Sales.SalesOrderMain set StatusNo =4 where  SalesOrderNo = @SalesOrderNo
+			update Sales.SalesOrderAmendmentMain set StatusNo = 4 where  SalesOrderNo = @SalesOrderNo
+		end
+	 	
+	else if exists(select 1 from Sales.SalesOrderItemDetail where  SalesOrderNo = @SalesOrderNo and Statusno=7)--shortclose
+	 	begin
+			update Sales.SalesOrderMain set StatusNo = 7 where  SalesOrderNo = @SalesOrderNo
+			update Sales.SalesOrderAmendmentMain set StatusNo = 7 where  SalesOrderNo = @SalesOrderNo
+		end				
+	
+	else if exists(select 1 from Sales.SalesOrderItemDetail where  SalesOrderNo = @SalesOrderNo and Statusno=2)--completed
+		begin
+			update Sales.SalesOrderMain set StatusNo = 2 where  SalesOrderNo = @SalesOrderNo
+			update Sales.SalesOrderAmendmentMain set StatusNo =  2 where  SalesOrderNo = @SalesOrderNo
+		end
+		
+		IF @AggreementTypeNo=2 And @AgreeValidationOn=1 
+		BEGIN
+			If ISNULL(@SOQty,0)>=ISNULL(@AgreementQty,0)
+			BEGIN
+				Update Sales.SalesOrderMain set StatusNo = 2 where  SalesOrderNo = @SalesOrderNo
+				Update Sales.SalesOrderAmendmentMain set StatusNo =  2 where  SalesOrderNo = @SalesOrderNo			
+			END
+			Else If @StatusNo in (4,7) --- Cancel / Short Close
+			BEGIN
+				Update Sales.SalesOrderMain set StatusNo = @StatusNo where  SalesOrderNo = @SalesOrderNo
+				Update Sales.SalesOrderAmendmentMain set StatusNo =  @StatusNo where  SalesOrderNo = @SalesOrderNo							
+			END			
+			Else if Exists ( 
+				   	Select 1
+					From Sales.SalesOrderMain SOM -- So againt agreement
+					Inner Join Sales.SalesOrderItemDetail SD on SD.SalesOrderNo=SOM.SalesOrderNo -- item of so
+					Inner Join Sales.SalesOrderAmendmentMain SAGM on SAGM.SalesOrderNo=@SalesOrderNo -- Sales agreement
+																And SOM.RefDocumentNo=SAGM.SalesOrderAmendmentNo
+																And SOM.SalesOrderSourceNo=3 -- agreement
+					Where SAGM.SalesOrderNo=@SalesOrderNo				   
+				  )  
+			BEGIN
+				Update Sales.SalesOrderMain set StatusNo = 8 where  SalesOrderNo = @SalesOrderNo
+				Update Sales.SalesOrderAmendmentMain set StatusNo =  8 where  SalesOrderNo = @SalesOrderNo			
+			END			
+			Else
+			BEGIN
+				Update Sales.SalesOrderMain set StatusNo = 1 where  SalesOrderNo = @SalesOrderNo
+				Update Sales.SalesOrderAmendmentMain set StatusNo =  1 where  SalesOrderNo = @SalesOrderNo							
+			END
+		END
+		
+set @OutputStatus =1
+set @Result='Success'
+end try
+
+begin catch
+set @OutputStatus =0
+set @Result=error_message()
+
+		select 0, error_message()
+end Catch
+
+
+END

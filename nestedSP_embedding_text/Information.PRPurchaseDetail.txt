@@ -1,0 +1,265 @@
+Stored procedure Information.PRPurchaseDetail: Purchase Detail Of Indent. Called from Inventory.MMPRGetDocumentInfo.
+Reads: DiscreteRM.SINGateEntryItemDetail, DiscreteRM.SINLotOrderDetail, DiscreteRM.SINOrderDetail, GlobalData.PORefDocumentType, GlobalData.TaxCategory, Inventory.GRNItemDetail, Inventory.GRNItemIndentDetail, Inventory.IndentMain, Inventory.InvLotBillDetail, Inventory.InvlotSummaryRefDetail, masterdata.mItemMaster, masterdata.mMakeMaster, masterdata.mMiscCharges, masterdata.mTaxGroup, masterdata.mUnitMaster, Purchase.POAmendmentMain, Purchase.POIndentDetail, Purchase.POItemDetail, Purchase.POItemLRate, Purchase.POItemTaxDetail, Purchase.POMain
+Parameters: @IndentNo int
+Author: Arvinder Kaur Vadrah, created 21/11/2013
+Code:
+										
+-- =============================================
+-- Author:		Arvinder Kaur Vadrah
+-- Create date: 21/11/2013
+-- Description:	Purchase Detail Of Indent
+-- =============================================
+CREATE PROCEDURE [Information].[PRPurchaseDetail] 
+	-- Add the parameters for the stored procedure here
+	@IndentNo int
+	
+AS
+BEGIN
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+
+    -- Insert statements for procedure here
+	
+
+	declare @str varchar(max)
+    select @str=masterdata.JSForInformation('MMPR')
+    set @str=@str+masterdata.CSSForInformation('MMPR')
+	set @str=@str+'<table class="altrowstable" id="PRPurchaseDetail">'
+	set @str=@str+'<Caption><Font color="Maroon"><h3 align="Left"><b>Purchase Detail</b></h3></Font></Caption>'
+    set @str=@str+'<tr><th>Sl. No.</th><th>PO Against</th><th>Po No.</th><th>Route Applicable</th><th>Item Description</th><th>Make</th><th>Unit</th><th>PO Qty.</th><th>PO Cancel Qty.</th><th>Rate</th><th>LRate</th><th>Basic Amount</th><th>Discount</th><th>Excise</th><th>Service Tax</th><th>Other Tax</th><th>GRN Qty.</th><th>Purchase Bill Qty.</th><th>Freight Bill Qty.</th></tr>'
+	set @str=@str
+				 +( 
+					replace(
+					replace(
+					replace(
+					replace( 
+					replace(
+					replace(
+					replace(
+					replace( 
+					replace(
+					replace(
+					replace( 
+					replace(
+					replace(
+					replace( 
+					replace(
+					replace(
+					replace( 
+					replace(
+					replace( 
+							(
+								Select Row_number() over (order by POM.DocumentNoYearly) as td1,
+								       PRF.RefDocumentType as td2 ,
+									   POM.DocumentNoYearly td3,
+									   RA.RouteApplicable as td4,
+									   IM.ItemDescription as td5,
+									   Isnull( MM.MakeName,'') as td6,
+									   UM.Alias as td7,
+									   CONVERT(Decimal(10,3),POIN.POQty*(POIN.FirstCF/POIN.SecondCF)) as td8,
+									   CONVERT(Decimal(10,3),Isnull(POR.POCancelQty,0)) as td9,
+									   CONVERT(Decimal(12,2), POIN.PORate) td10,
+									   CONVERT(Decimal(12,2),t.LRate+ POIN.PORate) td11,
+									   CONVERT(Decimal(12,2), (POIN.PORate* POIN.POQty) )as td12
+									   ,ISNULL( CONVERT(Decimal(12,2),t1.Discount),0) as td13
+									   ,ISNULL( CONVERT(Decimal(12,2),t2.Excise ),0)td14
+									   ,ISNULL( CONVERT(Decimal(12,2), t3.[Service Tax]),0) td15
+									   ,ISNULL(CONVERT(Decimal(12,2),t4.[Other Tax]),0) td16
+									   ,CONVERT(Decimal(12,3),ISNULL( ISNULL(PAM.[GRN Qty.],PAM1.[GRN Qty.]),0)) td17
+									   ,Isnull( CONVERT(Decimal(10,3),Bill.PBPB),0) as td18
+									   ,Isnull( CONVERT(Decimal(10,3),Bill.FIFI),0) as td19
+								From Purchase.POMain POM
+								Inner Join (Select 0 Id, 'No' RouteApplicable
+											Union all
+											Select 1 Id, 'Yes' RouteApplicable
+											 ) RA On POM.IsTransportationRouteApplicable = RA.Id
+								Inner Join GlobalData.PORefDocumentType PRF on PRF.PORefDocumentTypeNo=POM.PORefDocumentTypeNo
+								Inner Join Purchase.POItemDetail POID on POID.PONo=POM.PONo
+								Inner Join Purchase.POIndentDetail POIN ON POIN.PONo=POM.PONo
+																		And POIN.ItemNo=POID.ItemNo
+																		And Isnull(POIN.MakeNo,0)=Isnull(POID.MakeNo,0)
+																		And Isnull(POIN.TechnicalGradeNo,0)=Isnull(POID.TechnicalGradeNo,0)
+								-----Calculate LRate
+								Inner Join (		Select  SUM(POLR.LRate-POID.PORate ) LRate
+																,POLR.PONo
+																,POLR.ItemNo
+																,POLR.MakeNo
+																,POLR.TechnicalGradeNo
+																,POID.IndentNo
+													From Purchase.POItemLRate POLR
+													Inner Join Purchase.POIndentDetail POID On POLR.PONo = POID.PONo----For POID Rate
+																								And POLR.ItemNo = POID.ItemNo
+																								And ISNULL(POLR.MakeNo,0) = ISNULL(POID.MakeNo,0)
+																								And ISNULL(POLR.TechnicalGradeNo,0) = ISNULL(POID.TechnicalGradeNo,0)
+
+													Group by POLR.PONO,POLR.ItemNo,POLR.MakeNo,POLR.TechnicalGradeNo,POID.IndentNo
+												
+											)t on  t.PONo=POM.PONo
+											   And t.IndentNo=POIN.IndentNo
+											   And t.ItemNo=POID.ItemNo
+											   And isNull(t.MakeNo,0)=isNull(POID.MakeNo,0)
+											   And isNull(t.TechnicalGradeNo,0)=isNull(POID.TechnicalGradeNo,0)
+								Inner Join masterdata.mItemMaster IM on IM.ItemNo=POID.ItemNo
+								Inner Join masterdata.mUnitMaster UM ON UM.UnitNo=IM.UnitNo
+								Left Join masterdata.mMakeMaster MM on MM.MakeNo=POID.MakeNo
+								-------------PO Cancel Qty--------------------------------------------------------------------
+								Left Join (Select POI.PONo,POID.IndentNo,POID.ItemNo,POID.MakeNo,POID.TechnicalGradeNo,POID.POQty*(POID.FirstCF/POID.SecondCF)-sum(GRNIND.AcceptedQty*(GRNI.FirstCF/GRNI.SecondCF)) POCancelQty
+										   From Purchase.POIndentDetail POID
+										   Inner Join Purchase.POItemDetail POI ON POID.ItemNo=POI.ItemNo
+																				  And POID.PONo=POI.PONo
+																				  And isNull(POID.MakeNo,0)=isNull(POI.MakeNo,0)
+																				  And isNull(POID.TechnicalGradeNo,0)=isNUll(POI.TechnicalGradeNo,0)
+										   Inner Join Inventory.GRNItemIndentDetail GRNIND ON GRNIND.IndentNo=POID.IndentNo
+										   Inner Join Inventory.GRNItemDetail GRNI ON GRNI.GRNItemDetailNo=GRNIND.GRNItemDetailNo
+										   Inner Join Purchase.POAmendmentMain POA ON POA.POAmendmentNo=GRNI.POAmendmentNo
+																				   And POA.PONo=POI.PONo
+											Where POI.StatusNo=4
+										   Group by POID.ItemNo,POID.MakeNo,POID.TechnicalGradeNo,POID.IndentNo,POI.PONo,POID.POQty,POID.FirstCF/POID.SecondCF
+										  )POR on  POR.PONo=POIN.PONo
+											   And POR.IndentNo=POIN.IndentNo
+											   And POR.ItemNo=POIN.ItemNo
+											   And isNull(POR.MakeNo,0)=isNull(POIN.MakeNo,0)
+											   And isNull(POR.TechnicalGradeNo,0)=isNull(POIN.TechnicalGradeNo,0)
+								------------GRN Qty---------------------------------------------------------------------------
+								Left Join (
+										  Select SUM(GRNIND.AcceptedQty*(GRNI.FirstCF/GRNI.SecondCF)) [GRN Qty.],GRNIND.IndentNo,GRNI.ItemNo,GRNI.MakeNo,GRNI.TechnicalGradeNo,PAM.PONo
+										  From Inventory.GRNItemDetail GRNI
+										  Inner Join Inventory.GRNItemIndentDetail GRNIND ON GRNI.GRNItemDetailNo=GRNIND.GRNItemDetailNo 
+										  Inner Join Purchase.POAmendmentMain PAM ON PAM.POAmendmentNo =GRNI.POAmendmentNo
+										  Where PAM.IsTransportationRouteApplicable=0
+										  Group By GRNIND.IndentNo,GRNI.ItemNo,GRNI.MakeNo,GRNI.TechnicalGradeNo,PAM.PONo
+										  
+										  Union All
+										  
+										  Select SUM(GRNI.AcceptedQty) [GRN Qty.],SLOD.IndentNo,GRNI.ItemNo,GRNI.MakeNo,null TechnicalGradeNo,PAM.PONo
+										  From DiscreteRM.SINGateEntryItemDetail GRNI
+										  Inner Join DiscreteRM.SINOrderDetail OD on OD.SINNo=GRNI.SINNo
+										  Inner Join DiscreteRM.SINLotOrderDetail SLOD ON SLOD.ItemNo=GRNI.ItemNo
+																					   And SLOD.SINNo=GRNI.SINNo
+																					   And Isnull(SLOD.MakeNo,0)=Isnull(GRNI.MakeNo,0)
+										  Inner Join Purchase.POAmendmentMain PAM ON PAM.POAmendmentNo =OD.POAmendmentNo
+										  Where PAM.IsTransportationRouteApplicable=0
+										  Group By SLOD.IndentNo,GRNI.ItemNo,GRNI.MakeNo,PAM.PONo
+										  )	PAM on 	PAM.IndentNo =POIN.IndentNo	
+													And PAM.PONo=POIN.PONo							
+													And PAM.ItemNo =POIN.ItemNo 
+													AND (ISNULL(PAM.MakeNo,0)= ISNULL(POIN.MakeNo,0) or pam.makeno is null)
+													And ISnull(PAM.TechnicalGradeNo,0)=Isnull(POIN.TechnicalGradeNo,0)
+								--For Route Case					
+								Left Join (
+										  Select SUM(GRNIND.AcceptedQty*(GRNI.FirstCF/GRNI.SecondCF)) [GRN Qty.],GRNIND.IndentNo,GRNI.ItemNo,GRNI.MakeNo,GRNI.TechnicalGradeNo,PAM.PONo
+										  From Inventory.GRNItemDetail GRNI
+										  Inner Join Inventory.GRNItemIndentDetail GRNIND ON GRNI.GRNItemDetailNo=GRNIND.GRNItemDetailNo 
+										  Inner Join Purchase.POAmendmentMain PAM ON PAM.POAmendmentNo =GRNI.POAmendmentNo
+										  Where PAM.IsTransportationRouteApplicable=1
+										  And GRNI.RouteIdentity% .1=0
+										   Group By GRNIND.IndentNo,GRNI.ItemNo,GRNI.MakeNo,GRNI.TechnicalGradeNo,PAM.PONo
+										  )	PAM1 on  PAM1.IndentNo =POIN.IndentNo								
+													 And PAM1.PONo=POIN.PONo
+													 And PAM1.ItemNo =POIN.ItemNo 
+													 AND ISNULL(PAM1.MakeNo,0)= ISNULL(POIN.MakeNo,0)
+													 And ISnull(PAM1.TechnicalGradeNo,0)=Isnull(POIN.TechnicalGradeNo,0)												
+								---Calculate Bill Qty. (Service Invoice Left)
+								Left Join (Select IndentNo,ItemNo,MakeNo,PBPB,FIFI
+											 From(
+											Select IM.IndentNo,InBD.ItemNo,InBD.MakeNo,InBD.BillQty
+												  ,InBD.TransactionFlag
+											From Inventory.IndentMain IM
+											Inner Join Inventory.InvlotSummaryRefDetail InVS ON InVS.IndentNo=IM.IndentNo
+											Inner Join Inventory.InvLotBillDetail InBD on InVS.InvLotSummaryNo=InBD.InvLotSummaryNo
+																					   And InBD.TransactionFlag In ('FIFI','PBPB'))t
+											Pivot(sum(BillQty)
+											For TransactionFlag in ([PBPB],[FIFI]))
+												  As [Purchase Bill Qty.])Bill on Bill.IndentNo=POIN.IndentNo
+																			  And Bill.ItemNo=POIN.ItemNo
+																			  And isNull(Bill.MakeNo,0)=isNull(POIN.MakeNo,0)
+								
+								
+								--Calculate Discount                                                 
+								Outer Apply (Select POITD.PONo,POITD.ItemNo,POITD.MakeNo,POITD.TechnicalGradeNo
+												   ,POITD.TotalAmount [Discount]
+												   ,MIS.MiscChargeName
+												From Purchase.POItemTaxDetail POITD 
+												Inner Join masterdata.mMiscCharges MIS on MIS.MiscChargeNo=POITD.MiscChargeNo 
+																					   And MIS.TaxGroupNo=18-----For Discount--------
+																					   And POITD.PONo=POM.PONo
+																					   And POITD.ItemNo=POID.ItemNo
+																					   And isNull(POITD.MakeNo,0)=isNUll(POID.MakeNo,0)
+																					   And isNull(POITD.TechnicalGradeNo,0)=isNull(POID.TechnicalGradeNo,0)
+											)t1
+								---Calculate Excise
+								
+								Outer Apply(Select POITD.PONo,POITD.ItemNo,POITD.MakeNo,POITD.TechnicalGradeNo
+												   ,sum(POITD.TotalAmount) [Excise]
+											From Purchase.POItemTaxDetail POITD 
+											Inner Join masterdata.mMiscCharges MIS on MIS.MiscChargeNo=POITD.MiscChargeNo 
+											Inner Join masterdata.mTaxGroup TG on MIS.TaxGroupNo=TG.TaxGroupNo
+											Inner Join GlobalData.TaxCategory TC 
+																	   on TG.TaxCategoryNo=TC.TaxCategoryNo and TC.TaxCategoryNo=1
+																	   And POITD.PONo=POM.PONo
+																	   And POITD.ItemNo=POID.ItemNo
+																	   And isNull(POITD.MakeNo,0)=isNUll(POID.MakeNo,0)
+																	   And isNull(POITD.TechnicalGradeNo,0)=isNull(POID.TechnicalGradeNo,0)
+								Group BY POITD.PONo,POITD.ItemNo,POITD.MakeNo,POITD.TechnicalGradeNo)t2
+								
+								---Calculate Service Tax
+								
+								Outer Apply(	Select POITD.PONo,POITD.ItemNo,POITD.MakeNo,POITD.TechnicalGradeNo
+													   ,sum(POITD.TotalAmount) [Service Tax]
+												From Purchase.POItemTaxDetail POITD 
+												Inner Join masterdata.mMiscCharges MIS on MIS.MiscChargeNo=POITD.MiscChargeNo 
+												Inner Join masterdata.mTaxGroup TG on MIS.TaxGroupNo=TG.TaxGroupNo
+												Inner Join GlobalData.TaxCategory TC 
+																		   on TG.TaxCategoryNo=TC.TaxCategoryNo 
+																		   And TC.TaxCategoryNo in (3,4)
+																		   And POITD.PONo=POM.PONo
+																		   And POITD.ItemNo=POID.ItemNo
+																		   And isNull(POITD.MakeNo,0)=isNUll(POID.MakeNo,0)
+																		   And isNull(POITD.TechnicalGradeNo,0)=isNull(POID.TechnicalGradeNo,0)
+												Group BY POITD.PONo,POITD.ItemNo,POITD.MakeNo,POITD.TechnicalGradeNo
+											)t3
+								--Calculate Other Taxes
+								Outer Apply(	Select POITD.PONo,POITD.ItemNo,POITD.MakeNo,POITD.TechnicalGradeNo
+													   ,sum(POITD.TotalAmount) [Other Tax]
+												From Purchase.POItemTaxDetail POITD 
+												Inner Join masterdata.mMiscCharges MIS on MIS.MiscChargeNo=POITD.MiscChargeNo 
+												Inner Join masterdata.mTaxGroup TG on MIS.TaxGroupNo=TG.TaxGroupNo
+												Inner Join GlobalData.TaxCategory TC 
+																		   On TG.TaxCategoryNo=TC.TaxCategoryNo 
+																		   And TC.TaxCategoryNo not in (1,3,4,11)
+																		   And POITD.PONo=POM.PONo
+																		   And POITD.ItemNo=POID.ItemNo
+																		   And isNull(POITD.MakeNo,0)=isNUll(POID.MakeNo,0)
+																		   And isNull(POITD.TechnicalGradeNo,0)=isNull(POID.TechnicalGradeNo,0)
+												Group BY POITD.PONo,POITD.ItemNo,POITD.MakeNo,POITD.TechnicalGradeNo
+											)t4
+
+								Where POIN.IndentNo=@IndentNo
+									  
+							    for xml path('tr')),'<td1>','<td style="text-align: Center;">')
+							                   ,'<td2>','<td>')
+		   									   ,'<td3>','<td>')				
+											   ,'<td4>','<td>')
+											   ,'<td5>','<td>')
+		   									   ,'<td6>','<td>')				
+											   ,'<td7>','<td>')
+											    ,'<td8>','<td style="text-align: Right;">')
+											   ,'<td9>','<td style="text-align: Right;">')
+											   ,'<td10>','<td style="text-align: Right;">')
+											   ,'<td11>','<td style="text-align: Right;">')
+											   ,'<td12>','<td style="text-align: Right;">')						
+											   ,'<td13>','<td style="text-align: Right;">')
+											   ,'<td14>','<td style="text-align: Right;">')
+											   ,'<td15>','<td style="text-align: Right;">')
+											   ,'<td16>','<td style="text-align: Right;">')
+											   ,'<td17>','<td style="text-align: Right;">')
+											   ,'<td18>','<td style="text-align: Right;">')
+											   ,'<td19>','<td style="text-align: Right;">')
+									    	)
+								
+				   
+	set @str=@str+'</table>'
+	
+	select @str
+END

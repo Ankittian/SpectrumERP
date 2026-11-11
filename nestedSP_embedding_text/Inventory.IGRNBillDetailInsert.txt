@@ -1,0 +1,934 @@
+Stored procedure Inventory.IGRNBillDetailInsert. Called from Inventory.IGRNAuthorize.
+Writes: Inventory.InvLotBillDetail, Inventory.InvLotDetail, Inventory.InvLotSummary, Inventory.InvLotSummaryTaxDetail, Inventory.InvLotTaxDetail
+Reads: Finance.FreightInvoiceDocumentDetail, Finance.FreightInvoiceDocumentDetails, Finance.FreightInvoiceMain, Finance.FreightInvoiceTaxDetail, Inventory.GRNItemDetail, Inventory.GRNItemIndentDetail, Inventory.GRNItemLotAdditionalDetail, Inventory.GRNItemTaxDetail, Inventory.GRNMain, Inventory.GRNSCOrderDetail, Inventory.GRNTaxDetail, Inventory.InvLotBillDetail, Inventory.InvLotDetail, Inventory.InvLotSummary, Inventory.InvLotTaxDetail, masterdata.mExpenseHead, masterdata.mItemMaster, masterdata.mMiscCharges, Purchase.FreightOrderMain, Purchase.FreightOrderOrderDetail, Purchase.POAmendmentExpenseHead, Purchase.POAmendmentExpenseHeadOutputDetail, Purchase.POAmendmentItemDetail, Purchase.POAmendmentItemTaxDetail, Purchase.POAmendmentMain (+7 more)
+Parameters: @Documentno int, @Result bit OUTPUT, @ResultMsg varchar(1000) OUTPUT
+Calls procedures: Purchase.FreightAmount
+Code:
+																								
+CREATE PROCEDURE [Inventory].[IGRNBillDetailInsert] 
+(@Documentno int
+ , @Result bit output
+ ,@ResultMsg varchar(1000) output
+)
+as
+begin
+
+Begin try
+
+		Declare @IsReturnThroughDC bit ,@CurrencyConversionRate decimal(18,6) , @AuthorizedDate smalldatetime
+		
+		select @AuthorizedDate =AuthorizedDate from Inventory.GRNMain where GRNNo = @Documentno 
+		
+		select @IsReturnThroughDC =IsReturnThroughDC , @CurrencyConversionRate = convert(decimal(18,6),DivisibilityRate* MultiplicativeRate)
+			 from Inventory.GRNMain where GRNNo = @DocumentNo 
+		if @CurrencyConversionRate is null
+			set @CurrencyConversionRate=1
+		declare @PurchaseFreightAmount TABLE 
+						(
+							-- Add the column definitions for the TABLE variable here
+							GateEntryNo int,
+							GRNNo int,
+							FreightAmount money, 
+							DeductionAmount money
+						)
+						
+	 
+ 		--- Expenses In PO
+
+Create table #ExpenseHeads (invlotsummaryNo int,ExpenseHeadNo smallint,ExpenseRate decimal(18,6))
+Create table #FreightHeads (invlotsummaryNo int,FreightRate decimal(18,6))
+Create table #SCDiffRate (InvlotsummaryNo int,DiffRate decimal(18,6))
+
+ 
+if exists(select 1 from Inventory.GRNItemDetail gid inner join Purchase.POAmendmentExpenseHead peh on peh.POAmendmentNo = gid.POAmendmentNo 
+				and gid.GRNNo = @Documentno and SCOrderAmendmentNo is null)
+begin
+		insert into #ExpenseHeads
+		 select ls.InvLotSummaryNo,peh.ExpenseheadNo ,(((PEH.Rate * case PEH.BillingQtyNo when 1 then id.ChallanQty  
+						  when 2 then Id.ChallanQty 
+						  when 4 then ID.ReceivedQty else   
+						  case when @IsReturnThroughDC =1 then id.AcceptedQty + ISNULL(id.RejectedQty,0)
+							else id.AcceptedQty end end) 
+								* (case when @IsReturnThroughDC =1 then ID.AcceptedQty + RejectedQty else ID.AcceptedQty end * isnull(ID.SecondCF,1) /isnull(ID.FirstCF,1))) /
+					isnull((select case when @IsReturnThroughDC =1 then sum(pgd.AcceptedQty + ISNULL(pgd.RejectedQty,0))else sum(pgd.AcceptedQty) end
+							from Inventory.GRNItemIndentDetail pgd 
+							where pgd.GRNItemDetailNo= ID.GRNItemDetailNo),case when @IsReturnThroughDC =1 then ID.AcceptedQty + RejectedQty else ID.AcceptedQty end)) 
+								/ case when @IsReturnThroughDC =1 then ID.AcceptedQty + RejectedQty else ID.AcceptedQty end
+									--/ ls.ReceivedQty  ExpenseAmount
+		from 
+		Purchase.POAmendmentMain PAM
+		inner join Purchase.POAmendmentExpenseHead PEH on PAM.POAmendmentNo= PEH.POAmendmentNo 
+		outer apply (select APEOD.ItemNo from  Purchase.POAmendmentExpenseHeadOutputDetail APEOD
+						inner join Purchase.POAmendmentExpenseHead APEH on APEH.POAmendmentExpenseDetailNo = APEOD.POAmendmentExpenseDetailNo 
+						where  APEH.POAmendmentNo = PEH.POAmendmentNo
+						And APEOD.ItemNo in (Select i2.ItemNo From Inventory.GRNItemDetail i2 Where i2.GRNNo=@Documentno)
+					) PEOD
+		inner join masterdata.mExpenseHead eh on eh.ExpenseHeadNo = PEH.ExpenseheadNo and eh.NatureNo <>2
+		inner join Purchase.POAmendmentItemDetail PID on PID.POAmendmentNo  = PEH.POAmendmentNo
+		inner join Inventory.GRNItemDetail ID on  (ID.ItemNo= PEOD.ItemNo or ID.ItemNo = PID.ItemNo) and 
+						isnull(ID.MakeNo,0) = isnull(PID.MakeNo,0) and
+						isnull(ID.TechnicalGradeNo,0) = isnull(PID.TechnicalGradeNo,0) and
+						ID.POAmendmentNo = PAM.POAmendmentNo 
+		inner join Inventory.InvLotSummary ls on ls.DocumentNo = ID.GRNNo and ls.ItemNo = ID.ItemNo and
+					isnull(ID.MakeNo,0) = isnull(ls.MakeNo,0) and ls.TransactionFlag='IGRN' and
+					isnull(ID.TechnicalGradeNo,0) = isnull(ls.TechnicalGradeNo,0) and
+					isnull(ID.gateEntryNo,0) = isnull(ls.gateEntryNo,0) and
+					isnull(ID.invstocktransferNo,0) = isnull(ls.invstocktransferNo,0) and
+					ID.POAmendmentNo = ls.POAmendmentNo
+					and ls.receivedQty>0   
+		where
+		case when  @IsReturnThroughDC =1 then IsRejectedLot else 0 end= ls.IsRejectedLot and
+		id.grnno = @documentno and
+		PEH.IncludeInValuation =1 and
+		PEH.FreightRateTypeNo  =1 and -- per unit
+		(PEH.RouteIdentity = id.RouteIdentity or peh.BillingLocationNo = pam.ToLocationNo) and
+		(PEH.itemno is null or(PEH.ItemNo = PID.ItemNo and 
+						isnull(PEH.MakeNo,0) = isnull(PID.MakeNo,0) and
+						isnull(PEH.TechnicalGradeNo,0) = isnull(PID.TechnicalGradeNo,0) ))
+		 
+ 
+		Insert into #ExpenseHeads
+		select ls.InvLotSummaryNo , peh.ExpenseheadNo ,
+		(case PEH.BillingQtyNo when 1 then ID.ChallanQty when 2 then Id.ChallanQty 
+						  when 4 then ID.ReceivedQty else   
+						   case when @IsReturnThroughDC =1 then id.AcceptedQty + ISNULL(id.RejectedQty,0) else ID.AcceptedQty end  end * ((PEH.Rate * pid.Quantity * pid.Rate)/
+				(select  sum(pd.Quantity * pd.Rate) 
+						from Purchase.POAmendmentItemDetail pd where pd.POAmendmentNo = PAM.POAmendmentNo 
+						and (peh.ItemNo is null or pd.ItemNO = ls.ItemNo))
+				  )/ pid.Quantity)/(isnull((select   case when @IsReturnThroughDC =1 then sum(pgd.AcceptedQty + ISNULL(pgd.RejectedQty,0))else sum(pgd.AcceptedQty) end 
+							from Inventory.GRNItemIndentDetail pgd 
+							where pgd.GRNItemDetailNo= ID.GRNItemDetailNo)
+							,
+							--ls.receivedQty
+							-----------------
+							IsNULL(
+							(Select case when @IsReturnThroughDC =1 then SUM(IsNULL(GILD.AcceptedQty,0)) + SUM(ISNULL(GILD.RejectedQty,0)) else SUM(IsNULL(GILD.AcceptedQty,0)) End
+							from Inventory.GRNItemLotAdditionalDetail GILD
+							where GILD.GRNItemDetailNo = ID.GRNItemDetailNo 
+							),ls.ReceivedQty) 
+							------------------
+							)* isnull(ID.SecondCF,1) /isnull(ID.FirstCF,1))  ExpenseAmount
+		from 
+		Purchase.POAmendmentMain PAM
+		inner join Purchase.POAmendmentExpenseHead PEH on PAM.POAmendmentNo= PEH.POAmendmentNo 
+		outer apply (select APEOD.ItemNo from  Purchase.POAmendmentExpenseHeadOutputDetail APEOD
+						inner join Purchase.POAmendmentExpenseHead APEH on APEH.POAmendmentExpenseDetailNo = APEOD.POAmendmentExpenseDetailNo 
+						where  APEH.POAmendmentNo = PEH.POAmendmentNo  ) PEOD
+		inner join masterdata.mExpenseHead eh on eh.ExpenseHeadNo = PEH.ExpenseheadNo and eh.NatureNo <>2
+		inner join Purchase.POAmendmentItemDetail  PID on PID.POAmendmentNo  = PEH.POAmendmentNo
+		inner join Inventory.GRNItemDetail ID on (ID.ItemNo= PEOD.ItemNo or ID.ItemNo = PID.ItemNo) and 
+						isnull(ID.MakeNo,0) = isnull(PID.MakeNo,0) and
+						isnull(ID.TechnicalGradeNo,0) = isnull(PID.TechnicalGradeNo,0) and
+						ID.POAmendmentNo = PAM.POAmendmentNo 
+		inner join Inventory.InvLotSummary ls on ls.DocumentNo = ID.GRNNo and ls.ItemNo = ID.ItemNo and
+					isnull(ID.MakeNo,0) = isnull(ls.MakeNo,0) and
+					isnull(ID.GateEntryNo,0) = isnull(ls.GateEntryNo,0) and
+					isnull(ID.TechnicalGradeNo,0) = isnull(ls.TechnicalGradeNo,0) and
+					isnull(ID.invstocktransferNo,0) = isnull(ls.invstocktransferNo,0) and
+					ID.POAmendmentNo = ls.POAmendmentNo
+		where
+		ID.GRNNo =@DocumentNo and ls.TransactionFlag ='IGRN' and
+		case when  @IsReturnThroughDC =1 then IsRejectedLot else 0 end= ls.IsRejectedLot and
+		PEH.IncludeInValuation =1 and ls.ReceivedQty >0 and
+		PEH.FreightRateTypeNo  =2 and -- Fixed
+		(PEH.RouteIdentity = id.RouteIdentity or peh.BillingLocationNo = pam.ToLocationNo) and
+		(PEH.itemno is null or(PEH.ItemNo = PID.ItemNo and 
+						isnull(PEH.MakeNo,0) = isnull(PID.MakeNo,0) and
+						isnull(PEH.TechnicalGradeNo,0) = isnull(PID.TechnicalGradeNo,0) ))
+		 
+ 	
+ 		Insert into #ExpenseHeads
+			select InvLotSummaryNo,  ExpenseheadNo, avgRate  --sum(ExpenseAmount)/SUM(ReceivedQty)
+			from(
+				select ls.InvLotSummaryNo , peh.ExpenseheadNo ,
+				(sum( PEH.Rate * cnt *  case when @IsReturnThroughDC =1 then ID.AcceptedQty + ISNULL(ID.RejectedQty,0) else ID.AcceptedQty end * ID.Rate
+					)/ TotAmount)  ExpenseAmount ,ls.ReceivedQty 
+				, SUM(CID2.cnt2 * CID2.Rate) / SUM(FIT.TotReceivedQty) avgRate
+				from 
+				Purchase.POAmendmentMain PAM
+				inner join (select count(distinct isnull(GateEntryNo,1)) cnt ,POAmendmentNo,GateEntryNo 
+						from Inventory.GRNItemDetail id where grnno = @documentno
+					   group by POAmendmentNo ,GateEntryNo )Cid
+						  on Cid.POAmendmentNo = PAM.POAmendmentNo 
+				inner join Purchase.POAmendmentExpenseHead PEH on PAM.POAmendmentNo= PEH.POAmendmentNo 
+				outer apply (select APEOD.ItemNo from  Purchase.POAmendmentExpenseHeadOutputDetail APEOD
+						inner join Purchase.POAmendmentExpenseHead APEH on APEH.POAmendmentExpenseDetailNo = APEOD.POAmendmentExpenseDetailNo 
+						where  APEH.POAmendmentNo = PEH.POAmendmentNo  ) PEOD
+				inner join masterdata.mExpenseHead eh on eh.ExpenseHeadNo = PEH.ExpenseheadNo and eh.NatureNo <>2
+				inner join Purchase.POAmendmentItemDetail PID on PID.POAmendmentNo  = PEH.POAmendmentNo
+				inner join Inventory.GRNItemDetail ID on (ID.ItemNo= PEOD.ItemNo or ID.ItemNo = PID.ItemNo) and 
+								isnull(ID.MakeNo,0) = isnull(PID.MakeNo,0) and
+								isnull(ID.GateEntryNo,0) = isnull(Cid.GateEntryNo ,0) and
+								isnull(ID.TechnicalGradeNo,0) = isnull(PID.TechnicalGradeNo,0) and
+								ID.POAmendmentNo = PAM.POAmendmentNo 
+				--Left Join (
+				--			Select GID.GRNItemDetailNo,Count(IID.IMSTInvLotSummaryNo) IMSTLotCnt -- When Having More then one lot in IMST then bifurcate it
+				--			From Inventory.GRNItemDetail GID
+				--			Inner Join Inventory.GRNItemIndentDetail IID on IID.GRNItemDetailNo=GID.GRNItemDetailNo
+				--			Where GID.GRNNo=@Documentno And IID.IMSTInvLotSummaryNo is Not Null
+				--			Group By GID.GRNItemDetailNo
+				--		  )STLot on STLot.GRNItemDetailNo=ID.GRNItemDetailNo						
+			inner join (select sum(case when @IsReturnThroughDC =1 then AcceptedQty + ISNULL(RejectedQty,0) else gpd.AcceptedQty end * gpd.Rate) TotAmount
+							,gpd.GRNNo  ,GateEntryNo, PPEH.ExpenseheadNo
+							from  Inventory.GRNItemDetail gpd 
+							inner join Purchase.POAmendmentExpenseHead PPEH on gpd.POAmendmentNo= PPEH.POAmendmentNo 
+							inner join Purchase.POAmendmentItemDetail PPID on PPID.POAmendmentNo  = PPEH.POAmendmentNo
+				
+								where gpd.GRNNo=@DocumentNo and gpd.Rate<>0 and
+								 gpd.ItemNo= PPID.ItemNo and 
+								 isnull(gpd.RouteIdentity,0) = isnull(PPEH.RouteIdentity,0) and
+								isnull(gpd.MakeNo,0) = isnull(PPID.MakeNo,0) and
+								isnull(gpd.TechnicalGradeNo,0) = isnull(PPID.TechnicalGradeNo,0) and
+								gpd.POAmendmentNo = PPID.POAmendmentNo and
+								(PPEH.itemno is null or(PPEH.ItemNo = PPID.ItemNo and 
+								isnull(PPEH.MakeNo,0) = isnull(PPID.MakeNo,0) and
+								isnull(PPEH.TechnicalGradeNo,0) = isnull(PPID.TechnicalGradeNo,0)))
+								
+							group by gpd.GRNNo  ,GateEntryNo,PPEH.ExpenseheadNo) tot on tot.GRNNo= id.grnno and
+									PEH.ExpenseheadNo = tot.ExpenseheadNo  and 
+						      isnull(id.GateEntryNo,0) = isnull(tot.GateEntryNo,0)
+				inner join Inventory.InvLotSummary ls on ls.DocumentNo = ID.GRNNo and ls.ItemNo = ID.ItemNo and
+							isnull(ID.MakeNo,0) = isnull(ls.MakeNo,0) and
+							isnull(ID.TechnicalGradeNo,0) = isnull(ls.TechnicalGradeNo,0) and
+							isnull(ID.invstocktransferNo,0) = isnull(ls.invstocktransferNo,0) and
+							ID.POAmendmentNo = ls.POAmendmentNo
+							and isnull(ID.GateEntryNo,0) = isnull(Cid.GateEntryNo ,0) 
+				---
+				Outer apply	(Select SUM(Ils.ReceivedQty) TotReceivedQty from Inventory.InvLotSummary ILS
+				  inner join  Purchase.POAmendmentExpenseHead POEH1 on POEH1.POAmendmentNo = Ils.POAmendmentNo 
+				  inner join Purchase.POAmendmentMain POAM on POAM.POAmendmentNo = ILS.POAmendmentNo and POAM.POAmendmentNo = POEH1.POAmendmentNo  
+				  where POAM.POAmendmentNo = PAM.POAmendmentNo 
+				  and POEH1.ExpenseheadNo = PEh.ExpenseheadNo 
+				  and ILS.DocumentNo = Id.GRNNo and ILs.TransactionFlag like 'IGRN'
+				  ) FIT
+				---
+				---
+				outer apply (select count(distinct IsNULL(GateEntryNo,1)) cnt2,POEH2.POAmendmentNo,POEH2.rate  
+						from Inventory.GRNItemDetail id2
+						inner join Purchase.POAmendmentExpenseHead POEH2 on POEH2.POAmendmentNo = id2.POAmendmentNo and POEH2.POAmendmentNo = PAM.POAmendmentNo 
+						where grnno = @documentno and POEH2.ExpenseheadNo = peh.ExpenseheadNo 
+					   group by POEH2.POAmendmentNo,POEH2.Rate)CID2 
+				---
+				where
+				case when  @IsReturnThroughDC =1 then IsRejectedLot else 0 end= ls.IsRejectedLot and
+				PEH.IncludeInValuation =1 and ls.ReceivedQty >0 and
+				PEH.FreightRateTypeNo  =3 and -- per trip
+				(PEH.RouteIdentity = id.RouteIdentity or peh.BillingLocationNo = pam.ToLocationNo) and
+				(PEH.itemno is null or(PEH.ItemNo = PID.ItemNo and 
+								isnull(PEH.MakeNo,0) = isnull(PID.MakeNo,0) and
+								isnull(PEH.TechnicalGradeNo,0) = isnull(PID.TechnicalGradeNo,0)))
+					group by ls.InvLotSummaryNo,peh.ExpenseheadNo ,Cid.GateEntryNo,ls.ReceivedQty ,TotAmount 
+				)tt  group by InvLotSummaryNo, ExpenseheadNo,avgRate  
+	
+end
+  
+  
+------freight Invoice
+
+Insert into #FreightHeads 
+	 --select LS.InvLotSummaryNo, isnull((sum(fd.FreightAmount - ISNULL(DeductionAmount,0))) * gid.Rate  * LS.ReceivedQty  -- commented on 11 11 2019 081119008
+	 --select LS.InvLotSummaryNo, isnull((sum(fd.PayableAmount)) * gid.Rate  * LS.ReceivedQty 11 12 2019 Ticket NO 071219001
+	 select LS.InvLotSummaryNo, (isnull((
+	     (
+		 (sum(fd.PayableAmount + isnull(fd.AdvanceAmount,0))) * gid.Rate  * LS.ReceivedQty) 
+		 )
+			/ (select sum((case when @IsReturnThroughDC =1 then AcceptedQty + ISNULL(RejectedQty,0) else AcceptedQty  end* isnull(FirstCF,1) /isnull(SecondCF,1) )* Rate) 
+					from Inventory.GRNItemDetail pgd 
+						 where  pgd.GRNNo = @DocumentNo and Rate >0 and isnull(GateEntryNo,0) = isnull(ls.gateEntryNo,0) ),0)
+		  + IsNULL((Select  (SUM(IsNULL(FITD.TotalValue,0)) * gid.Rate * LS.ReceivedQty) 
+		                    
+		       from Finance.FreightInvoiceTaxDetail FITD 
+			  inner join Finance.FreightInvoiceDocumentDetail fidd on fidd.FreightInvoiceNo = fITD.FreightInvoiceNo 
+	          inner join Finance.FreightInvoiceDocumentDetails fidds on fidds.FreightInvoiceNo = fidd.FreightInvoiceNo 
+					and (fidds.GateEntryNo = fidd.RefDocNo or fidds.GRNNo = fidd.RefDocNo )
+	             where ls.GateEntryNo = fidds.GateEntryNo and FITD.IncludeInBasic = 1)
+				 / (select sum((case when @IsReturnThroughDC =1 then AcceptedQty + ISNULL(RejectedQty,0) else AcceptedQty  end* isnull(FirstCF,1) /isnull(SecondCF,1) )* Rate) 
+					from Inventory.GRNItemDetail pgd 
+						 where  pgd.GRNNo = @DocumentNo and Rate >0 and isnull(GateEntryNo,0) = isnull(ls.gateEntryNo,0))
+				 ,0) 		
+			
+	    )
+						 / LS.ReceivedQty	
+	from
+	Finance.FreightInvoiceMain fm 
+	inner join Finance.FreightInvoiceDocumentDetail fd on fd.FreightInvoiceNo = fm.FreightInvoiceNo 
+	inner join Finance.FreightInvoiceDocumentDetails fds on fds.FreightInvoiceNo = fd.FreightInvoiceNo 
+					and (fds.GateEntryNo = fd.RefDocNo)
+	inner join  Inventory.InvLotSummary LS on ls.GateEntryNo = fds.GateEntryNo
+	inner join Inventory.GRNItemDetail gid on gid.GRNNo = ls.DocumentNo and gid.ItemNo=ls.ItemNo 
+		and isnull(gid.MakeNo,0) = isnull(ls.MakeNo,0) and 
+		isnull(gid.TechnicalGradeNo,0) = isnull(LS.TechnicalGradeNo,0) 
+		and isnull(gid.POAmendmentNo,0) = isnull(ls.POAmendmentNo,0)and 
+		isnull(gid.InvStockTransferNo ,0)= isnull(ls.invStockTransferNo ,0)
+		and isnull(gid.GateEntryNo ,0) = isnull(LS.GateEntryNo ,0)
+	where  ls.receivedQty>0 And
+		gid.GRNNo = @documentno and
+	case when  @IsReturnThroughDC =1 then IsRejectedLot else 0 end= ls.IsRejectedLot 
+	and fm.AuthorizedBy is not null and fm.AuthorizedDate < @AuthorizedDate
+	group by LS.InvLotSummaryNo , ls.gateEntryNo,gid.Rate,LS.ReceivedQty
+
+	 
+if not exists (select 1 from #FreightHeads)
+begin
+	insert into @PurchaseFreightAmount
+		  exec [Purchase].[FreightAmount] @Documentno--4978
+		  
+	Insert into #FreightHeads
+		select ls.InvLotSummaryNo, isnull((sum(fa.FreightAmount - ISNULL(DeductionAmount,0))) * gid.Rate   * LS.ReceivedQty 
+			/ (select sum((case when @IsReturnThroughDC =1 then AcceptedQty + ISNULL(RejectedQty,0) else AcceptedQty end* isnull(FirstCF,1) /isnull(SecondCF,1) )* Rate) 
+				from Inventory.GRNItemDetail pgd  where 
+					pgd.GRNNo = @DocumentNo and Rate >0 and isnull(GateEntryNo,0) = isnull(ls.gateEntryNo,0) ),0)/LS.ReceivedQty 
+		from @PurchaseFreightAmount fa
+		inner join  Inventory.InvLotSummary LS on isnull(ls.GateEntryNo,LS.DocumentNo) = isnull(fa.GateEntryNo,fa.GRNNo )
+		inner join Inventory.GRNItemDetail gid on gid.GRNNo = ls.DocumentNo and gid.ItemNo=ls.ItemNo and
+				isnull(gid.MakeNo,0) = isnull(ls.MakeNo,0) and 
+				isnull(gid.TechnicalGradeNo,0) = isnull(LS.TechnicalGradeNo,0) and 
+				isnull(gid.POAmendmentNo,0) = isnull(ls.POAmendmentNo,0)and 
+				isnull(gid.InvStockTransferNo ,0)= isnull(ls.invStockTransferNo ,0) and 
+				isnull(gid.GateEntryNo ,0) = isnull(LS.GateEntryNo ,0)
+		where LS.DocumentNo =@documentno and ls.receivedQty>0 and LS.TransactionFlag = 'IGRN'  and
+		case when  @IsReturnThroughDC =1 then IsRejectedLot else 0 end= ls.IsRejectedLot 
+		and not exists(select 1 from Finance.FreightInvoiceDocumentDetails fd , Finance.FreightInvoiceMain fm
+				 where fm.FreightInvoiceNo = fd.FreightInvoiceNo and fm.AuthorizedBy is not null and
+				  fd.GateEntryNo = LS.GateEntryNo and fm.AuthorizedDate < @AuthorizedDate)
+			and not exists(select 1 from Purchase.SCOrderAmendmentMain where SCOrderAmendmentNo= LS.SCOrderAmendmentNo 
+				and SCValuationMethodNo in(1,2))
+		group by LS.InvLotSummaryNo , ls.gateEntryNo,gid.Rate  , LS.ReceivedQty 
+end
+
+
+if exists(select 1 from Inventory.GRNItemDetail where GRNNo = @Documentno and RouteIdentity is null)
+begin 
+Insert into #FreightHeads 
+	select ls.InvLotSummaryNo, isnull(sum(pm.FreightAmount * 
+			case when grn.GRNPassOnQty= 2 and ItemTypeNo = 2 then gid.ChallanQty/gid.ReceivedQty else 1 end * isnull(gid.SecondCF,1) /isnull(gid.FirstCF,1)),0) 
+	from 
+	Purchase.POAmendmentMain  pm
+	inner join Inventory.InvLotSummary ls on ls.POAmendmentNo= pm.POAmendmentNo 
+	inner join masterdata.mItemMaster im on im.ItemNo = ls.ItemNo 
+	Inner join Inventory.GRNItemDetail gid on gid.GRNNo = ls.DocumentNo and gid.ItemNo =ls.ItemNo
+			and isnull(gid.MakeNo,0) = isnull(ls.MakeNo,0) 
+			and isnull(gid.TechnicalGradeNo ,0)= isnull(ls.TechnicalGradeNo,0) 
+			and gid.POAmendmentNo = ls.POAmendmentNo 
+			and isnull(gid.GateEntryNo,0) = isnull(ls.GateEntryNo,0) 
+			and isnull(gid.InvStockTransferNo,0) = isnull(ls.InvStockTransferNo,0) 
+			and isnull(gid.DispatchChallanNo,0) = isnull(ls.DispatchChallanNo,0)
+			and ls.TransactionFlag ='IGRN'
+	inner join Inventory.GRNMain grn on grn.GRNNo = gid.GRNNo 
+	where 
+	ls.ReceivedQty >0 and case when  @IsReturnThroughDC =1 then IsRejectedLot else 0 end= ls.IsRejectedLot and
+	pm.FreightTypeNo =1 -- To Pay only
+	and FreightRateTypeNo  =1 -- per unit
+	and gid.GRNNo =@documentno
+	and not exists(select 1 from Finance.FreightInvoiceDocumentDetails fd , Finance.FreightInvoiceMain fm
+				 where fm.FreightInvoiceNo = fd.FreightInvoiceNo and fm.AuthorizedBy is not null and
+				 fd.GateEntryNo = ls.GateEntryNo  and fm.AuthorizedDate < @AuthorizedDate)
+	and not exists(select 1 
+				   from Purchase.FreightOrderOrderDetail fd 
+				   Inner Join Purchase.FreightOrderMain FOM on FOM.FreightOrderNo=fd.FreightOrderNo
+				   where fd.PONo = pm.PONo and FOM.AuthorizedBy is Not Null)
+	Group by ls.InvLotSummaryNo  
+ 
+ Insert into #FreightHeads
+	select invlotsummaryNo, isnull(sum(FreightRate),0)
+	from(
+	select id.invLotsummaryno, ((isnull(gid.SecondCF,1) * id.ReceivedQty/isnull(gid.FirstCF,1)) * ((pm.FreightAmount * pid.Quantity * pid.Rate)/
+				(select SUM(pd.Quantity * pd.Rate) 
+						from Purchase.POAmendmentItemDetail pd where pd.POAmendmentNo = pm.POAmendmentNo )
+				  )/ pid.Quantity) / id.ReceivedQty  FreightRate
+	
+	   ,id.ItemNo,id.MakeNo ,id.TechnicalGradeNo  from 
+	Purchase.POAmendmentMain  pm
+	inner join Inventory.InvLotSummary id on id.POAmendmentNo= pm.POAmendmentNo 
+	left join Inventory.GRNItemDetail gid on gid.GRNNo = id.DocumentNo and id.TransactionFlag ='IGRN' and 
+			gid.ItemNo = id.ItemNo and isnull(gid.MakeNo,0) = isnull(id.MakeNo,0) and 
+			isnull(gid.TechnicalGradeNo,0) = isnull(id.TechnicalGradeNo ,0)
+			and isnull(id.POAmendmentNo,0) = isnull(gid.POAmendmentNo,0) and 
+			isnull(id.GateEntryNo,0) = isnull(gid.GateEntryNo,0) and 
+			isnull(id.SCOrderAmendmentNo,0) = isnull(gid.SCOrderAmendmentNo,0)
+	inner join Purchase.POAmendmentItemDetail pid on pid.POAmendmentNo = pm.POAmendmentNo 
+			and pid.ItemNo =id.ItemNo and isnull(pid.MakeNo,0) = isnull(id.MakeNo,0)
+			and isnull(pid.TechnicalGradeNo,0) = isnull(id.TechnicalGradeNo ,0)
+	where 
+	gid.GRNNo = @documentno and id.ReceivedQty >0 and
+	case when  @IsReturnThroughDC =1 then IsRejectedLot else 0 end= id.IsRejectedLot  and
+	pm.FreightTypeNo =1 -- To Pay only
+	and FreightRateTypeNo  =2 -- Fixed
+	and id.RouteIdentity is null
+	and not exists(select 1 from Finance.FreightInvoiceDocumentDetails fd , Finance.FreightInvoiceMain fm
+				 where fm.FreightInvoiceNo = fd.FreightInvoiceNo and fm.AuthorizedBy is not null and
+				 fd.GateEntryNo = id.GateEntryNo  and fm.AuthorizedDate < @AuthorizedDate)
+	and not exists(select 1 from Purchase.FreightOrderOrderDetail fd 
+				   Inner Join Purchase.FreightOrderMain FOM on FOM.FreightOrderNo=fd.FreightOrderNo
+				   where fd.PONo = pm.PONo and FOM.AuthorizedBy is Not Null	
+					)
+	) tt group by InvLotSummaryNo 
+
+
+Insert into #FreightHeads 
+	select invlotsummaryNo,isnull(sum(FreightRate),0)
+	from (
+	select LS.InvLotSummaryNo , (sum(pm.FreightAmount * cnt * LS.ReceivedQty  * i.Rate )/
+		(select sum(case when @IsReturnThroughDC =1 then AcceptedQty + isnull(rejectedQty,0) else AcceptedQty  end * Rate) 
+				from inventory.GRNItemDetail where grnno =@DocumentNo and Rate >0 and
+				GateEntryNo = id.GateEntryNo))/ LS.ReceivedQty FreightRate
+	 from 
+	Purchase.POAmendmentMain  pm
+	inner join (select count(distinct isnull(GateEntryNo,1)) cnt ,poamendmentno,GateEntryNo from 
+			Inventory.GRNItemDetail id 
+	where GRNNo = @DocumentNo   
+		and not exists(select 1 from Finance.FreightInvoiceDocumentDetails fd , Finance.FreightInvoiceMain fm
+				 where fm.FreightInvoiceNo = fd.FreightInvoiceNo and fm.AuthorizedBy is not null and
+				 fd.GateEntryNo = id.GateEntryNo  and fm.AuthorizedDate < @AuthorizedDate)
+	group by POAmendmentNo ,GateEntryNo )
+				id on id.poamendmentno = pm.POAmendmentNo 
+	inner join inventory.GRNItemDetail I on i.POAmendmentNo= id.POAmendmentNo and i.GateEntryNo= id.GateEntryNo 
+	inner join Inventory.InvLotSummary LS on I.GRNNo = LS.DocumentNo and LS.TransactionFlag ='IGRN' and 
+			I.ItemNo = LS.ItemNo and isnull(I.MakeNo,0) = isnull(LS.MakeNo,0) and 
+			isnull(I.TechnicalGradeNo,0) = isnull(LS.TechnicalGradeNo ,0)
+			and isnull(I.POAmendmentNo,0) = isnull(LS.POAmendmentNo,0) and 
+			isnull(I.GateEntryNo,0) = isnull(LS.GateEntryNo,0) and 
+			isnull(I.SCOrderAmendmentNo,0) = isnull(LS.SCOrderAmendmentNo,0)
+	where
+	I.GRNNo = @documentno and LS.ReceivedQty >0 and
+	case when  @IsReturnThroughDC =1 then IsRejectedLot else 0 end= LS.IsRejectedLot  and
+	pm.FreightTypeNo =1 -- To Pay only
+	and FreightRateTypeNo  =3 -- per trip
+	and I.GRNNo = @DocumentNo 
+	and I.RouteIdentity is null
+	and not exists(select 1 from Purchase.FreightOrderOrderDetail fd 
+						   Inner Join Purchase.FreightOrderMain FOM on FOM.FreightOrderNo=fd.FreightOrderNo
+						   where fd.PONo = pm.PONo and FOM.AuthorizedBy is Not Null	)
+	and not exists(select 1 from Finance.FreightInvoiceDocumentDetails fd , Finance.FreightInvoiceMain fm
+				 where fm.FreightInvoiceNo = fd.FreightInvoiceNo and fm.AuthorizedBy is not null and
+				 fd.GateEntryNo = LS.GateEntryNo  and fm.AuthorizedDate < @AuthorizedDate)
+	group by  LS.InvLotSummaryNo,LS.ReceivedQty,id.GateEntryNo) tt Group by invlotsummaryNo
+
+end	 
+
+if exists(select 1 from Inventory.GRNItemDetail gid inner join  Purchase.SCOrderAmendmentMain sam on sam.SCOrderAmendmentNo = gid.SCOrderAmendmentNo 
+				where gid.GRNNo = @Documentno and SCValuationMethodNo =3) 
+begin
+ Insert into #FreightHeads 
+	select ls.invLotsummaryNo, isnull(sum(FreightAmount),0) from 
+	Purchase.SCOrderAmendmentMain  SAM
+	inner join Inventory.InvLotSummary ls on ls.SCOrderAmendmentNo= SAM.SCOrderAmendmentNo
+	where 
+	ls.DocumentNo =@documentno and ls.TransactionFlag ='IGRN'
+	and SAM.FreightTypeNo =1 -- To Pay only
+	and SAM.FreightRateTypeNo  =1 -- per unit
+	-- and ls.RouteIdentity is null  -- commented on  21 sept 2018 for route conversion case of RR
+	and not exists(select 1 from Finance.FreightInvoiceDocumentDetails fd , Finance.FreightInvoiceMain fm
+				 where fm.FreightInvoiceNo = fd.FreightInvoiceNo and fm.AuthorizedBy is not null and
+				 fd.GateEntryNo = ls.GateEntryNo  and fm.AuthorizedDate < @AuthorizedDate)
+	and not exists(select 1 from Purchase.FreightOrderOrderDetail fd 
+				   Inner Join Purchase.FreightOrderMain FOM on FOM.FreightOrderNo=fd.FreightOrderNo
+				   where fd.SCOrderNo = SAM.SCOrderNo and FOM.AuthorizedBy is Not Null	)
+	and case when  @IsReturnThroughDC =1 then IsRejectedLot else 0 end= ls.IsRejectedLot 
+	and ls.ReceivedQty >0 
+	Group by  ls.invLotsummaryNo
+
+ Insert into #FreightHeads 
+	select InvlotsummaryNo, isnull(sum(FreightRate),0)
+	from(
+	select ls.invlotSummaryNo,(case when @IsReturnThroughDC =1 then gid.AcceptedQty + ISNULL(gid.rejectedQty,0) else gid.AcceptedQty end * ((SAM.FreightAmount *  said.Quantity * said.Rate)/
+				(select SUM(pd.Quantity * isnull(pd.ActualRate , pd.Rate)) 
+						from Purchase.SCOrderAmendmentItemDetail pd where  ItemFlowNo in (3,4) and said.rate<>0 and
+								pd.SCOrderAmendmentNo = sam.SCOrderAmendmentNo)
+				  )/ said.Quantity )/LS.ReceivedQty  FreightRate
+	
+	   ,gid.ItemNo,gid.MakeNo ,gid.TechnicalGradeNo  
+	   from 
+			Inventory.GRNItemDetail gid
+			inner join Inventory.GRNSCOrderDetail gsd on gsd.GRNNo = gid.GRNNo 
+						and gsd.SCOrderAmendmentNo = gid.SCOrderAmendmentNo 
+			inner join Purchase.SCOrderAmendmentDetail sad on sad.SCOrderAmendmentNo = gsd.SCOrderAmendmentNo 
+				and coalesce(sad.ActivityNo,sad.ItemNo)= coalesce(gsd.ActivityNo ,gsd.ServiceItemNo)
+				
+					and  isnull(sad.SequenceNo,0) = isnull(gsd.SequenceNo,0)
+			inner join Purchase.SCOrderAmendmentItemDetail said on 
+						said.SCOrderAmendmentNo = sad.SCOrderAmendmentNo  
+				and (coalesce(sad.ActivityNo,sad.ItemNo)= coalesce(said.ActivityNo ,said.ServiceItemNo)
+					and  isnull(sad.SequenceNo,0) = isnull(said.SequenceNo,0) or 
+					(said.ActivityNo is null and said.ServiceItemNo is null))
+					and said.ItemFlowNo in (3,4)
+					and said.ItemNo = gid.ItemNo 
+					and isnull(said.Makeno,0) =isnull( gid.Makeno ,0)
+					and isnull(said.TechnicalGradeNo,0) = isnull(gid.TechnicalGradeNo ,0)
+			inner join Purchase.SCOrderAmendmentMain SAM on SAM.SCOrderAmendmentNo = sad.SCOrderAmendmentNo
+			inner join Inventory.InvLotSummary LS on gid.GRNNo = LS.DocumentNo and LS.TransactionFlag ='IGRN' and 
+			gid.ItemNo = LS.ItemNo and isnull(gid.MakeNo,0) = isnull(LS.MakeNo,0) and 
+			isnull(gid.TechnicalGradeNo,0) = isnull(LS.TechnicalGradeNo ,0)
+			and isnull(gid.POAmendmentNo,0) = isnull(LS.POAmendmentNo,0) and 
+			isnull(gid.GateEntryNo,0) = isnull(LS.GateEntryNo,0) and 
+			isnull(gid.SCOrderAmendmentNo,0) = isnull(LS.SCOrderAmendmentNo,0)
+			
+	where gid.GRNNo = @DocumentNo
+	and SAM.FreightTypeNo =1 -- To Pay only
+	and FreightRateTypeNo  =2 -- Fixed
+	-- and ls.RouteIdentity is null  -- commented on  21 sept 2018 for route conversion case of RR
+	and not exists(select 1 from Finance.FreightInvoiceDocumentDetails fd , Finance.FreightInvoiceMain fm
+				 where fm.FreightInvoiceNo = fd.FreightInvoiceNo and fm.AuthorizedBy is not null and
+				  fd.GateEntryNo = gid.GateEntryNo  and fm.AuthorizedDate < @AuthorizedDate )
+	and not exists(select 1 from Purchase.FreightOrderOrderDetail fd 
+					   Inner Join Purchase.FreightOrderMain FOM on FOM.FreightOrderNo=fd.FreightOrderNo
+				   where fd.scorderno = SAM.SCOrderNo and FOM.AuthorizedBy is Not Null
+				   )
+	and case when  @IsReturnThroughDC =1 then IsRejectedLot else 0 end= LS.IsRejectedLot 
+	and LS.ReceivedQty >0
+	) tt Group By InvlotsummaryNo
+
+ Insert into #FreightHeads 
+	select  invLotsummaryNo, isnull(sum(FreightRate),0)
+	from (
+	select ls.InvLotSummaryNo , (sum(SAm.FreightAmount * cnt * case when ChapterHeadingNo is null then  gid.AcceptedQty else gid.AcceptedQty + isnull(gid.RejectedQty,0) end * gid.Rate )/
+		(select sum(case when @IsReturnThroughDC =1 then AcceptedQty + isnull(RejectedQty ,0) else AcceptedQty end * Rate) 
+						from inventory.GRNItemDetail where grnno =@DocumentNo and rate <>0 and 
+						GateEntryNo = gid.GateEntryNo)) /LS.ReceivedQty  FreightRate
+	 from 
+			Inventory.GRNItemDetail gid
+			inner join Inventory.GRNSCOrderDetail gsd on gsd.GRNNo = gid.GRNNo 
+						and gsd.SCOrderAmendmentNo = gid.SCOrderAmendmentNo 
+			inner join Purchase.SCOrderAmendmentDetail sad on sad.SCOrderAmendmentNo = gsd.SCOrderAmendmentNo 
+				and coalesce(sad.ActivityNo,sad.ItemNo,0) = coalesce(gsd.ActivityNo,gsd.ServiceItemNo,0)
+					and isnull(sad.SequenceNo,0)=isnull(gsd.SequenceNo,0)
+			inner join Purchase.SCOrderAmendmentItemDetail said on 
+						said.SCOrderAmendmentNo = sad.SCOrderAmendmentNo and
+					( coalesce(sad.ActivityNo,sad.ItemNo,0)= coalesce(said.ActivityNo,said.ServiceItemNo,0)
+					or (said.ActivityNo is null and said.ServiceItemNo is null)
+					)
+					and isnull(sad.SequenceNo,0)=isnull(said.SequenceNo,0)
+					and said.ItemFlowNo in(3,4)
+					and said.ItemNo = gid.ItemNo 
+					and isnull(said.Makeno,0) =isnull( gid.Makeno ,0)
+					and isnull(said.technicalgradeNo,0) = isnull(gid.technicalgradeNo,0)
+			inner join Purchase.SCOrderAmendmentMain SAM on SAM.SCOrderAmendmentNo = sad.SCOrderAmendmentNo
+			inner join (select count(distinct isnull(GateEntryNo,1)) cnt ,SCOrderAmendmentNo,GateEntryNo from 
+			Inventory.GRNItemDetail id 
+	where GRNNo = @DocumentNo    
+		and not exists(select 1 from Finance.FreightInvoiceDocumentDetails fd , Finance.FreightInvoiceMain fm
+				 where fm.FreightInvoiceNo = fd.FreightInvoiceNo and fm.AuthorizedBy is not null and
+				  fd.GateEntryNo = id.GateEntryNo  and fm.AuthorizedDate < @AuthorizedDate)
+	group by SCOrderAmendmentNo ,GateEntryNo ) id on id.SCOrderAmendmentNo = SAM.SCOrderAmendmentNo 
+	inner join Inventory.InvLotSummary LS on gid.GRNNo = LS.DocumentNo and LS.TransactionFlag ='IGRN' and 
+			gid.ItemNo = LS.ItemNo and isnull(gid.MakeNo,0) = isnull(LS.MakeNo,0) and 
+			isnull(gid.TechnicalGradeNo,0) = isnull(LS.TechnicalGradeNo ,0)
+			and isnull(gid.POAmendmentNo,0) = isnull(LS.POAmendmentNo,0) and 
+			isnull(gid.GateEntryNo,0) = isnull(LS.GateEntryNo,0) and 
+			isnull(gid.SCOrderAmendmentNo,0) = isnull(LS.SCOrderAmendmentNo,0)
+	where gid.GRNNo = @DocumentNo 
+	and SAM.FreightTypeNo =1 -- To Pay only
+	and FreightRateTypeNo  =3 -- per trip
+	and gid.GRNNo = @DocumentNo
+	-- and ls.RouteIdentity is null  -- commented on  21 sept 2018 for route conversion case of RR
+	and case when  @IsReturnThroughDC =1 then IsRejectedLot else 0 end= LS.IsRejectedLot 
+	and LS.ReceivedQty >0
+	and not exists(select 1 from Purchase.FreightOrderOrderDetail fd 
+					   Inner Join Purchase.FreightOrderMain FOM on FOM.FreightOrderNo=fd.FreightOrderNo
+				   where fd.SCOrderNo = SAM.SCOrderNo and FOM.AuthorizedBy is Not Null
+	)
+	group by gid.GateEntryNo,LS.InvLotSummaryNo,LS.ReceivedQty ) tt group by InvLotSummaryNo 
+
+end 
+ 
+if exists(select 1 from Inventory.GRNItemDetail where GRNNo = @Documentno and RouteIdentity is Not null)
+begin 
+ Insert into #FreightHeads 
+ 	select id.InvLotSummaryNo , isnull(sum( case when grn.GRNPassOnQty = 2 and ItemTypeNo = 2 then pm.FreightAmount *  ChallanQty /AcceptedQty else pm.FreightAmount end* isnull(gid.SecondCF,1) /isnull(gid.FirstCF,1)),0)
+	from
+	purchase.POAmendmentMain pam 
+	inner join Purchase.POAmendmentTransportationRoute pm on pm.poamendmentno = pam.POAmendmentNo 
+	inner join Inventory.InvLotSummary id on id.POAmendmentNo= pm.POAmendmentNo 
+	inner join masterdata.mItemMaster im on im.ItemNo = id.ItemNo 
+	inner join Inventory.GRNItemDetail gid on gid.GRNNo = id.DocumentNo and id.ItemNo = gid.ItemNo 
+			and isnull(gid.MakeNo,0) = isnull(id.MakeNo,0) 
+			and isnull(gid.TechnicalGradeNo ,0)= isnull(id.TechnicalGradeNo,0) 
+			and gid.POAmendmentNo = id.POAmendmentNo 
+			and isnull(gid.RouteIdentity,0) = isnull(id.RouteIdentity,0) 
+			and isnull(gid.GateEntryNo,0) = isnull(id.GateEntryNo,0) 
+			and isnull(gid.InvStockTransferNo,0) = isnull(id.InvStockTransferNo,0)
+			and isnull(gid.DispatchChallanNo,0) = isnull(id.DispatchChallanNo,0)
+	inner join Inventory.GRNMain grn on grn.GRNNo = gid.GRNNo 
+	where pm.FreightTypeNo =1 -- To Pay only
+	and pm.FreightRateTypeNo  =1 -- per unit
+	and gid.GRNNo = @documentno and gid.SCOrderAmendmentNo is null
+	and id.RouteIdentity = pm.RouteIdentity 
+	and (pm.ItemNo is null or (pm.ItemNo = id.ItemNo 
+						and isnull(pm.MakeNo,0) = isnull(id.MakeNo,0) 
+						and isnull(pm.TechnicalGradeNo,0) = isnull(id.TechnicalGradeNo,0)))
+	and case when  @IsReturnThroughDC =1 then IsRejectedLot else 0 end= id.IsRejectedLot 
+	and id.ReceivedQty >0
+	and not exists(select 1 from Finance.FreightInvoiceDocumentDetails fd , Finance.FreightInvoiceMain fm
+				 where fm.FreightInvoiceNo = fd.FreightInvoiceNo and fm.AuthorizedBy is not null and
+				  fd.GateEntryNo = id.GateEntryNo  and fm.AuthorizedDate < @AuthorizedDate)
+	and not exists(select 1 from Purchase.FreightOrderOrderDetail fd 
+				   Inner Join Purchase.FreightOrderMain FOM on FOM.FreightOrderNo=fd.FreightOrderNo
+				    where fd.PONo = pam.PONo and FOM.AuthorizedBy is Not Null	
+					and fd.RouteIdentity = pm.RouteIdentity )
+	Group by id.InvLotSummaryNo 
+
+ Insert into #FreightHeads 
+	select InvLotSummaryNo,  isnull(sum(FreightRate),0)
+	from(
+	select id.InvLotSummaryNo, (( id.ReceivedQty * isnull(gid.SecondCF,1) /isnull(gid.FirstCF,1) )* ((pm.FreightAmount * pid.Quantity * pid.Rate)/
+				(select SUM(pd.Quantity * pd.Rate) 
+							from Purchase.POAmendmentItemDetail pd where pd.POAmendmentNo = pm.POAmendmentNo 
+							 )
+				  )/ pid.Quantity) /id.ReceivedQty  FreightRate
+	,id.ItemNo,id.MakeNo ,id.TechnicalGradeNo  
+	from 
+	purchase.POAmendmentMain pam 
+	inner join Purchase.POAmendmentTransportationRoute pm on pm.poamendmentno = pam.POAmendmentNo 
+	inner join Inventory.InvLotSummary id on id.POAmendmentNo = pm.POAmendmentNo
+	inner join Inventory.GRNItemDetail gid on gid.GRNNo = id.DocumentNo and id.TransactionFlag ='IGRN' and 
+			gid.ItemNo = id.ItemNo and isnull(gid.MakeNo,0) = isnull(id.MakeNo,0) and 
+			isnull(gid.TechnicalGradeNo,0) = isnull(id.TechnicalGradeNo ,0)
+			and isnull(id.POAmendmentNo,0) = isnull(gid.POAmendmentNo,0) and 
+			isnull(id.GateEntryNo,0) = isnull(gid.GateEntryNo,0) and 
+			isnull(id.SCOrderAmendmentNo,0) = isnull(id.SCOrderAmendmentNo,0)
+	inner join Purchase.POAmendmentItemDetail pid on pid.POAmendmentNo = pm.POAmendmentNo 
+			and pid.ItemNo =id.ItemNo and isnull(pid.MakeNo,0) = isnull(id.MakeNo,0)
+			and isnull(pid.TechnicalGradeNo,0) = isnull(id.TechnicalGradeNo ,0)
+	where
+	gid.GRNNo =@documentno and
+	case when  @IsReturnThroughDC =1 then IsRejectedLot else 0 end= id.IsRejectedLot  and
+	id.ReceivedQty >0  and   gid.SCOrderAmendmentNo is null and
+	pm.FreightTypeNo =1 -- To Pay only
+	and pm.FreightRateTypeNo  =2 -- Fixed
+	and id.RouteIdentity = pm.RouteIdentity 
+	and (pm.ItemNo is null or (pm.ItemNo = id.ItemNo 
+						and isnull(pm.MakeNo,0) = isnull(id.MakeNo,0) 
+						and isnull(pm.TechnicalGradeNo,0) = isnull(id.TechnicalGradeNo,0)))
+	and not exists(select 1 from Finance.FreightInvoiceDocumentDetails fd , Finance.FreightInvoiceMain fm
+				 where fm.FreightInvoiceNo = fd.FreightInvoiceNo and fm.AuthorizedBy is not null and
+				  fd.GateEntryNo = id.GateEntryNo  and fm.AuthorizedDate < @AuthorizedDate)
+	and not exists(select 1 from Purchase.FreightOrderOrderDetail fd 
+				   Inner Join Purchase.FreightOrderMain FOM on FOM.FreightOrderNo=fd.FreightOrderNo
+				   where fd.PONo = pam.PONo and FOM.AuthorizedBy is Not Null	
+				   and fd.RouteIdentity = pm.RouteIdentity )
+	 
+	) tt group by InvLotSummaryNo
+
+ Insert into #FreightHeads 
+	select I.InvLotSummaryNo , 
+		isnull(((pm.FreightAmount * cnt * case when @IsReturnThroughDC =1 then gid.AcceptedQty + ISNULL(gid.rejectedqty,0) else gid.AcceptedQty end * gid.Rate) /(select sum(AcceptedQty * Rate) 
+				from Inventory.GRNItemDetail where grnno = @documentNo and 
+					isnull(GateEntryNo,InvStockTransferNo) = isnull(id.GateEntryNo,id.InvStockTransferNo))) /I.ReceivedQty,0)
+	from 
+	purchase.poAmendmentMain pam 
+	inner join Purchase.POAmendmentTransportationRoute pm on pm.poamendmentno = pam.POAmendmentNo 
+	inner join (select count(distinct ISNULL(GateEntryNo,1)) cnt ,POAmendmentNo,GateEntryNo,InvStockTransferNo from Inventory.GRNItemDetail id 
+	where id.grnno =@documentNo 
+	and not exists(select 1 from Finance.FreightInvoiceDocumentDetails fd , Finance.FreightInvoiceMain fm
+				 where fm.FreightInvoiceNo = fd.FreightInvoiceNo and fm.AuthorizedBy is not null and
+				  fd.GateEntryNo = id.GateEntryNo  and fm.AuthorizedDate < @AuthorizedDate)
+	group by POAmendmentNo ,GateEntryNo ,InvStockTransferNo	
+	)
+				id on id.POAmendmentNo = pm.POAmendmentNo 
+	inner join Inventory.InvLotSummary I on I.POAmendmentNo= id.POAmendmentNo 
+			and isnull(i.GateEntryNo,0)= isnull(id.GateEntryNo,0) 
+			and isnull(id.InvStockTransferNo,0) = isnull(i.invStockTransferNo ,0)
+	inner join Inventory.GRNItemDetail gid on gid.GRNNo = I.DocumentNo and I.TransactionFlag ='IGRN' and 
+			gid.ItemNo = I.ItemNo and isnull(gid.MakeNo,0) = isnull(I.MakeNo,0) and 
+			isnull(gid.TechnicalGradeNo,0) = isnull(I.TechnicalGradeNo ,0)
+			and isnull(I.POAmendmentNo,0) = isnull(gid.POAmendmentNo,0) and 
+			isnull(I.GateEntryNo,0) = isnull(gid.GateEntryNo,0) and 
+			isnull(I.SCOrderAmendmentNo,0) = isnull(gid.SCOrderAmendmentNo,0)
+	where
+	case when  @IsReturnThroughDC =1 then IsRejectedLot else 0 end= I.IsRejectedLot  and
+	I.ReceivedQty >0 and gid.SCOrderAmendmentNo is null and
+	 pm.FreightTypeNo =1 -- To Pay only
+	and pm.FreightRateTypeNo  =3 -- per trip
+	and I.RouteIdentity = pm.RouteIdentity 
+	and gid.GRNNo= @documentno 
+	and not exists(select 1 from Purchase.FreightOrderOrderDetail fd 
+				   Inner Join Purchase.FreightOrderMain FOM on FOM.FreightOrderNo=fd.FreightOrderNo
+				   where fd.PONo = pam.PONo and FOM.AuthorizedBy is Not Null	
+				   and fd.RouteIdentity = pm.RouteIdentity )
+	and (pm.ItemNo is null or (pm.ItemNo = I.ItemNo 
+						and isnull(pm.MakeNo,0) = isnull(I.MakeNo,0) 
+						and isnull(pm.TechnicalGradeNo,0) = isnull(I.TechnicalGradeNo,0)))
+ 
+end 
+				
+		insert into Inventory.InvLotBillDetail (InvLotSummaryNo, InvLotDetailNo, ItemNo, MakeNo, BillNo,
+			 BillNoYearly, BillDate, PartyBillNo, PartyBillDate, TransactionFlag, BasicValue, BillQty
+				,ItemRate ,DiffRate,CreatedDate,IsIncluded,VoucherNo,LotBalanceQty, CurrencyConversionRate )
+		select ls.InvLotSummaryNo ,ld.InvLotDetailNo ,ls.ItemNo,ls.MakeNo ,gm.GRNNo ,gm.DocumentNoYearly ,
+			gm.DocumentDate , gm.VendorBillNo , gm.VendorBilLDate ,'IGRN', @CurrencyConversionRate * ls.ItemRate * ls.ReceivedQty ,ls.ReceivedQty 
+			,@CurrencyConversionRate * ls.ItemRate ,0,GETDATE (), case when IsRejectedLot =1 then ISNULL(IsReturnThroughDC,0) else 1 end  ,ld.VoucherNo
+			, ls.ReceivedQty ,1 --@CurrencyConversionRate
+			from Inventory.InvLotSummary ls
+		inner join Inventory.InvLotDetail ld on ld.InvLotSummaryNo = ls.InvLotSummaryNo 
+		inner join Inventory.GRNMain gm on gm.GRNNo = ls.DocumentNo 
+		where gm.GRNNo = @documentno and ls.TransactionFlag ='IGRN'	and ld.ReceivedQty >0  and StockTypeNo =1 -- 1 for stock 2 for replaceable
+		
+
+			if (
+					exists(select 1 from Inventory.GRNMain gm
+					  Inner Join Inventory.InvLotSummary LS on LS.DocumentNo=gm.GRNNo  And gm.GRNPassOnQty =2 
+					  inner join masterdata.mItemMaster im on im.ItemNo = LS.ItemNo and ItemTypeNo =2 -- added on 16 sep 2019
+					  where ls.DocumentNo = @documentno and ls.TransactionFlag ='IGRN' and ls.ReceivedQty>0
+					 )
+				)
+			Begin 
+						INSERT INTO Inventory.InvLotTaxDetail(InvLotSummaryNo, InvLotDetailNo, InvLotBillDetailNo,ItemNo, MakeNo, MiscChargeNo, Qty, RatePerUnit, Amount,InOutType ,ChargeTypeNo,IncludeInBasic)
+						Select ld.InvLotSummaryNo,ld.InvLotDetailNo, ld.InvLotBillDetailNo, ld.ItemNo, ld.MakeNo, ptd.MiscChargeNo
+						,ls.ReceivedQty 
+						,(/*@CurrencyConversionRate * */convert( decimal(18,6), (TotalAmount  * isnull(ls.SecondCf,1))/(pd.Quantity * isnull(ls.FirstCF,1))) ) * gid.ChallanQty/gid.ReceivedQty
+						, (/*@CurrencyConversionRate * */convert( decimal(18,6), (TotalAmount  * isnull(ls.SecondCf,1))/(pd.Quantity * isnull(ls.FirstCF,1))) *  gid.ChallanQty/gid.ReceivedQty) * ls.ReceivedQty
+						,1, ptd.ChargeType ,patd.IncludeInBasic 
+						from 
+						Inventory.InvLotSummary ls 						
+						Inner Join inventory.grnitemdetail gid on ls.DocumentNo = gid.GRNNo and gid.ItemNo = ls.ItemNo 
+									and ISNULL(ls.MakeNo,0) = ISNULL(gid.MakeNo,0)
+									and ISNULL(ls.TechnicalGradeNo,0) = ISNULL(gid.TechnicalGradeNo,0)
+									and ISNULL(ls.GateEntryNo,0) = ISNULL(gid.GateEntryNo,0)
+									and ISNULL(ls.POAmendmentNo,0) = ISNULL(gid.POAmendmentNo,0)
+									and ISNULL(ls.invStockTransferNo,0) = ISNULL(gid.invStockTransferNo,0)
+									and ISNULL(ls.DispatchChallanNo,0) = ISNULL(gid.DispatchChallanNo,0)		
+						inner join Inventory.InvLotBillDetail ld on ls.InvLotSummaryNo = ld.InvLotSummaryNo and ld.TransactionFlag = ls.TransactionFlag 
+						inner join Purchase.POAmendmentItemtaxDetail ptd on ptd.POAmendmentNo = ls.POAmendmentNo 
+								and ptd.ItemNo = ls.ItemNo and isnull(ptd.MakeNo,0)= isnull(ls.MakeNo,0)
+								and isnull(ptd.TechnicalGradeNo,0)= isnull(ls.TechnicalGradeNo,0)
+						inner join Purchase.POAmendmentItemDetail pd on ptd.POAmendmentNo = pd.POAmendmentNo
+								and pd.ItemNo = ptd.ItemNo and isnull(pd.MakeNo,0)= isnull(ptd.MakeNo,0)
+								and isnull(pd.TechnicalGradeNo,0)= isnull(ptd.TechnicalGradeNo,0)
+						inner join Purchase.POAmendmentTaxDetail patd on patd.POAmendmentNo = ptd.POAmendmentNo 
+									and patd.MiscChargeNo= ptd.MiscChargeNo 
+						 inner join masterdata.mMiscCharges mc on mc.MiscChargeNo = ptd.MiscChargeNo 
+						 where ls.DocumentNo = @documentno and ls.TransactionFlag ='IGRN' and ls.ReceivedQty>0
+						 and (ls.RouteIdentity is null or (ls.RouteIdentity * 10 % (convert(int,ls.RouteIdentity * 10))) = 0)
+						 and not exists(Select 1 from Inventory.GRNItemDetail where FOCQty = ls.ReceivedQty and GRNNo=ls.DocumentNo and 
+											ItemNo = ls.ItemNo and POAmendmentNo = ls.POAmendmentNo )			
+			END
+			Else
+			BEGIN
+				 INSERT INTO Inventory.InvLotTaxDetail(InvLotSummaryNo, InvLotDetailNo, InvLotBillDetailNo, 
+						ItemNo, MakeNo, MiscChargeNo, Qty, RatePerUnit, Amount,InOutType ,ChargeTypeNo,IncludeInBasic)
+						
+						select ld.InvLotSummaryNo,ld.InvLotDetailNo, ld.InvLotBillDetailNo, ld.ItemNo, ld.MakeNo, ptd.MiscChargeNo
+						,ls.ReceivedQty 
+						,(/*@CurrencyConversionRate * */convert( decimal(18,6), (TotalAmount  * isnull(ls.SecondCf,1))/(pd.Quantity * isnull(ls.FirstCF,1))) )
+						, /*@CurrencyConversionRate * */convert( decimal(18,6), (TotalAmount  * isnull(ls.SecondCf,1))/(pd.Quantity * isnull(ls.FirstCF,1))) * ls.ReceivedQty
+						,1, ptd.ChargeType ,patd.IncludeInBasic 
+						from 
+						Inventory.InvLotSummary ls 
+						inner join Inventory.InvLotBillDetail ld on ls.InvLotSummaryNo = ld.InvLotSummaryNo and ld.TransactionFlag = ls.TransactionFlag 
+						inner join Purchase.POAmendmentItemtaxDetail ptd on ptd.POAmendmentNo = ls.POAmendmentNo 
+								and ptd.ItemNo = ls.ItemNo and isnull(ptd.MakeNo,0)= isnull(ls.MakeNo,0)
+								and isnull(ptd.TechnicalGradeNo,0)= isnull(ls.TechnicalGradeNo,0)
+						inner join Purchase.POAmendmentItemDetail pd on ptd.POAmendmentNo = pd.POAmendmentNo
+								and pd.ItemNo = ptd.ItemNo and isnull(pd.MakeNo,0)= isnull(ptd.MakeNo,0)
+								and isnull(pd.TechnicalGradeNo,0)= isnull(ptd.TechnicalGradeNo,0)
+						inner join Purchase.POAmendmentTaxDetail patd on patd.POAmendmentNo = ptd.POAmendmentNo 
+									and patd.MiscChargeNo= ptd.MiscChargeNo 
+						 inner join masterdata.mMiscCharges mc on mc.MiscChargeNo = ptd.MiscChargeNo 
+						 where ls.DocumentNo = @documentno and ls.TransactionFlag ='IGRN' and ls.ReceivedQty>0
+						 and (ls.RouteIdentity is null or (ls.RouteIdentity * 10 % (convert(int,ls.RouteIdentity * 10))) = 0)
+						 and not exists(Select 1 from Inventory.GRNItemDetail where FOCQty = ls.ReceivedQty and GRNNo=ls.DocumentNo and 
+											ItemNo = ls.ItemNo and POAmendmentNo = ls.POAmendmentNo )			
+			END				
+
+ 
+--		-- GRN tax Detail				
+		if exists(select 1 from  Inventory.GRNItemTaxDetail where GRNNo =@documentno )
+		INSERT INTO Inventory.InvLotTaxDetail(InvLotSummaryNo, InvLotDetailNo, InvLotBillDetailNo, 
+			ItemNo, MakeNo, MiscChargeNo, Qty, RatePerUnit, Amount,InOutType ,ChargeTypeNo,IncludeInBasic)
+			select bd.InvLotSummaryNo, bd.InvLotDetailNo, bd.InvLotBillDetailNo, bd.ItemNo, bd.MakeNo, ptd.MiscChargeNo,
+			bd.BillQty ,/*@CurrencyConversionRate * */ convert(decimal(18,6),(TotalAmount*isnull(gid.SecondCf,1))/(gid.AcceptedQty * isnull(gid.FirstCF,1))) , 
+			/*@CurrencyConversionRate * */convert(decimal(18,6),(TotalAmount  * isnull(gid.SecondCf,1))/(gid.AcceptedQty * isnull(gid.FirstCF,1))) * bd.BillQty 
+				,1, ptd.ChargeType ,gtd.IncludeInBasic 
+			from 
+			Inventory.InvLotSummary ls
+			inner join Inventory.GRNItemDetail gid on gid.GRNNo = ls.DocumentNo and ls.TransactionFlag ='IGRN'
+			inner join Inventory.InvLotBillDetail bd on bd.InvLotSummaryNo = ls.InvLotSummaryNo and bd.TransactionFlag = ls.TransactionFlag 	
+			inner join Inventory.GRNItemTaxDetail ptd on ptd.GRNItemDetailNo = gid.GRNItemDetailNo 
+			inner join Inventory.GRNTaxDetail gtd on gtd.GRNNo = ptd.GRNNo and gtd.MiscChargeNo = ptd.MiscChargeNo 
+			 inner join masterdata.mMiscCharges mc on mc.MiscChargeNo = ptd.MiscChargeNo 
+			 where gid.GRNNo = @DocumentNo  and gid.itemNo = ls.ItemNo and 
+			 isnull(gid.MakeNo,0)= isnull(ls.MakeNo,0)
+			 and isnull(gid.TechnicalGradeNo,0)= isnull(ls.TechnicalGradeNo,0)
+			 and isnull(gid.POAmendmentNo,0)= isnull(ls.POAmendmentNo,0)
+			  and  gid.GRNNo =@DocumentNo  and gid.SCOrderAmendmentNo is null
+			  and gid.AcceptedQty>0
+		
+--		--PO Expenses
+		insert into Inventory.InvLotTaxDetail(InvLotSummaryNo, InvLotDetailNo, InvLotBillDetailNo, 
+			ItemNo, MakeNo, MiscChargeNo, Qty, RatePerUnit, Amount, InOutType, ChargeTypeNo, ExpenseHeadNo)
+		select bd.InvLotSummaryNo, bd.InvLotDetailNo ,bd.InvLotBillDetailNo ,bd.ItemNo,bd.MakeNo ,
+		null, bd.BillQty ,/*@CurrencyConversionRate * */sum(EH.ExpenseRate) , /*@CurrencyConversionRate * */bd.BillQty * sum(EH.ExpenseRate), 1, 2,EH.ExpenseHeadNo
+		from
+		Inventory.InvLotBillDetail bd
+		inner join #ExpenseHeads EH on EH.invlotsummaryNo = bd.InvLotSummaryNo 
+		group by 
+		 bd.InvLotSummaryNo, bd.InvLotDetailNo ,bd.InvLotBillDetailNo ,bd.ItemNo,bd.MakeNo ,bd.BillQty	,EH.ExpenseHeadNo
+				
+--		-- Freight Expense
+		 
+		insert into Inventory.InvLotTaxDetail(InvLotSummaryNo, InvLotDetailNo, InvLotBillDetailNo, 
+		ItemNo, MakeNo, MiscChargeNo, Qty, RatePerUnit, Amount, InOutType, ChargeTypeNo, ExpenseHeadNo)
+		select bd.InvLotSummaryNo, bd.InvLotDetailNo ,bd.InvLotBillDetailNo ,bd.ItemNo,bd.MakeNo ,
+		null, bd.BillQty , /*@CurrencyConversionRate * */sum(fh.FreightRate) , /*@CurrencyConversionRate * */bd.BillQty * sum(fh.FreightRate), 1, 2,null
+		from
+		Inventory.InvLotBillDetail bd
+		inner join #FreightHeads fh on fh.invlotsummaryNo = bd.InvLotSummaryNo 
+		group by 
+		 bd.InvLotSummaryNo, bd.InvLotDetailNo ,bd.InvLotBillDetailNo ,bd.ItemNo,bd.MakeNo ,bd.BillQty
+		
+			
+		insert into Inventory.InvLotSummaryTaxDetail(InvLotSummaryNo, MiscChargeNo, Qty, RatePerUnit, 
+			Amount, InOutType, ChargeTypeNo, ExpenseHeadNo)
+		select td.InvLotSummaryNo, td.MiscChargeNo, td.Qty, td.RatePerUnit,td.Amount, td.InOutType, td.ChargeTypeNo, td.ExpenseHeadNo
+			from
+			Inventory.InvLotTaxDetail td
+			inner join Inventory.InvLotDetail  bd on bd.InvLotSummaryNo = td.InvLotSummaryNo and bd.InvLotDetailNo = td.InvLotDetailNo
+			where bd.DocumentNo  = @Documentno  and bd.TransactionFlag ='IGRN'
+
+				
+		if exists(select 1 from Inventory.GRNItemDetail where SCOrderAmendmentNo is not null and GRNNo =@documentno )
+			begin
+			Insert into #SCDiffRate
+				select ls.invlotsummaryno,/* @CurrencyConversionRate *  */ case when SCValuationMethodNo=3 then said.Rate - said.ActualRate else 0 end
+				+ isnull(said.BifercationPercentage*0.01,1) * ((gsd.Amount  /gid.AcceptedQty)  ) 
+				--isnull(sum(case when mc.CalculationNature =1 and std.IncludeInBasic=1 then td.TotalAmount 
+				--		when mc.CalculationNature =2 and std.IncludeInBasic=1 then 0 -(td.TotalAmount )
+				--		else 0 end)/sad.Quantity ,0))
+				from
+				Inventory.GRNItemDetail gid
+				Inner join Inventory.InvLotSummary ls  on ls.DocumentNo = gid.GRNNo and ls.TransactionFlag ='IGRN'
+						and gid.ItemNo = ls.ItemNo and gid.SCOrderAmendmentNo = ls.SCOrderAmendmentNo 
+						and ISNULL(gid.MakeNo,0) = ISNULL(ls.MakeNo,0) 
+						and ISNULL(gid.TechnicalGradeNo,0) = ISNULL(ls.TechnicalGradeNo,0) 
+				inner join Inventory.GRNSCOrderDetail gsd on gsd.GRNNo = gid.GRNNo 
+						and gsd.SCOrderAmendmentNo = gid.SCOrderAmendmentNo 
+			inner join Purchase.SCOrderAmendmentMain scm on scm.SCOrderAmendmentNo= gsd.SCOrderAmendmentNo 
+			inner join Purchase.SCOrderAmendmentDetail sad on sad.SCOrderAmendmentNo = gsd.SCOrderAmendmentNo 
+				and  coalesce(sad.ActivityNo,sad.ItemNo,0) = coalesce(gsd.ActivityNo,gsd.ServiceItemNo,0)
+						and isnull(sad.SequenceNo,0) = isnull(gsd.SequenceNo ,0)
+			inner join Purchase.SCOrderAmendmentItemDetail said on said.SCOrderAmendmentNo = sad.SCOrderAmendmentNo
+			and coalesce(sad.ActivityNo,sad.ItemNo,0)	= coalesce(said.ActivityNo ,said.ServiceItemNo,0)
+			and  isnull(sad.SequenceNo,0) = isnull(said.SequenceNo ,0)
+			left join Purchase.SCOrderAmendmentItemTaxDetail td on td.SCOrderAmendmentNo = gsd.SCOrderAmendmentNo 
+					and coalesce(td.ActivityNo,td.ItemNo,0)	= coalesce(gsd.ActivityNo ,gsd.ServiceItemNo,0)
+					and  isnull(td.SequenceNo,0) = isnull(gsd.SequenceNo ,0)
+			left join purchase.SCOrderAmendmentTaxDetail std on std.SCOrderAmendmentNo = td.SCOrderAmendmentNo
+						and std.MiscChargeNo = td.MiscChargeNo and std.IncludeInBasic =1
+						  
+			left join masterdata.mMiscCharges mc on mc.MiscChargeNo = td.MiscChargeNo
+			
+			where said.ItemFlowNo in(3,4)
+			and said.ItemNo = gid.ItemNo and scm.SCValuationMethodNo = 3
+			and isnull(said.Makeno,0) =isnull( gid.Makeno ,0)
+			and isnull(said.technicalgradeNo,0) = isnull(gid.technicalgradeNo ,0)
+			and gid.GRNNo = @documentno 
+			 and gid.AcceptedQty>0	 
+			 Group by ls.invlotsummaryno,SCValuationMethodNo,said.Rate ,said.ActualRate ,BifercationPercentage,gsd.Amount ,gid.AcceptedQty,sad.Quantity
+			 
+			 
+			if exists(select 1 from Inventory.GRNItemDetail where POAmendmentNo is null and SCOrderAmendmentNo is not null and GRNNo =@documentno )
+			  begin
+			  
+			    INSERT INTO Inventory.InvLotTaxDetail(InvLotSummaryNo, InvLotDetailNo, InvLotBillDetailNo, 
+				ItemNo, MakeNo, MiscChargeNo, Qty, RatePerUnit, Amount,InOutType ,ChargeTypeNo,IncludeInBasic)
+				
+				select bd.InvLotSummaryNo, bd.InvLotDetailNo, bd.InvLotBillDetailNo, bd.ItemNo, bd.MakeNo, td.MiscChargeNo,
+				bd.BillQty ,/*@CurrencyConversionRate * */ convert(decimal(18,6),((TotalAmount* isnull(said.BifercationPercentage * 0.01,1))*isnull(gid.SecondCf,1))/(said.Quantity * isnull(gid.FirstCF,1))) , 
+				/* @CurrencyConversionRate * */ convert(decimal(18,6),((TotalAmount * isnull(said.BifercationPercentage * 0.01,1))  * isnull(gid.SecondCf,1))/(said.Quantity* isnull(gid.FirstCF,1))) * bd.BillQty 
+					,1, td.ChargeType ,satd.IncludeInBasic 
+				from Inventory.GRNItemDetail gid
+				Inner join Inventory.InvLotSummary ls  on ls.DocumentNo = gid.GRNNo and ls.TransactionFlag ='IGRN'
+						and gid.ItemNo = ls.ItemNo and gid.SCOrderAmendmentNo = ls.SCOrderAmendmentNo 
+						and ISNULL(gid.MakeNo,0) = ISNULL(ls.MakeNo,0) 
+						and ISNULL(gid.TechnicalGradeNo,0) = ISNULL(ls.TechnicalGradeNo,0) 
+				Inner Join Inventory.InvLotBillDetail bd on bd.InvLotSummaryNo = ls.InvLotSummaryNo and bd.TransactionFlag = ls.TransactionFlag 		
+				inner join Inventory.GRNSCOrderDetail gsd on gsd.GRNNo = gid.GRNNo 
+						and gsd.SCOrderAmendmentNo = gid.SCOrderAmendmentNo 
+			
+			inner join Purchase.SCOrderAmendmentDetail sad on sad.SCOrderAmendmentNo = gsd.SCOrderAmendmentNo 
+				and ((sad.ActivityNo = gsd.ActivityNo and sad.SequenceNo = gsd.SequenceNo )or 
+						sad.ItemNo = gsd.ServiceItemNo )
+			inner join Purchase.SCOrderAmendmentItemDetail said on said.SCOrderAmendmentNo = sad.SCOrderAmendmentNo and (coalesce(sad.ActivityNo,sad.ItemNo)= coalesce(said.ActivityNo,said.ServiceItemNo)
+					and isnull(sad.SequenceNo,0) = isnull(said.SequenceNo,0)
+					or 
+					(said.ActivityNo is null and said.ServiceItemNo is null)
+					)
+						and said.ItemFlowNo in(3,4)
+						and said.ItemNo = gid.ItemNo 
+						and isnull(said.Makeno,0) =isnull( gid.Makeno ,0)
+						and isnull(said.technicalgradeNo,0) = isnull(gid.technicalgradeNo ,0)
+			inner join Purchase.SCOrderAmendmentItemTaxDetail td on td.SCOrderAmendmentNo=gsd.SCOrderAmendmentNo 
+				and ((td.ActivityNo = gsd.ActivityNo and td.SequenceNo = gsd.SequenceNo)or 
+						td.ItemNo = gsd.ServiceItemNo )
+			inner join purchase.SCOrderAmendmentTaxDetail satd on satd.SCOrderAmendmentNo = td.SCOrderAmendmentNo 
+					and satd.MiscChargeNo = td.MiscChargeNo 
+			inner join masterdata.mMiscCharges mc on mc.MiscChargeNo = td.MiscChargeNo
+				where gid.GRNNo = @DocumentNo  
+				and gid.AcceptedQty>0
+		 	
+			insert into Inventory.InvLotSummaryTaxDetail(InvLotSummaryNo, MiscChargeNo, Qty, RatePerUnit, 
+			Amount, InOutType, ChargeTypeNo, ExpenseHeadNo)
+		select td.InvLotSummaryNo, td.MiscChargeNo, td.Qty, td.RatePerUnit,td.Amount, td.InOutType, td.ChargeTypeNo, td.ExpenseHeadNo
+			from
+			Inventory.InvLotTaxDetail td
+			inner join Inventory.InvLotBillDetail  bd on bd.InvLotBillDetailNo = td.InvLotBillDetailNo 
+			where bd.BillNo = @documentno and bd.TransactionFlag ='IGRN'
+			
+		 end
+		end 
+
+	 	Update bd set DiffRate = DiffVrate + ISNULL(SDR.DiffRate,0)
+	 	, VRate = bd.ItemRate + ISNULL(DiffVrate,0) + ISNULL(SDR.DiffRate,0) 
+	 	, DiffInLRate = td.DiffinLRate 
+	 	from Inventory.InvLotBillDetail bd
+	 	inner join Inventory.InvLotDetail ld on ld.InvLotSummaryNo = bd.InvLotSummaryNo and ld.InvLotDetailNo = bd.InvLotDetailNo 
+	 				and ld.TransactionFlag = bd.TransactionFlag 
+	 	inner join Inventory.InvLotSummary ls on ls.InvLotSummaryNo = ld.InvLotSummaryNo 
+	 	left join #SCDiffRate SDR on SDR.InvlotsummaryNo = ls.InvLotSummaryNo 
+	 	outer apply (select  isnull(sum(case when mc.CalculationNature is null then td.RatePerUnit 
+	 						when td.IncludeInBasic =1 and isnull(mc.CalculationNature,1) =1  then td.RatePerUnit 
+							when td.IncludeInBasic =1 and mc.CalculationNature =2 then 0 -td.RatePerUnit
+							else 0 end),0) DiffVrate,
+							 isnull(sum(case when isnull(mc.CalculationNature,1) =1  then td.RatePerUnit 
+							when mc.CalculationNature =2 then 0 -(td.RatePerUnit  )
+							else 0 end),0) DiffinLRate
+				from  Inventory.InvLotTaxDetail td
+					left join masterdata.mMiscCharges mc on mc.MiscChargeNo = td.MiscChargeNo 
+				 where td.InvLotSummaryNo =bd.InvLotSummaryNo and td.InvLotBillDetailNo = bd.InvLotBillDetailNo) td
+	 	where ls.DocumentNo = @Documentno  and ls.TransactionFlag ='IGRN' 
+	 	
+	 	
+	 	update ls set VRate = (@CurrencyConversionRate *ls.ItemRate) + ISNULL(DiffRate,0) , 
+	 			LRate = (@CurrencyConversionRate *ls.ItemRate) + ISNULL(DiffInLRate ,0),
+	 			ItemRate = @CurrencyConversionRate * ls.ItemRate
+	 	from Inventory.InvLotBillDetail bd
+	 	inner join Inventory.InvLotDetail ld on ld.InvLotSummaryNo = bd.InvLotSummaryNo and ld.InvLotDetailNo = bd.InvLotDetailNo 
+	 				and ld.TransactionFlag = bd.TransactionFlag 
+	 	inner join Inventory.InvLotSummary ls on ls.InvLotSummaryNo = ld.InvLotSummaryNo 
+	 	where ls.DocumentNo = @Documentno  and ls.TransactionFlag ='IGRN' 
+		
+		update ld set VRate = ls.ItemRate + ISNULL(DiffRate,0) , LRate = ls.ItemRate + ISNULL(DiffInLRate ,0) ,ItemRate= ls.ItemRate
+	 	from Inventory.InvLotBillDetail bd
+	 	inner join Inventory.InvLotDetail ld on ld.InvLotSummaryNo = bd.InvLotSummaryNo and ld.InvLotDetailNo = bd.InvLotDetailNo 
+	 				and ld.TransactionFlag = bd.TransactionFlag 
+	 	inner join Inventory.InvLotSummary ls on ls.InvLotSummaryNo = ld.InvLotSummaryNo 
+	 	where ls.DocumentNo = @Documentno  and ls.TransactionFlag ='IGRN'  	 
+  
+   if exists (select 1 from Inventory.InvLotSummary where DocumentNo = @Documentno and TransactionFlag ='IGRN' and VRate <0 )
+	 raiserror('Vrate can''t be Negative.',16,-1)
+
+	select @Result =1,@ResultMsg ='Success'
+
+if OBJECT_ID ('tempdb..#ExpenseHeads') is not null
+	drop table #ExpenseHeads
+if OBJECT_ID ('tempdb..#FreightHeads') is not null
+	drop table #FreightHeads
+if OBJECT_ID ('tempdb..#SCDiffRate') is not null
+	drop table #SCDiffRate
+end try
+
+begin catch
+	select @Result = 0,@ResultMsg = ERROR_MESSAGE ()
+end catch
+		
+end

@@ -1,0 +1,94 @@
+Stored procedure Information.ConsumptionSummary: Consumption Summary. Called from Inventory.IMMIGetItemInfo.
+Reads: Inventory.MaterialIssueItemDetail, Inventory.MaterialIssueMain, Inventory.MaterialReturnItemDetail, masterdata.mFYear, masterdata.MonthList
+Parameters: @CompanyNo tinyint, @DocumentDate smalldatetime, @ItemNo int
+Author: Arvinder kaur Vadrah, created 2013/09/03
+Code:
+
+-- =============================================
+-- Author:		Arvinder kaur Vadrah
+-- Create date: 2013/09/03
+-- Description:	Consumption Summary
+-- =============================================
+-- updated by  lukesh Sahu Comment  NOnreturnable Codintion
+CREATE PROCEDURE [Information].[ConsumptionSummary] 
+	-- Add the parameters for the stored procedure here
+	@CompanyNo tinyint,
+	@DocumentDate smalldatetime,
+	@ItemNo int
+	
+AS
+BEGIN
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+
+    -- Insert statements for procedure here
+	
+
+	declare @str varchar(max)
+    select @str=masterdata.JSForInformation('IMMI')
+    set @str=@str+masterdata.CSSForInformation('IMMI')
+	set @str=@str+'<table class="altrowstable" id="alternatecolorConsumptionSummaryInfo">'
+	set @str=@str+'<Caption><Font color="Maroon"><h3 align="Left"><b>Consumption Summary</b></h3></Font></Caption>'
+    set @str=@str+'<tr><th>Sl. No.</th><th>Month</th><th>Issued Quantity</th><th>Issued Amount</th><th>Returned Quantity</th><th>Returned Amount</th><th>Consumption Quantity</th><th>Consumption Amount</th></tr>'
+	set @str=@str
+				 +( replace(
+					replace(
+					replace(
+					replace(
+					replace(
+					replace(
+					replace(
+					replace(
+					 (    
+					    
+					    Select ROW_NUMBER() over (Order by ML.SortingMonth) as td1
+                               ,ML.MonthName td2
+						       ,Isnull(MI.td2,0) td3
+						       ,Isnull(td3,0) td4
+						       ,Isnull(td4,0) td5
+						       ,Isnull(td5,0) td6
+						       ,Isnull(td6,0) td7
+						       ,Isnull(td7,0) td8
+						From masterdata.mFYear YR
+						Inner Join masterdata.MonthList ML ON YR.YearNo=ML.YearNo
+						LEFT Join
+						(
+					    Select 
+						  Month(MI.DocumentDate) [Month]
+						 ,MI.YearNo
+						 ,Sum(MII.IssuedQty) td2
+						 ,Cast(Sum(MII.IssuedQty*MII.IssuedRate) as Decimal(15,2)) td3
+						 ,Isnull(Sum(MRI.Quantity),0) td4
+						 ,Isnull((Cast(Sum(MRI.Quantity*MRI.Rate) as Decimal(15,2))),0) td5
+						 ,Sum(MII.IssuedQty)-Isnull(Sum(MRI.Quantity),0) td6
+						 ,Cast(Sum(MII.IssuedQty*MII.IssuedRate)-Isnull((Sum(MRI.Quantity*MRI.Rate)),0) as Decimal(15,2)) td7
+						From Inventory.MaterialIssueMain MI
+						Inner Join Inventory.MaterialIssueItemDetail MII ON MI.IssueNo=MII.IssueNo
+						Left Join Inventory.MaterialReturnItemDetail MRI ON MI.IssueNo=MRI.IssueNo
+																		And MII.ItemNo=MRI.ItemNo
+																		And Isnull(MII.MakeNo,0)=Isnull(MRI.MakeNo,0)
+						Where --MI.IsNonReturnable=0 And
+							  MI.DocumentDate<=@DocumentDate
+							  And MII.ItemNo=@ItemNo  
+							  And MI.CompanyNo=@CompanyNo
+					    Group by Month(MI.DocumentDate),MI.YearNo
+					    )MI ON MI.[Month]=ML.MonthNo
+								And MI.YearNo=YR.YearNo
+					   Where @DocumentDate between YR.StartDate and YR.EndDate
+					   Order by ML.SortingMonth
+					   
+					    For xml path('tr')
+						),'<td1>','<td style="text-align: center;">')
+						 ,'<td2>','<td>')
+						 ,'<td3>','<td style="text-align: Right;">')
+						 ,'<td4>','<td style="text-align: Right;">')
+						 ,'<td5>','<td style="text-align: Right;">')
+						 ,'<td6>','<td style="text-align: Right;">')
+						 ,'<td7>','<td style="text-align: Right;">')
+						 ,'<td8>','<td style="text-align: Right;">')
+					 )
+	set @str=@str+'</table>'
+	
+	select @str
+END

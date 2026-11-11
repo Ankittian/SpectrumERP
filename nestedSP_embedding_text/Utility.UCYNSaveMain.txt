@@ -1,0 +1,207 @@
+Stored procedure Utility.UCYNSaveMain: Save Script For UCYNSaveMain. Called from Customize.ISKGChangeNumber.
+Writes: Finance.accVoucherMain, Finance.accVoucherReferenceDetail, Finance.ReferenceMain, Finance.VoucherGSTDetail, Utility.ChangeYearlyNumberMain
+Reads: Finance.accVoucherDetail, Finance.accVoucherMain, GlobalData.FormMaster
+Parameters: @ChangeYearlyNumberNo int, @FormNo smallint, @DocumentId int, @DocumentNo varchar(30), @DocumentSettingNo smallint, @NewDocumentNo varchar(30), @LoginNo SmallInt, @DocumentDate smalldatetime, @OutputStatusNo tinyint = null OUTPUT, @OutputStatusRemarks varchar(4000) = null OUTPUT
+Author: Yusuf, created 04 Aug 2013
+Code:
+
+-- =============================================
+-- Author:		Yusuf
+-- Create date: 04 Aug 2013
+-- Description: Save Script For UCYNSaveMain
+-- =============================================
+CREATE PROCEDURE [Utility].[UCYNSaveMain]
+(
+@ChangeYearlyNumberNo  int
+,@FormNo  smallint
+,@DocumentId  int
+,@DocumentNo  varchar(30)
+,@DocumentSettingNo  smallint
+,@NewDocumentNo  varchar(30)
+,@LoginNo   SmallInt
+,@DocumentDate smalldatetime
+,@OutputStatusNo tinyint = null output
+,@OutputStatusRemarks varchar(4000)  = null output
+)
+AS
+
+BEGIN
+	SET NOCOUNT ON;
+	
+	BEGIN TRY
+
+		set @DocumentNo = substring(@DocumentNo,0,CHARINDEX(' dt.',@DocumentNo,0))
+
+		IF IsNull(@ChangeYearlyNumberNo,0)=0
+		BEGIN
+				
+			INSERT INTO  [Utility].[ChangeYearlyNumberMain]
+			   (
+			    FormNo
+			   ,DocumentId
+			   ,DocumentNo
+			   ,DocumentSettingNo
+			   ,NewDocumentNo
+			   ,CreatedBy
+			   ,CreatedDate
+			   )
+			VALUES
+			   (
+			    @FormNo
+			   ,@DocumentId
+			   ,@DocumentNo
+			   ,@DocumentSettingNo
+			   ,@NewDocumentNo
+			   ,@LoginNo
+			   ,Getdate()
+			   )
+
+			Select @ChangeYearlyNumberNo=IDENT_CURRENT('[Utility].[ChangeYearlyNumberMain]')
+
+			declare @FormMainTableinDB varchar(100)
+					,@FormCode varchar(10)
+					
+			select @FormMainTableinDB=replace(replace(FormMainTableinDB,'[',''),']','') 
+					,@FormCode=FormCode
+			from GlobalData.FormMaster 
+			where FormNo=@FormNo
+			
+			declare @ColName varchar(100)
+			select @ColName = substring((select ',['+c.COLUMN_NAME+']'
+							from 	INFORMATION_SCHEMA.TABLE_CONSTRAINTS pk 
+								inner join INFORMATION_SCHEMA.KEY_COLUMN_USAGE c on c.TABLE_NAME = pk.TABLE_NAME
+																			and	c.CONSTRAINT_NAME = pk.CONSTRAINT_NAME
+																			and c.TABLE_SCHEMA = pk.TABLE_SCHEMA
+							where 	pk.CONSTRAINT_TYPE = 'PRIMARY KEY'
+								and pk.TABLE_NAME=op.name
+								and pk.TABLE_SCHEMA=s.name
+							for xml path('')),2,4000)
+			from sys.objects o
+				inner join sys.schemas s on s.schema_id=o.schema_id
+				inner join sys.objects op on op.object_id=o.parent_object_id
+			where SCHEMA_NAME(op.schema_id)+'.'+op.name=@FormMainTableinDB
+				and o.type='PK'
+				
+			declare @str varchar(max)
+			set @str='
+			update M set
+				DocumentNoYearly=@NewDocumentNo
+			from @FormMainTableinDB M
+			where @ColName=@DocumentId'
+			
+			set @str=REPLACE(@str,'@ColName',@ColName)
+			set @str=REPLACE(@str,'@FormMainTableinDB',@FormMainTableinDB)
+			set @str=REPLACE(@str,'@DocumentId',@DocumentId)
+			set @str=REPLACE(@str,'@NewDocumentNo',''''+@NewDocumentNo+'''')
+					
+			exec(@str)
+			
+			set @str='
+			update M set
+				DocumentNoYearly=@NewDocumentNo
+			from Finance.CashCounterMain M
+			where DocumentNo=@DocumentId
+				and SourceDocumentFormNo=@FormNo
+				
+			update M set
+				DocumentNoYearly=@NewDocumentNo
+			from Inventory.InvLotDetail M
+			where DocumentNo=@DocumentId
+				and TransactionFlag=@FormCode
+				
+			update M set
+				DocumentNoYearly=@NewDocumentNo
+			from Inventory.InvLotSummary M
+			where DocumentNo=@DocumentId
+				and TransactionFlag=@FormCode
+				
+			update M set
+				BillNoYearly=@NewDocumentNo
+			from Inventory.InvLotBillDetail M
+			where BillNo=@DocumentId
+				and TransactionFlag=@FormCode'
+			
+			set @str=REPLACE(@str,'@FormNo',@FormNo)
+			set @str=REPLACE(@str,'@FormCode',''''+@FormCode+'''')
+			set @str=REPLACE(@str,'@DocumentId',@DocumentId)
+			set @str=REPLACE(@str,'@NewDocumentNo',''''+@NewDocumentNo+'''')
+					
+			exec(@str)
+			
+			declare @VoucherNos varchar(2000) 
+			set @VoucherNos = (select '+'',''+convert(varchar(10),isnull('+c.name +',''''))'
+								from sys.objects o
+									inner join sys.schemas s on s.schema_id=o.schema_id
+									inner join sys.objects op on op.object_id=o.parent_object_id
+									inner join sys.foreign_key_columns fkc on fkc.constraint_object_id=o.object_id
+									inner join sys.objects po on po.object_id=fkc.referenced_object_id
+									inner join sys.columns c on c.column_id=fkc.parent_column_id
+															and c.object_id=fkc.parent_object_id
+								where SCHEMA_NAME(op.schema_id)+'.'+op.name=@FormMainTableinDB
+									and po.name='accVoucherMain'
+									for xml path(''))
+									
+			set @str='
+			select @VoucherNos
+			from @FormMainTableinDB M
+			where @ColName=@DocumentId'
+			
+			set @str=REPLACE(@str,'@ColName',@ColName)
+			set @str=REPLACE(@str,'@FormMainTableinDB',@FormMainTableinDB)
+			set @str=REPLACE(@str,'@DocumentId',@DocumentId)
+			set @str=REPLACE(@str,'@VoucherNos',@VoucherNos)
+					
+			declare @Vouchers table (VoucherNos varchar(100))		
+			
+			insert into @Vouchers
+			exec(@str)
+			
+			select @VoucherNos=VoucherNos from @Vouchers
+			
+			declare @tempDoc varchar(50),@refDoc varchar(50),@PrevRefDoc varchar(50)
+			
+			set @tempDoc=@NewDocumentNo --+' dt.' +convert(varchar(10),@DocumentDate,103)
+			
+			select @refDoc=isnull(case when VendorDocumentNo = @DocumentNo then null else VendorDocumentNo end,@NewDocumentNo) --+' dt.' +convert(varchar(10),isnull(VendorDocumentDate,@DocumentDate),103)
+				,@PrevRefDoc=isnull(VendorDocumentNo,@DocumentNo) --+' dt.' +convert(varchar(10),isnull(VendorDocumentDate,@DocumentDate),103)	
+			from Finance.accVoucherMain
+			where VoucherNo in (select Data from masterdata.Split(@VoucherNos,','))
+			
+			update Finance.accVoucherMain
+				set SourceDocumentNoYearly=@tempDoc
+					,Narration=REPLACE(Narration,@DocumentNo,@NewDocumentNo)
+			where VoucherNo in (select Data from masterdata.Split(@VoucherNos,','))
+			
+			update Finance.ReferenceMain 
+				set SourceDocumentNoYearly=@tempDoc
+					,Remarks=REPLACE(Remarks,@DocumentNo,@NewDocumentNo)
+			where VoucherDetailNo in (select VoucherDetailNo from Finance.accVoucherDetail vd 
+										inner join masterdata.Split(@VoucherNos,',') s on s.Data=vd.VoucherNo)
+										
+			update Finance.ReferenceMain 
+				set VendorDocumentNo=@refDoc
+			where VoucherDetailNo in (select VoucherDetailNo from Finance.accVoucherDetail vd 
+										inner join masterdata.Split(@VoucherNos,',') s on s.Data=vd.VoucherNo)
+				and VendorDocumentNo=@PrevRefDoc
+				
+			update Finance.accVoucherReferenceDetail
+				set ReferenceNoYearly=@refDoc
+			where VoucherDetailNo in (select VoucherDetailNo from Finance.accVoucherDetail vd 
+										inner join masterdata.Split(@VoucherNos,',') s on s.Data=vd.VoucherNo)
+				and ReferenceNoYearly=@PrevRefDoc
+			
+			update Finance.VoucherGSTDetail	set DocumentNoYearly = @NewDocumentNo
+					where DocumentNo = @DocumentId and FormCode = @FormCode  
+				
+		END
+
+		Select 1,@ChangeYearlyNumberNo
+		set @OutputStatusNo = 1
+		set @OutputStatusRemarks ='Success'
+	END TRY
+	BEGIN CATCH
+		Select 0,Error_Message()
+		set @OutputStatusNo = 0
+		set @OutputStatusRemarks = ERROR_MESSAGE ()
+	END CATCH
+END

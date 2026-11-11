@@ -1,0 +1,140 @@
+Stored procedure masterdata.AIAGSave. Called from masterdata.FCOASave.
+Writes: masterdata.mAccountGroup
+Reads: GlobalData.DefaultAccountGroup, masterdata.mAccountGroup
+Parameters: @GroupNo smallint, @GroupName varchar(50), @ParentGroupNo smallint, @NatureNo tinyint, @LoginNo smallint, @IsReferenceApp bit, @IsCostCenterApp bit, @Inactive bit, @AlternateGroupNo smallint, @GroupTypeNo tinyint, @COANo smallint, @OrderBy tinyint, @GroupCode varchar(6) = null
+Code:
+
+
+
+-- =============================================
+-- Author:		<Yusuf>
+-- Create date: <16-Feb-12>
+-- Description:	<This Procedure is used to insert data in Group master>
+-- =============================================
+
+CREATE Procedure [masterdata].[AIAGSave]
+ (
+	-- Add the parameters for the stored procedure here
+	 @GroupNo smallint 
+	,@GroupName varchar(50)
+	,@ParentGroupNo smallint
+	,@NatureNo tinyint
+	,@LoginNo smallint
+	,@IsReferenceApp bit
+	,@IsCostCenterApp bit
+	,@Inactive bit
+	,@AlternateGroupNo smallint
+	,@GroupTypeNo tinyint
+	,@COANo smallint
+	,@OrderBy tinyint
+	,@GroupCode varchar(6) = null
+) 
+AS
+
+BEGIN
+Begin try
+
+	SET NOCOUNT ON;
+
+	declare @Ranking tinyint
+	select @Ranking=Ranking from masterdata.mAccountGroup where GroupNo=@ParentGroupNo
+	set @Ranking=ISNULL(@Ranking,0)+1
+	
+	IF isnull(@GroupNo,0)=0
+	BEGIN	
+
+		if @GroupCode is null 
+		begin
+			SELECT @GroupCode='AG'+ RIGHT(REPLICATE('0', 4) +cast(isnull(max(Convert(int,substring(GroupCode,3,4))),0) + 1 as varchar(4)),4) 
+			FROM [masterdata].mAccountGroup 
+		end
+		
+		INSERT INTO [masterdata].[mAccountGroup]
+			   ([GroupCode]
+			   ,COANo 
+			   ,[GroupName]
+			   ,[ParentGroupNo]
+			   ,[AlternateGroupNo]
+			   ,[NatureNo]
+			   ,[GroupTypeNo]
+			   ,[IsReferenceApp]
+			   ,[IsCostCenterApp]
+			   ,[Inactive]
+			   ,[CreatedBy]
+			   ,[CreatedDate]
+			   ,Ranking
+			   ,OrderBy)
+		 VALUES
+			   (@GroupCode
+			   ,@COANo 
+			   ,@GroupName
+			   ,@ParentGroupNo
+			   ,@AlternateGroupNo
+			   ,@NatureNo
+			   ,@GroupTypeNo
+			   ,@IsReferenceApp
+			   ,@IsCostCenterApp
+			   ,@Inactive
+			   ,@LoginNo
+			   ,getdate()
+			   ,@Ranking
+			   ,@OrderBy)
+
+		set @GroupNo =ident_current('masterdata.mAccountGroup')
+	END
+	ELSE
+	BEGIN
+		-- Update statements for procedure here
+
+		UPDATE masterdata.mAccountGroup SET    
+		GroupName	= @GroupName,
+		COANo = @COANo ,
+		NatureNo = @NatureNo,
+		IsReferenceApp = @IsReferenceApp,
+		ParentGroupNo = @ParentGroupNo,
+		ModifiedBy		= @LoginNo,
+		Modifieddate	= GetDate(),
+		[IsCostCenterApp] = @IsCostCenterApp,
+		AlternateGroupNo = @AlternateGroupNo,
+		Inactive = @Inactive,
+		Ranking = @Ranking,
+		--GroupTypeNo = @GroupTypeNo,
+		OrderBy = @OrderBy
+		WHERE GroupNo = @GroupNo
+		
+		
+		
+		If Not Exists(Select 1 From GlobalData.DefaultAccountGroup 
+						Where GroupCode=(Select GroupCode From masterdata.mAccountGroup Where GroupNo=@GroupNo))
+		
+		Begin		  
+			UPDATE masterdata.mAccountGroup SET 
+			GroupTypeNo = @GroupTypeNo
+			WHERE GroupNo = @GroupNo
+		End
+		
+		 
+
+		;with cte (GroupNo )
+		as
+		(select ACM.GroupNo 
+			from masterdata.mAccountGroup ACM 
+			where ACM.GroupNo=@GroupNo
+			union all
+			select ACM.GroupNo 
+				from masterdata.mAccountGroup ACM 
+				inner join cte on cte.GroupNo=ACM.ParentGroupNo
+		)
+		update ag set NatureNo = @NatureNo 
+		from cte ,  masterdata.mAccountGroup ag
+		where ag.GroupNo = cte.GroupNo 
+		
+	END
+
+	select 1 ,@GroupNo-- sucuessfully udpated
+
+End Try
+	Begin Catch
+	     select 0,ERROR_MESSAGE()
+	End Catch
+END

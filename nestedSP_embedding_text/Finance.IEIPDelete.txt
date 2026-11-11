@@ -1,0 +1,117 @@
+Stored procedure Finance.IEIPDelete: Delete EXcise Invoice Posting Delete. Called from Inventory.IGRNDelete, Finance.PBPBDelete.
+Writes: DiscreteRM.SINLotOrderDetail, Finance.ExciseRGPart, Finance.InExcisePostingCustomFieldDetail, Finance.InExcisePostingItemDetail, Finance.InExcisePostingItemTaxDetail, Finance.InExcisePostingMain, Finance.InExcisePostingNotesDetail, Finance.InExcisePostingSummary, Finance.PurchaseBillItemDetail, Inventory.GRNItemDetail, Inventory.InvlotSummaryRefDetail
+Reads: Finance.ExciseRGPart, Finance.InExcisePostingItemDetail, Finance.InExcisePostingMain, Finance.PurchaseBillMain, Purchase.POAmendmentMain
+Parameters: @ExcisePostingNo int, @LoginNo SmallInt
+Calls procedures: Finance.VoucherDelete
+Author: Akhil, created 29 Mar 2012
+Code:
+					-- =============================================
+-- Author:		Akhil
+-- Create date: 29 Mar 2012
+-- Description: Delete EXcise Invoice Posting Delete
+-- =============================================
+--  [Finance].[IEIPDelete]  71
+CREATE PROCEDURE [Finance].[IEIPDelete] 
+(
+ @ExcisePostingNo  int
+  ,@LoginNo SmallInt
+)
+AS
+
+BEGIN
+	SET NOCOUNT ON;
+	
+	BEGIN TRY
+
+		BEGIN Transaction 
+			if exists (select 1 from Finance.InExcisePostingMain where SupplimentaryExcisepostingNo is not null
+						and excisepostingNo =@ExcisePostingNo)
+				raiserror('Supplimentary DFT is prepared against this entry.',16,-1)
+			
+			-- comment by akhil on 20 mar 2013
+			-- reopen 0n  13 may 2013 by shyam
+			if exists (select 1 from Finance.InExcisePostingItemDetail a
+						inner join Purchase.POAmendmentMain b on a.POAmendmentNo = b.POAmendmentNo
+						inner join Finance.PurchaseBillMain pm on pm.PurchaseBillNo = a.PurchaseBillNo 
+						 where 
+						 POPurchaseCategoryNo<>2 and-- for except import case only on 13 may 2013
+						 pm.IsExcisePosting <>1 and -- on 27 aug 2013
+						ExcisePostingNo=@ExcisePostingNo)
+				raiserror('Purchase Bill is prepared against this entry.',16,-1)	
+				
+			declare @VoucherNo int
+			select @VoucherNo=VoucherNo
+			from Finance.InExcisePostingMain 
+			where ExcisePostingNo=@ExcisePostingNo
+			
+			Update Finance.InExcisePostingMain set VoucherNo=null where ExcisePostingNo=@ExcisePostingNo				
+		update pd set ExcisePostingNo=null
+		from
+		finance.PurchasebillItemDetail pd ,finance.PurchasebillMain pm 
+		where pd.PurchasebillNo = pm.Purchasebillno and pm.IsExcisePosting =1 and
+		ExcisePostingNo=@ExcisePostingNo
+		
+			
+			declare @OutputStatusNo tinyint 
+					,@OutputStatusRemarks varchar(4000) 
+		Declare @out as table (ID tinyint,Result varchar(1000))
+		 
+			exec [Finance].[VoucherDelete] 
+				@VoucherNo = @VoucherNo
+				,@LoginNo  = @LoginNo
+				,@OutputStatusNo = @OutputStatusNo output
+				,@OutputStatusRemarks = @OutputStatusRemarks output
+
+			if @OutputStatusNo=0
+				raiserror(@OutputStatusRemarks,16,-1)
+				
+				update gd set dftstatus =0
+				from
+				Inventory.GRNItemDetail  gd inner join Finance.InExcisePostingItemDetail epd
+				on epd.GRNNo = gd.GRNNo and epd.ItemNo= gd.ItemNo and ISNULL(epd.makeno,0) = ISNULL( gd.MakeNo ,0)
+				and isnull(epd.POAmendmentNo ,0)= isnull(gd.POAmendmentNo ,0)
+				where 
+				epd.ExcisePostingNo = @ExcisePostingNo 
+				
+				update gd set dftstatus =0
+				from
+				DiscreteRM.SINLotOrderDetail gd inner join Finance.InExcisePostingItemDetail epd
+				on epd.SINNo = gd.SINNo and epd.ItemNo= gd.ItemNo and ISNULL(epd.MakeNo,0) = ISNULL( gd.MakeNo ,0)
+				and isnull(epd.POAmendmentNo ,0)= isnull(gd.POAmendmentNo ,0)
+				where 
+				epd.ExcisePostingNo = @ExcisePostingNo 
+				
+				
+				
+				
+				update Finance.InExcisePostingMain set SupplimentaryExcisepostingNo = null	
+						where SupplimentaryExcisepostingNo=@ExcisePostingNo
+				
+				Update LS set ExciseRGPartNo= null 
+				from
+				Inventory.InvlotSummaryRefDetail  ls ,
+				 Finance.ExciseRGPart EP where ls.ExciseRGPartNo = EP.ExciseRGPartNo and
+					 ep.DocumentNo = @ExcisePostingNo and ep.TransactionFlag ='IEIP'
+						 
+						
+				delete from Finance.ExciseRGPart  where DocumentNo = @ExcisePostingNo and TransactionFlag ='IEIP'
+						and RefExciseRGPartNo is not null
+				
+				delete from Finance.ExciseRGPart  where DocumentNo = @ExcisePostingNo and TransactionFlag ='IEIP'
+						and RefExciseRGPartNo is null
+								
+			    Delete From Finance.InExcisePostingCustomFieldDetail Where ExcisePostingNo=@ExcisePostingNo
+			    Delete From Finance.InExcisePostingItemTaxDetail Where ExcisePostingNo=@ExcisePostingNo
+			    Delete From Finance.InExcisePostingNotesDetail Where ExcisePostingNo=@ExcisePostingNo
+			    delete from  Finance.InExcisePostingsummary where  ExcisePostingNo=@ExcisePostingNo
+			    Delete From Finance.InExcisePostingItemDetail Where ExcisePostingNo=@ExcisePostingNo
+			    Delete From Finance.InExcisePostingMain Where ExcisePostingNo=@ExcisePostingNo
+
+			Select 1,'Success'
+		COMMIT Transaction 
+	END TRY
+	BEGIN CATCH
+		Rollback Transaction
+			Select 0,Error_Message()
+	END CATCH
+END

@@ -1,0 +1,831 @@
+Stored procedure Purchase.PMPOInsertPOIntoPortal: Save PO Into Portal. Called from Purchase.PMPOAuthorize.
+Reads: Purchase.PortalSetting
+Parameters: @POAmendmentNo int, @OutputStatusNo tinyint = null OUTPUT, @OutputStatusRemarks varchar(4000) = null OUTPUT
+Author: Alok, created 28 Dec 2018
+Code:
+-- =============================================
+-- Author:		Alok
+-- Create date: 28 Dec 2018
+-- Description:	Save PO Into Portal
+-- =============================================
+-- [Purchase].[PMPOInsertPOIntoPortal] 701
+CREATE PROCEDURE [Purchase].[PMPOInsertPOIntoPortal] 
+	@POAmendmentNo int,	
+    @OutputStatusNo tinyint = null output,
+    @OutputStatusRemarks varchar(4000)  = null output
+AS
+BEGIN
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+BEGIN Transaction	
+begin try
+	
+	Declare @CurrentDB Varchar(100),@PortalDBName Varchar(100)
+
+	Select @PortalDBName=PortalDbNAme from Purchase.PortalSetting
+	Select @CurrentDB =DB_NAME()
+
+	If @PortalDBName is null
+	BEGIN
+		Raiserror('Portal Database not defined found.',16,-1)
+		return
+	END
+	
+	If Not Exists (Select 1 FROM master.dbo.sysdatabases Where name =@PortalDBName)
+	BEGIN
+		Raiserror('Portal Database not defined found.',16,-1)
+		return	
+	END
+
+	Declare @Query1 Varchar(Max)=''
+	,@Query2 Varchar(Max)='',@Query3 Varchar(Max)=''
+	,@Query4 Varchar(Max)='',@Query5 Varchar(Max)=''
+	,@Query6 Varchar(Max)='',@Query7 Varchar(Max)=''
+	,@Query8 Varchar(Max)='',@Query9 Varchar(Max)=''
+	,@Query10 Varchar(Max)='',@Query11 Varchar(Max)=''
+	,@Query12 Varchar(Max)='',@Query13 Varchar(Max)='',@Query14 Varchar(Max)=''
+
+
+	Select @Query1=' Declare @PONo int
+	Select @PONo=PONo From Purchase.POAmendmentMain Where POAmendmentNo=' + Convert(Varchar,@POAmendmentNo) + 
+
+	'If Not Exists (
+					Select CM.CompanyCode,CM.DBNo
+					from ' + @PortalDBName + '.masterdata.mCompanyMaster CM
+					Inner Join ' + @PortalDBName + '.masterdata.mDBMaster DB on DB.DBNo=CM.DBNo 
+					And IsNumeric(CM.CompanyCode)=1
+					Where DBName=''' + @CurrentDB +''' And CM.CompanyCode not in (''RB'',''RU'',''SH'',''AP'')
+				 )
+	BEGIN
+			Raiserror(''Unable to save,Portal Database not avaliable.'',16,-1)
+			Return
+	END
+
+	If Exists(
+				Select 1
+				From Purchase.POAmendmentMain
+				Where POAmendmentNo=' + Convert(Varchar,@POAmendmentNo) + '
+				And PORefDocumentTypeNo=3
+			) -- If Against Indent then only insert into portal
+	BEGIN
+		If Not Exists (
+						Select 1
+						From purchase.POAmendmentItemDetail PID
+						Inner Join Masterdata.mitemMaster mim on mim.itemNo=pid.itemno
+						Inner Join Globaldata.MaterialNature MT on MT.ItemTypeNo=mim.ItemTypeNo
+						Where PID.POAmendmentNo=' + Convert(Varchar,@POAmendmentNo) + '
+						And MT.MaterialNatureNo=2
+						Group by MT.MaterialNatureNo,MT.MaterialNature
+					  ) -- Don not Insert RM PO into Portal
+		BEGIN
+		-- Validate
+			BEGIN
+				If Exists (
+							Select 1
+							From Purchase.POAmendmentItemDetail PId
+							Inner Join Purchase.POAmendmentMain PAM on PAM.POAmendmentNo=PId.POAmendmentNo 
+							Left Join (
+										Select CM.CompanyCode,CM.DBNo
+										from ' + @PortalDBName + '.masterdata.mCompanyMaster CM
+										Inner Join ' + @PortalDBName + '.masterdata.mDBMaster DB on DB.DBNo=CM.DBNo 
+										And IsNumeric(CM.CompanyCode)=1
+										Where DBName=''' + @CurrentDB +''' And CM.CompanyCode not in (''RB'',''RU'',''SH'',''AP'')
+									  )PCM on IsNumeric(PCM.CompanyCode)=1 And PCM.CompanyCode=PAM.CompanyNo 
+							Left Join ' + @PortalDBName + '.ERPMaster.eItemMaster EIm on EIm.ERPUniqueValue=PId.ItemNo
+																			And EIm.DBNo=PCM.DBNo
+																			And IsNumeric(EIM.ERPUniqueValue)=1
+																			
+							Where IsNumeric(PCM.CompanyCode)=1						
+							And PAM.POAmendmentNo=' + Convert(Varchar,@POAmendmentNo) + '						
+							And EIM.ItemNo is null
+							)
+				BEGIN
+					Raiserror(''Item Not Mapped'',16,-1)
+					Return
+				END '
+
+	select @Query2='			
+				If Exists (
+							Select 1
+							From Purchase.POAmendmentItemDetail PId
+							Inner Join Purchase.POAmendmentMain PAM on PAM.POAmendmentNo=PId.POAmendmentNo 
+																	And PId.MakeNo is not null
+							Left Join (
+										Select CM.CompanyCode,CM.DBNo
+										from ' + @PortalDBName + '.masterdata.mCompanyMaster CM
+										Inner Join ' + @PortalDBName + '.masterdata.mDBMaster DB on DB.DBNo=CM.DBNo 
+										And IsNumeric(CM.CompanyCode)=1
+										Where DBName=''' + @CurrentDB +''' And CM.CompanyCode not in (''RB'',''RU'',''SH'',''AP'')
+									  )PCM on IsNumeric(PCM.CompanyCode)=1 And PCM.CompanyCode=PAM.CompanyNo 
+							Left Join ' + @PortalDBName + '.ERPMaster.eMakeMaster EMM on EMM.ERPUniqueValue=PId.MakeNo
+																			And EMM.DBNo=PCM.DBNo
+																			And IsNumeric(EMM.ERPUniqueValue)=1
+							Where IsNumeric(PCM.CompanyCode)=1
+							And  PAM.POAmendmentNo=' + Convert(Varchar,@POAmendmentNo) + '
+							And EMM.MakeNo is null
+							)
+				BEGIN
+					Raiserror(''Make Not Mapped'',16,-1)
+					Return
+				END
+
+				If Exists (
+							Select 1
+							From Purchase.POAmendmentItemDetail PId
+							Inner Join Purchase.POAmendmentMain PAM on PAM.POAmendmentNo=PId.POAmendmentNo 
+																	And PId.MakeNo is not null
+							Left Join (
+										Select CM.CompanyCode,CM.DBNo
+										from ' + @PortalDBName + '.masterdata.mCompanyMaster CM
+										Inner Join ' + @PortalDBName + '.masterdata.mDBMaster DB on DB.DBNo=CM.DBNo 
+										And IsNumeric(CM.CompanyCode)=1
+										Where DBName=''' + @CurrentDB +''' And CM.CompanyCode not in (''RB'',''RU'',''SH'',''AP'')
+									  )PCM on IsNumeric(PCM.CompanyCode)=1 And PCM.CompanyCode=PAM.CompanyNo 
+							Left Join ' + @PortalDBName + '.ERPMaster.eUnitMaster EUM on EUM.ERPUniqueValue=PId.UnitNo
+																			And EUM.DBNo=PCM.DBNo
+																			And IsNumeric(EUM.ERPUniqueValue)=1
+							Where IsNumeric(PCM.CompanyCode)=1
+							And  PAM.POAmendmentNo=' + Convert(Varchar,@POAmendmentNo) + '
+							And EUM.UnitNo is null
+							)
+				BEGIN
+					Raiserror(''Unit Not Mapped'',16,-1)
+					Return
+				END
+				
+				If Exists (
+							Select 1
+							From Purchase.POAmendmentMain PAM
+							Left Join (
+										Select CM.CompanyCode,CM.DBNo
+										from ' + @PortalDBName + '.masterdata.mCompanyMaster CM
+										Inner Join ' + @PortalDBName + '.masterdata.mDBMaster DB on DB.DBNo=CM.DBNo 
+										And IsNumeric(CM.CompanyCode)=1
+										Where DBName=''' + @CurrentDB +''' And CM.CompanyCode not in (''RB'',''RU'',''SH'',''AP'')
+									  )PCM on IsNumeric(PCM.CompanyCode)=1 And PCM.CompanyCode=PAM.CompanyNo 
+							Left Join ' + @PortalDBName + '.ERPMaster.eVendorLocationDetail EVLD on EVLD.ERPUniqueValue2=PAM.VendorLocationNo
+																			And EVLD.DBNo=PCM.DBNo
+																			And IsNumeric(EVLD.ERPUniqueValue2)=1
+							Where IsNumeric(PCM.CompanyCode)=1
+							And  PAM.POAmendmentNo=' + Convert(Varchar,@POAmendmentNo) + '
+							And EVLD.VendorLocationNo is null
+						  )
+				BEGIN
+					Raiserror(''Vendor Not Mapped'',16,-1)
+					Return
+				END
+				
+							
+				If Exists (
+							Select RIB.PortalIndentItemDetailNo
+							From Purchase.POAmendmentIndentDetail PAID
+							Inner Join Inventory.IndentItemDetail IID on IID.IndentNo=PAID.IndentNo
+																And IID.ItemNo=PAID.ItemNo
+																And IsNull(IID.MakeNo,0) = IsNull(PAID.IndentMakeNo,0)
+							Inner Join Inventory.IndentMain IIM on IIM.IndentNo=IID.IndentNo
+							Left Join (
+										Select CM.CompanyCode,CM.DBNo
+										from ' + @PortalDBName + '.masterdata.mCompanyMaster CM
+										Inner Join ' + @PortalDBName + '.masterdata.mDBMaster DB on DB.DBNo=CM.DBNo 
+										And IsNumeric(CM.CompanyCode)=1
+										Where DBName=''' + @CurrentDB +''' And CM.CompanyCode not in (''RB'',''RU'',''SH'',''AP'')
+									  )PCM on IsNumeric(PCM.CompanyCode)=1 And PCM.CompanyCode=IIM.CompanyNo 
+							Left Join ' + @PortalDBName + '.Customize.RealIndentMain RIM on RIM.EntityCode=PCM.CompanyCode
+																			And RIM.DBNo=PCM.DBNo
+																			And RIM.DocumentNoYearly=IIM.DocumentNoYearly
+																			And RIM.DocumentDate=IIM.DocumentDate
+							Left Join ' + @PortalDBName + '.Customize.RealIndentBody RIB on RIB.IndentNo=RIM.IndentNo
+																				And RIB.SLNo=IID.IndentItemDetailNo
+							Where PAID.POAmendmentNo=' + Convert(Varchar,@POAmendmentNo) + '
+							And RIB.PortalIndentItemDetailNo is null
+							)
+				BEGIN
+					Raiserror(''Indent not found in portal.'',16,-1)
+					Return
+				END '
+
+	Select @Query3='			
+				Declare @PortalPOAmendmentNo Int ,@PortalPONo Int,@AuthBy int
+				Declare @Max int,@DocumentNoYearly Varchar(30)
+
+				If Exists (
+							Select 1
+							From Purchase.POAmendmentMain PAM
+							Where PAM.POAmendmentNo=' + Convert(Varchar,@POAmendmentNo) + '
+							And AmendmentNo=0
+						  ) -- If 0th Amendment
+				BEGIN
+					
+					
+					If Exists(
+								Select 1
+								From Purchase.POAmendmentMain PAM
+								Left Join (
+											Select CM.CompanyCode,CM.DBNo,CM.CompanyNo
+											From ' + @PortalDBName + '.masterdata.mCompanyMaster CM
+											Inner Join ' + @PortalDBName + '.masterdata.mDBMaster DB on DB.DBNo=CM.DBNo 
+											And IsNumeric(CM.CompanyCode)=1
+											Where DBName=''' + @CurrentDB +''' And CM.CompanyCode not in (''RB'',''RU'',''SH'',''AP'')
+										  )PCM on IsNumeric(PCM.CompanyCode)=1 And PCM.CompanyCode=PAM.CompanyNo
+								Inner Join ' + @PortalDBName + '.Purchase.POAmendmentMain EPAM on EPAM.CompanyNo=PCM.CompanyNo
+																					And EPAM.ERPPOAmendmentNo=PAM.POamendmentNo
+								Where PAM.POAmendmentNo=' + Convert(Varchar,@POAmendmentNo) + '	
+																											
+							) -- If POAmendment Found in Portal
+					BEGIN
+
+							Select @PortalPOAmendmentNo =POAmendmentNo 
+							,@PortalPONo=PONo
+							From ' + @PortalDBName + '.Purchase.POAmendmentMain
+							Where ERPPOAmendmentNo=' + Convert(Varchar,@POAmendmentNo) + '
+							
+							-- Delete POAmendment
+							Delete From ' + @PortalDBName + '.Purchase.POAmendmentItemDetail Where POAmendmentNo=@PortalPOAmendmentNo
+							Delete From ' + @PortalDBName + '.Purchase.POAmendmentIndentDetail Where POAmendmentNo=@PortalPOAmendmentNo
+							Delete From ' + @PortalDBName + '.Purchase.POAmendmentItemScheduleDetail Where POAmendmentNo=@PortalPOAmendmentNo
+							
+							-- Delete PO
+							Delete From ' + @PortalDBName + '.Purchase.POItemDetail Where PONo=@PortalPONo
+							Delete From ' + @PortalDBName + '.Purchase.POIndentDetail Where PONo=@PortalPONo
+							Delete From ' + @PortalDBName + '.Purchase.POItemScheduleDetail Where PONo=@PortalPONo '
+
+Select @Query4=	'													
+							Update EPAM
+							Set POAmendmentDate=PAM.POAmendmentDate
+							,AmendmentNo=PAM.AmendmentNo							
+							,DocumentDate=PAM.DocumentDate
+							,DocumentStatusNo=PAM.DocumentStatusNo
+							,PODocumentTypeNo=PAM.PODocumentTypeNo
+							,IndentTypeNo=PAM.IndentTypeNo,POPurchaseCategoryNo=PAM.POPurchaseCategoryNo
+							,PORefDocumentTypeNo=Case When PAM.PortalRevisedQuotationNo is not null then 1 else  PAM.PORefDocumentTypeNo End
+							,VendorNo=EVD.VendorNo
+							,VendorLocationNo=EVD.VendorLocationNo
+							,ValidityDate=PAM.ValidityDate
+							,RefDocumentNo=PAM.PortalRevisedQuotationNo,PaymentModeNo=PAM.PaymentModeNo
+							,StatusNo=PAM.StatusNo,NetAmount=PAM.NetAmount,CreatedBy=PAM.CreatedBy,CreatedDate=PAM.CreatedDate
+							,AuthorizedBy=PAM.AuthorizedBy,AuthorizedDate=PAM.AuthorizedDate
+							,DivisibilityRate=PAM.DivisibilityRate,MultiplicativeRate=PAM.MultiplicativeRate,POAgainst=PAM.POAgainst
+							,IsCSAgainstAgreement=0,IsAuthorizedInERP=0
+							,IsReadyForAuthorization=IsNull(PAM.IsReadyToAuthorize,0)
+							,IsPublishInPortal=0
+							,ERPPONo=PAM.pono						
+							,ERPPOAmendmentNo=PAM.POAmendmentNo
+							From Purchase.POAmendmentMain PAM
+							Inner Join (
+											Select CM.CompanyCode,CM.DBNo,CM.CompanyNo
+											From ' + @PortalDBName + '.masterdata.mCompanyMaster CM
+											Inner Join ' + @PortalDBName + '.masterdata.mDBMaster DB on DB.DBNo=CM.DBNo 
+											And IsNumeric(CM.CompanyCode)=1
+											Where DBName=''' + @CurrentDB +''' And CM.CompanyCode not in (''RB'',''RU'',''SH'',''AP'')
+										  )PCM on IsNumeric(PCM.CompanyCode)=1 And PCM.CompanyCode=PAM.CompanyNo
+							Inner Join ' + @PortalDBName + '.Purchase.POAmendmentMain EPAM on EPAM.CompanyNo=PCM.CompanyNo
+																					And EPAM.ERPPOAmendmentNo=PAM.POamendmentNo
+							Inner Join ' + @PortalDBName + '.ERPMaster.eVendorLocationDetail EVLD on EVLD.ERPUniqueValue2=PAM.VendorLocationNo
+																							And EVLD.DBNo=PCM.DBNo
+																							And IsNumeric(EVLD.ERPUniqueValue2)=1
+							Inner Join ' + @PortalDBName + '.masterdata.mVendorLocationDetail EVD on EVD.VendorLocationNo=EVLD.VendorLocationNo
+							Where PAM.POAmendmentNo=' + Convert(Varchar,@POAmendmentNo) 
+							
+Select @Query5=	'				
+							-- Update PO
+							Update EPAM
+							Set AmendmentNo=PAM.AmendmentNo							
+							,DocumentDate=PAM.DocumentDate
+							,DocumentStatusNo=PAM.DocumentStatusNo
+							,PODocumentTypeNo=PAM.PODocumentTypeNo
+							,IndentTypeNo=PAM.IndentTypeNo,POPurchaseCategoryNo=PAM.POPurchaseCategoryNo
+							,PORefDocumentTypeNo=Case When PAM.PortalRevisedQuotationNo is not null then 1 else  PAM.PORefDocumentTypeNo End
+							,VendorNo=EVD.VendorNo
+							,VendorLocationNo=EVD.VendorLocationNo
+							,ValidityDate=PAM.ValidityDate
+							,RefDocumentNo=PAM.PortalRevisedQuotationNo,PaymentModeNo=PAM.PaymentModeNo
+							,StatusNo=PAM.StatusNo,NetAmount=PAM.NetAmount,CreatedBy=PAM.CreatedBy,CreatedDate=PAM.CreatedDate
+							,AuthorizedBy=PAM.AuthorizedBy,AuthorizedDate=PAM.AuthorizedDate
+							,DivisibilityRate=PAM.DivisibilityRate,MultiplicativeRate=PAM.MultiplicativeRate,POAgainst=PAM.POAgainst
+							,IsCSAgainstAgreement=0,IsAuthorizedInERP=0
+							--,IsReadyForAuthorization=PAM.IsReadyToAuthorize
+							,IsPublishInPortal=0	
+							,ERPPONo=PAM.pono
+							From Purchase.POMain PAM
+							Inner Join (
+											Select CM.CompanyCode,CM.DBNo,CM.CompanyNo
+											From ' + @PortalDBName + '.masterdata.mCompanyMaster CM
+											Inner Join ' + @PortalDBName + '.masterdata.mDBMaster DB on DB.DBNo=CM.DBNo 
+											And IsNumeric(CM.CompanyCode)=1
+											Where DBName=''' + @CurrentDB +''' And CM.CompanyCode not in (''RB'',''RU'',''SH'',''AP'')
+										  )PCM on IsNumeric(PCM.CompanyCode)=1 And PCM.CompanyCode=PAM.CompanyNo
+							Inner Join ' + @PortalDBName + '.Purchase.POMain EPAM on EPAM.CompanyNo=PCM.CompanyNo
+																					And EPAM.ERPPONo=PAM.pONo
+							Inner Join ' + @PortalDBName + '.ERPMaster.eVendorLocationDetail EVLD on EVLD.ERPUniqueValue2=PAM.VendorLocationNo
+																							And EVLD.DBNo=PCM.DBNo
+																							And IsNumeric(EVLD.ERPUniqueValue2)=1
+							Inner Join ' + @PortalDBName + '.masterdata.mVendorLocationDetail EVD on EVD.VendorLocationNo=EVLD.VendorLocationNo
+							Where PAM.PONo=@PONo
+							
+					END
+					ELSE -- IF PO Not found
+					BEGIN '
+
+	Select @Query6=	'				
+						Select @Max= Max(Convert(int,DocumentNoYearly))
+						From ' + @PortalDBName + '.Purchase.POMain
+						Where ISNUMERIC(DocumentNoYearly)=1
+						
+						Select @DocumentNoYearly= Right(''00000''+ Convert(varchar,IsNull(@Max,0)+1),6)
+						
+						INSERT INTO ' + @PortalDBName + '.[Purchase].[POMain]
+						   ([CompanyNo],[YearNo],[AmendmentNo],[DivisionNo],[DocumentNoYearly],[DocumentDate]
+						   ,[DocumentStatusNo],[PODocumentTypeNo],[IndentTypeNo],[POPurchaseCategoryNo]
+						   ,[PORefDocumentTypeNo],[RefDocumentNo],[VendorNo],[VendorLocationNo]
+						   ,[VendorContactNo],[ValidityDate],[CurrencyConversionNo],[DivisibilityRate]
+						   ,[MultiplicativeRate] ,[WayBillNo],[WaybillDate],[ConsigneeNo]
+						   ,[ConsigneeLocationNo],[FreightTypeNo],[FreightRateTypeNo],[FreightAmount]
+						   ,ToLocationNo ,[PayToPartyNo],[PayToPartyLocationNo],[BillToPartyNo]
+						   ,[BillTopartyLocationNo],[PaymentModeNo],[Remarks],[StatusNo],[NetAmount],[CreatedBy]
+						   ,[CreatedDate],[AuthorizedBy],[AuthorizedDate],ReleasedBy,ReleasedDate,POAgainst
+						   ,DeptNo,FromLocationNo,ReferenceNo ,ReferenceDate ,NoOfTrips,SubGroupNo
+						   ,IsCSAgainstAgreement,BasicAmount,VehicleTypeNo,PaymentDueBasisNo
+							,DueDays,DocumentSerialNo,CompanyShippingLocation,PartyRefNo
+							,PartyRefDate,AuthorizationGroupNo,IsReadyForAuthorization,IsPublishInPortal
+							,ERPDocumentNoYearly,ERPPONo
+						   )
+			 			Select PCM.CompanyNo,MF.YearNo,PAM.AmendmentNo,Null DivisionNo,@DocumentNoYearly,PAM.DocumentDate
+			 			,PAM.DocumentStatusNo,PAM.PODocumentTypeNo,PAM.IndentTypeNo,PAM.POPurchaseCategoryNo
+			 			,Case When PAM.PortalRevisedQuotationNo is not null then 1 else  PAM.PORefDocumentTypeNo End
+			 			,PAM.PortalRevisedQuotationNo RefDocumentNo,EVD.VendorNo,EVD.VendorLocationNo
+			 			,Null VendorContactNo,PAM.ValidityDate,Null CurrencyConversionNo,PAM.DivisibilityRate
+			 			,PAM.MultiplicativeRate,PAM.WayBillNo,PAM.WaybillDate,Null ConsigneeNo
+			 			,Null ConsigneeLocationNo,PAM.[FreightTypeNo],PAM.[FreightRateTypeNo],PAM.[FreightAmount]
+			 			,Null ToLocationNo ,Null [PayToPartyNo] ,Null [PayToPartyLocationNo],Null [BillToPartyNo]
+						,Null [BillTopartyLocationNo], PAM.PaymentModeNo [PaymentModeNo],PAM.[Remarks],PAM.StatusNo,PAM.[NetAmount],1 [CreatedBy]
+						,PAM.[CreatedDate],1 [AuthorizedBy],PAM.[AuthorizedDate],Null ReleasedBy,Null ReleasedDate,PAM.POAgainst,Null DeptNo
+						,Null FromLocationNo ,PAM.ReferenceNo ,PAM.ReferenceDate ,Null NoOfTrips,Null SubGroupNo,0 IsCSAgainstAgreement
+						,0 BasicAmount,Null VehicleTypeNo,Null PaymentDueBasisNo,Null DueDays,Null DocumentSerialNo
+						,Null CompanyShippingLocation,Null PartyRefNo,Null PartyRefDate,Null AuthorizationGroupNo
+						,IsNull(PAM.IsReadyToAuthorize,0) IsReadyForAuthorization,0 IsPublishInPortal
+						,PAM.DocumentNoYearly,PAM.PONo
+						From Purchase.POAmendmentMain PAM
+						Inner Join (
+											Select CM.CompanyCode,CM.DBNo,CM.CompanyNo
+											From ' + @PortalDBName + '.masterdata.mCompanyMaster CM
+											Inner Join ' + @PortalDBName + '.masterdata.mDBMaster DB on DB.DBNo=CM.DBNo 
+											And IsNumeric(CM.CompanyCode)=1
+											Where DBName=''' + @CurrentDB +''' And CM.CompanyCode not in (''RB'',''RU'',''SH'',''AP'')
+								 )PCM on IsNumeric(PCM.CompanyCode)=1 And PCM.CompanyCode=PAM.CompanyNo
+						Inner Join ' + @PortalDBName + '.masterdata.mFYear MF on PAM.POAmendmentDate between MF.StartDate and MF.EndDate
+						Inner Join ' + @PortalDBName + '.ERPMaster.eVendorLocationDetail EVLD on EVLD.ERPUniqueValue2=PAM.VendorLocationNo
+																							And EVLD.DBNo=PCM.DBNo
+																							And IsNumeric(EVLD.ERPUniqueValue2)=1
+						Inner Join ' + @PortalDBName + '.masterdata.mVendorLocationDetail EVD on EVD.VendorLocationNo=EVLD.VendorLocationNo
+						Where PAM.POAmendmentNo=' + Convert(Varchar,@POAmendmentNo) + '
+						
+						Select @PortalPONo = Ident_Current(''' + @PortalDBName + '.[Purchase].[POMain]'') '
+					
+Select @Query7=	'		
+					  INSERT INTO ' + @PortalDBName + '.[Purchase].[POAmendmentMain]
+						   ([CompanyNo],[YearNo],[POAmendmentDate],[PONo],[AmendmentNo],[DivisionNo]
+						   ,[DocumentNoYearly],[DocumentDate],[DocumentStatusNo],[PODocumentTypeNo]
+						   ,[IndentTypeNo],[POPurchaseCategoryNo],[PORefDocumentTypeNo],[RefDocumentNo],[VendorNo],[VendorLocationNo]
+						   ,[VendorContactNo],[ValidityDate],[CurrencyConversionNo],[DivisibilityRate]
+						   ,[MultiplicativeRate],[WayBillNo],[WaybillDate],[ConsigneeNo],[ConsigneeLocationNo],[FreightTypeNo]
+						   ,[FreightRateTypeNo],[FreightAmount],ToLocationNo ,[PayToPartyNo],[PayToPartyLocationNo],[BillToPartyNo]
+						   ,[BillTopartyLocationNo],[PaymentModeNo],[Remarks],[StatusNo],[NetAmount],[CreatedBy],[CreatedDate],[AuthorizedBy]
+						   ,[AuthorizedDate],Releasedby,ReleasedDate,POAgainst,DeptNo,FromLocationNo,AmendmentReason
+						   ,ReferenceNo ,ReferenceDate ,NoOfTrips,SubGroupNo,IsCSAgainstAgreement,BasicAmount,VehicleTypeNo,PaymentDueBasisNo	
+							,DueDays,DocumentSerialNo,CompanyShippingLocation,PartyRefNo,PartyRefDate,AuthorizationGroupNo	
+							,IsReadyForAuthorization,IsPublishInPortal	   
+							,ERPPONo,ERPPOAmendmentNo
+						   )	
+						Select PCM.[CompanyNo],MF.[YearNo],PAM.[POAmendmentDate]
+						   ,@PortalPONo,PAM.[AmendmentNo],Null [DivisionNo],@documentNoYearly [DocumentNoYearly],PAM.[DocumentDate]
+						   ,PAM.[DocumentStatusNo],PAM.[PODocumentTypeNo],PAM.[IndentTypeNo],PAM.[POPurchaseCategoryNo]
+						   ,Case When PAM.PortalRevisedQuotationNo is not null then 1 else  PAM.PORefDocumentTypeNo End
+						   ,PAM.PortalRevisedQuotationNo [RefDocumentNo],EVD.VendorNo [VendorNo],EVD.[VendorLocationNo],Null [VendorContactNo]
+						   ,PAM.[ValidityDate],Null [CurrencyConversionNo],PAM.[DivisibilityRate],PAM.[MultiplicativeRate],PAM.[WayBillNo],PAM.[WaybillDate]
+						   ,Null [ConsigneeNo],Null [ConsigneeLocationNo],PAM.[FreightTypeNo],PAM.[FreightRateTypeNo]
+						   ,Null [FreightAmount],Null ToLocationNo ,Null [PayToPartyNo],Null [PayToPartyLocationNo],Null [BillToPartyNo]
+						   ,Null [BillTopartyLocationNo],PAM.PaymentModeNo [PaymentModeNo],PAM.[Remarks],PAM.[StatusNo],PAM.[NetAmount]
+						   ,1 [CreatedBy],PAM.[CreatedDate],1 [AuthorizedBy],PAM.[AuthorizedDate],Null Releasedby,Null ReleasedDate
+						   ,PAM.POAgainst,Null DeptNo,Null FromLocationNo,PAM.AmendmentReason,PAM.ReferenceNo ,PAM.ReferenceDate ,Null NoOfTrips,Null SubGroupNo
+						  ,0 IsCSAgainstAgreement,0 BasicAmount,Null VehicleTypeNo,Null PaymentDueBasisNo,Null DueDays,Null DocumentSerialNo,Null CompanyShippingLocation,PAM.ReferenceNo PartyRefNo
+						  ,PAM.ReferenceDate PartyRefDate,Null AuthorizationGroupNo ,IsNull(PAM.IsReadyToAuthorize,0) IsReadyForAuthorization,0 IsPublishInPortal
+						  ,PAM.PONo,PAM.POAmendmentNo
+						From Purchase.POAmendmentMain PAM
+						Inner Join (
+											Select CM.CompanyCode,CM.DBNo,CM.CompanyNo
+											From ' + @PortalDBName + '.masterdata.mCompanyMaster CM
+											Inner Join ' + @PortalDBName + '.masterdata.mDBMaster DB on DB.DBNo=CM.DBNo 
+											And IsNumeric(CM.CompanyCode)=1
+											Where DBName=''' + @CurrentDB +''' And CM.CompanyCode not in (''RB'',''RU'',''SH'',''AP'')
+								 )PCM on IsNumeric(PCM.CompanyCode)=1 And PCM.CompanyCode=PAM.CompanyNo
+						Inner Join ' + @PortalDBName + '.masterdata.mFYear MF on PAM.POAmendmentDate between MF.StartDate and MF.EndDate
+						Inner Join ' + @PortalDBName + '.ERPMaster.eVendorLocationDetail EVLD on EVLD.ERPUniqueValue2=PAM.VendorLocationNo
+																							And EVLD.DBNo=PCM.DBNo
+																							And IsNumeric(EVLD.ERPUniqueValue2)=1
+						Inner Join ' + @PortalDBName + '.masterdata.mVendorLocationDetail EVD on EVD.VendorLocationNo=EVLD.VendorLocationNo					
+						Where PAM.POAmendmentNo=' + Convert(Varchar,@POAmendmentNo) + '
+						
+						Select @PortalPOAmendmentNo = Ident_Current(''' + @PortalDBName + '.[Purchase].[POAmendmentMain]'')
+						
+					END'
+					
+	Select @Query8='
+						Insert into ' + @PortalDBName + '.Purchase.POIndentDetail
+						Select @PortalPONo,POID.IndentNo,POID.ItemNo,POID.MakeNo IndentMakeNo,EMM.MakeNo MakeNo 
+						,PAID.FirstCF,EUM.UnitNo UnitNo,PAID.SecondCF,PAID.POQty POQty,PAID.PORate,PAID.ScheduleDate
+						,POID.IndentItemLineNo
+						From Purchase.POAmendmentIndentDetail PAID
+						Inner Join Inventory.IndentItemDetail IID on IID.IndentNo=PAID.IndentNo
+															And IID.ItemNo=PAID.ItemNo
+															And IsNull(IID.MakeNo,0) = IsNull(PAID.IndentMakeNo,0)
+						Inner Join Inventory.IndentMain IIM on IIM.IndentNo=IID.IndentNo
+						Left Join (
+									Select CM.CompanyCode,CM.DBNo
+									from ' + @PortalDBName + '.masterdata.mCompanyMaster CM
+									Inner Join ' + @PortalDBName + '.masterdata.mDBMaster DB on DB.DBNo=CM.DBNo 
+									And IsNumeric(CM.CompanyCode)=1
+									Where DBName=''' + @CurrentDB +''' And CM.CompanyCode not in (''RB'',''RU'',''SH'',''AP'')
+								  )PCM on IsNumeric(PCM.CompanyCode)=1 And PCM.CompanyCode=IIM.CompanyNo 
+						Inner Join ' + @PortalDBName + '.erpMaster.eUnitMaster EUM on EUM.ERPUniqueValue=PAID.POUnitNo and EUM.DBNo=PCM.DbNo And ISNUMERIC(EUM.ERPUniqueValue)=1
+						Left Join ' + @PortalDBName + '.erpMaster.eMakeMaster EMM on EMM.ERPUniqueValue=PAID.MakeNo and EMM.DBNo=PCM.DbNo And ISNUMERIC(EMM.ERPUniqueValue)=1
+						Inner Join ' + @PortalDBName + '.Customize.RealIndentMain RIM on RIM.EntityCode=PCM.CompanyCode
+																		And RIM.DBNo=PCM.DBNo
+																		And RIM.DocumentNoYearly=IIM.DocumentNoYearly
+																		And RIM.DocumentDate=IIM.DocumentDate
+						Inner Join ' + @PortalDBName + '.Customize.RealIndentBody RIB on RIB.IndentNo=RIM.IndentNo
+																			And RIB.SLNo=IID.IndentItemDetailNo
+						Inner Join ' + @PortalDBName + '.Inventory.IndentItemDetail POID on POID.IndentItemDetailNo=RIB.PortalIndentItemDetailNo
+						Where PAID.POAmendmentNo=' + Convert(Varchar,@POAmendmentNo) + '
+						
+						Insert into ' + @PortalDBName + '.Purchase.POAmendmentIndentDetail
+						Select @PortalPOAmendmentNo,POID.IndentNo,POID.ItemNo,POID.MakeNo IndentMakeNo,EMM.MakeNo MakeNo 
+						,PAID.FirstCF,EUM.UnitNo UnitNo,PAID.SecondCF,PAID.POQty POQty,PAID.PORate,PAID.ScheduleDate
+						,POID.IndentItemLineNo
+						From Purchase.POAmendmentIndentDetail PAID
+						Inner Join Inventory.IndentItemDetail IID on IID.IndentNo=PAID.IndentNo
+															And IID.ItemNo=PAID.ItemNo
+															And IsNull(IID.MakeNo,0) = IsNull(PAID.IndentMakeNo,0)
+						Inner Join Inventory.IndentMain IIM on IIM.IndentNo=IID.IndentNo
+						Left Join (
+									Select CM.CompanyCode,CM.DBNo
+									from ' + @PortalDBName + '.masterdata.mCompanyMaster CM
+									Inner Join ' + @PortalDBName + '.masterdata.mDBMaster DB on DB.DBNo=CM.DBNo 
+									And IsNumeric(CM.CompanyCode)=1
+									Where DBName=''' + @CurrentDB +''' And CM.CompanyCode not in (''RB'',''RU'',''SH'',''AP'')
+								  )PCM on IsNumeric(PCM.CompanyCode)=1 And PCM.CompanyCode=IIM.CompanyNo 
+						Inner Join ' + @PortalDBName + '.erpMaster.eUnitMaster EUM on EUM.ERPUniqueValue=PAID.POUnitNo and EUM.DBNo=PCM.DbNo And ISNUMERIC(EUM.ERPUniqueValue)=1
+						Left Join ' + @PortalDBName + '.erpMaster.eMakeMaster EMM on EMM.ERPUniqueValue=PAID.MakeNo and EMM.DBNo=PCM.DbNo And ISNUMERIC(EMM.ERPUniqueValue)=1
+						Inner Join ' + @PortalDBName + '.Customize.RealIndentMain RIM on RIM.EntityCode=PCM.CompanyCode
+																		And RIM.DBNo=PCM.DBNo
+																		And RIM.DocumentNoYearly=IIM.DocumentNoYearly
+																		And RIM.DocumentDate=IIM.DocumentDate
+						Inner Join ' + @PortalDBName + '.Customize.RealIndentBody RIB on RIB.IndentNo=RIM.IndentNo
+																			And RIB.SLNo=IID.IndentItemDetailNo
+						Inner Join ' + @PortalDBName + '.Inventory.IndentItemDetail POID on POID.IndentItemDetailNo=RIB.PortalIndentItemDetailNo
+						Where PAID.POAmendmentNo=' + Convert(Varchar,@POAmendmentNo) 
+						
+Select @Query9='						
+						Insert into ' + @PortalDBName + '.Purchase.POItemDetail
+						Select @PortalPONo,Null,Null,EIM.Itemno,EMM.MakeNo,PAID.TechSpecification,PAID.Quantity,EUM.UnitNo
+						,PAID.Rate,PAID.BasicAmount,PAID.NetAmount,PAID.Remark,PAID.StatusNo,PAID.ToleranceBasisNo,PAID.TolerancePlus,PAID.ToleranceMinus
+						,ECM.CostCenterNo,null,null
+						From Purchase.POAmendmentItemDetail PAID
+						Inner Join Purchase.POAmendmentMain PAM on PAM.POAmendmentNo=PAID.POAmendmentNo					
+						Left Join (
+									Select CM.CompanyCode,CM.DBNo
+									from ' + @PortalDBName + '.masterdata.mCompanyMaster CM
+									Inner Join ' + @PortalDBName + '.masterdata.mDBMaster DB on DB.DBNo=CM.DBNo 
+									And IsNumeric(CM.CompanyCode)=1
+									Where DBName=''' + @CurrentDB +''' And CM.CompanyCode not in (''RB'',''RU'',''SH'',''AP'')
+								  )PCM on IsNumeric(PCM.CompanyCode)=1 And PCM.CompanyCode=PAM.CompanyNo 
+						Inner Join ' + @PortalDBName + '.erpMaster.eUnitMaster EUM on EUM.ERPUniqueValue=PAID.UnitNo and EUM.DBNo=PCM.DbNo And ISNUMERIC(EUM.ERPUniqueValue)=1
+						Left Join ' + @PortalDBName + '.erpMaster.eMakeMaster EMM on EMM.ERPUniqueValue=PAID.MakeNo and EMM.DBNo=PCM.DbNo And ISNUMERIC(EMM.ERPUniqueValue)=1
+						Inner Join ' + @PortalDBName + '.erpMaster.eItemMaster EIM on EIM.ERPUniqueValue=PAID.Itemno and EIM.DBNo=PCM.DbNo And ISNUMERIC(EIM.ERPUniqueValue)=1
+						LEft Join ' + @PortalDBName + '.erpMaster.eCostCenterMaster ECM on ECM.ERPUniqueValue=PAID.CostCenterNo and EIM.DBNo=PCM.DbNo And ISNUMERIC(ECM.ERPUniqueValue)=1
+						Where PAID.POAmendmentNo=' + Convert(Varchar,@POAmendmentNo) + '
+						
+						Insert into ' + @PortalDBName + '.Purchase.POAmendmentItemDetail
+						Select @PortalPOAmendmentNo,Null,EIM.Itemno,EMM.MakeNo,PAID.TechSpecification,PAID.Quantity,EUM.UnitNo
+						,PAID.Rate,PAID.BasicAmount,PAID.NetAmount,PAID.Remark,PAID.StatusNo,PAID.ToleranceBasisNo,PAID.TolerancePlus,PAID.ToleranceMinus
+						,ECM.CostCenterNo,null,null
+						From Purchase.POAmendmentItemDetail PAID
+						Inner Join Purchase.POAmendmentMain PAM on PAM.POAmendmentNo=PAID.POAmendmentNo					
+						Left Join (
+									Select CM.CompanyCode,CM.DBNo
+									from ' + @PortalDBName + '.masterdata.mCompanyMaster CM
+									Inner Join ' + @PortalDBName + '.masterdata.mDBMaster DB on DB.DBNo=CM.DBNo 
+									And IsNumeric(CM.CompanyCode)=1
+									Where DBName=''' + @CurrentDB +''' And CM.CompanyCode not in (''RB'',''RU'',''SH'',''AP'')
+								  )PCM on IsNumeric(PCM.CompanyCode)=1 And PCM.CompanyCode=PAM.CompanyNo 
+						Inner Join ' + @PortalDBName + '.erpMaster.eUnitMaster EUM on EUM.ERPUniqueValue=PAID.UnitNo and EUM.DBNo=PCM.DbNo And ISNUMERIC(EUM.ERPUniqueValue)=1
+						Left Join ' + @PortalDBName + '.erpMaster.eMakeMaster EMM on EMM.ERPUniqueValue=PAID.MakeNo and EMM.DBNo=PCM.DbNo And ISNUMERIC(EMM.ERPUniqueValue)=1
+						Inner Join ' + @PortalDBName + '.erpMaster.eItemMaster EIM on EIM.ERPUniqueValue=PAID.Itemno and EIM.DBNo=PCM.DbNo And ISNUMERIC(EIM.ERPUniqueValue)=1
+						LEft Join ' + @PortalDBName + '.erpMaster.eCostCenterMaster ECM on ECM.ERPUniqueValue=PAID.CostCenterNo and EIM.DBNo=PCM.DbNo And ISNUMERIC(ECM.ERPUniqueValue)=1
+						Where PAID.POAmendmentNo=' + Convert(Varchar,@POAmendmentNo) + '
+				END '
+Select @Query10='				
+				Else -- If Not 0th Amendment
+				BEGIN
+					Select @AuthBy=AuthorizedBy From Purchase.POAmendmentMain where POAmendmentNo=' + Convert(Varchar,@POAmendmentNo) + '
+					Select @PortalPONo=POM.PONo 
+					,@DocumentNoYearly=POM.DocumentNoYearly 
+					From Purchase.POAmendmentMain PAM
+					Inner Join ' + @PortalDBName + '.Purchase.POMain pom on pom.ERPPONo=PAM.PONo
+					Where PAM.POAmendmentNo=' + Convert(Varchar,@POAmendmentNo) + '
+					
+					-- Delete PO
+					If @AuthBy is not null
+					BEGIN
+							Delete From ' + @PortalDBName + '.Purchase.POItemDetail Where PONo=@PortalPONo
+							Delete From ' + @PortalDBName + '.Purchase.POIndentDetail Where PONo=@PortalPONo
+							Delete From ' + @PortalDBName + '.Purchase.POItemScheduleDetail Where PONo=@PortalPONo	
+							
+							-- Update PO
+							Update EPAM
+							Set AmendmentNo=PAM.AmendmentNo							
+							,DocumentDate=PAM.DocumentDate
+							,DocumentStatusNo=PAM.DocumentStatusNo
+							,PODocumentTypeNo=PAM.PODocumentTypeNo
+							,IndentTypeNo=PAM.IndentTypeNo,POPurchaseCategoryNo=PAM.POPurchaseCategoryNo
+							,PORefDocumentTypeNo=Case When PAM.PortalRevisedQuotationNo is not null then 1 else  PAM.PORefDocumentTypeNo End
+							,VendorNo=EVD.VendorNo
+							,VendorLocationNo=EVD.VendorLocationNo
+							,ValidityDate=PAM.ValidityDate
+							,RefDocumentNo=PAM.PortalRevisedQuotationNo,PaymentModeNo=PAM.PaymentModeNo
+							,StatusNo=PAM.StatusNo,NetAmount=PAM.NetAmount,CreatedBy=PAM.CreatedBy,CreatedDate=PAM.CreatedDate
+							,AuthorizedBy=PAM.AuthorizedBy,AuthorizedDate=PAM.AuthorizedDate
+							,DivisibilityRate=PAM.DivisibilityRate,MultiplicativeRate=PAM.MultiplicativeRate,POAgainst=PAM.POAgainst
+							,IsCSAgainstAgreement=0,IsAuthorizedInERP=0
+							--,IsReadyForAuthorization=PAM.IsReadyToAuthorize
+							,IsPublishInPortal=0	
+							,ERPPONo=PAM.pono
+							From Purchase.POMain PAM
+							Inner Join (
+											Select CM.CompanyCode,CM.DBNo,CM.CompanyNo
+											From ' + @PortalDBName + '.masterdata.mCompanyMaster CM
+											Inner Join ' + @PortalDBName + '.masterdata.mDBMaster DB on DB.DBNo=CM.DBNo 
+											And IsNumeric(CM.CompanyCode)=1
+											Where DBName=''' + @CurrentDB +''' And CM.CompanyCode not in (''RB'',''RU'',''SH'',''AP'')
+										  )PCM on IsNumeric(PCM.CompanyCode)=1 And PCM.CompanyCode=PAM.CompanyNo
+							Inner Join ' + @PortalDBName + '.Purchase.POMain EPAM on EPAM.CompanyNo=PCM.CompanyNo
+																					And EPAM.ERPPONo=PAM.pONo
+							Inner Join ' + @PortalDBName + '.ERPMaster.eVendorLocationDetail EVLD on EVLD.ERPUniqueValue2=PAM.VendorLocationNo
+																							And EVLD.DBNo=PCM.DBNo
+																							And IsNumeric(EVLD.ERPUniqueValue2)=1
+							Inner Join ' + @PortalDBName + '.masterdata.mVendorLocationDetail EVD on EVD.VendorLocationNo=EVLD.VendorLocationNo
+							Where PAM.PONo=@PONo
+							End
+													
+					If Exists(
+								Select 1
+								From Purchase.POAmendmentMain PAM
+								Left Join (
+											Select CM.CompanyCode,CM.DBNo,CM.CompanyNo
+											From ' + @PortalDBName + '.masterdata.mCompanyMaster CM
+											Inner Join ' + @PortalDBName + '.masterdata.mDBMaster DB on DB.DBNo=CM.DBNo 
+											And IsNumeric(CM.CompanyCode)=1
+											Where DBName=''' + @CurrentDB +''' And CM.CompanyCode not in (''RB'',''RU'',''SH'',''AP'')
+										  )PCM on IsNumeric(PCM.CompanyCode)=1 And PCM.CompanyCode=PAM.CompanyNo
+								Inner Join ' + @PortalDBName + '.Purchase.POAmendmentMain EPAM on EPAM.CompanyNo=PCM.CompanyNo
+																					And EPAM.ERPPOAmendmentNo=PAM.POamendmentNo
+								Where PAM.POAmendmentNo=' + Convert(Varchar,@POAmendmentNo) + '	
+																											
+							) ' -- If POAmendment Found in Portal
+Select @Query11='					BEGIN
+
+							Select @PortalPOAmendmentNo =POAmendmentNo 
+							,@PortalPONo=PONo
+							From ' + @PortalDBName + '.Purchase.POAmendmentMain
+							Where ERPPOAmendmentNo=' + Convert(Varchar,@POAmendmentNo) + '
+							
+							-- Delete POAmendment
+							Delete From ' + @PortalDBName + '.Purchase.POAmendmentItemDetail Where POAmendmentNo=@PortalPOAmendmentNo
+							Delete From ' + @PortalDBName + '.Purchase.POAmendmentIndentDetail Where POAmendmentNo=@PortalPOAmendmentNo
+							Delete From ' + @PortalDBName + '.Purchase.POAmendmentItemScheduleDetail Where POAmendmentNo=@PortalPOAmendmentNo
+							
+													
+							Update EPAM
+							Set POAmendmentDate=PAM.POAmendmentDate
+							,AmendmentNo=PAM.AmendmentNo							
+							,DocumentDate=PAM.DocumentDate
+							,DocumentStatusNo=PAM.DocumentStatusNo
+							,PODocumentTypeNo=PAM.PODocumentTypeNo
+							,IndentTypeNo=PAM.IndentTypeNo,POPurchaseCategoryNo=PAM.POPurchaseCategoryNo
+							,PORefDocumentTypeNo=Case When PAM.PortalRevisedQuotationNo is not null then 1 else  PAM.PORefDocumentTypeNo End
+							,VendorNo=EVD.VendorNo
+							,VendorLocationNo=EVD.VendorLocationNo
+							,ValidityDate=PAM.ValidityDate
+							,RefDocumentNo=PAM.PortalRevisedQuotationNo,PaymentModeNo=PAM.PaymentModeNo
+							,StatusNo=PAM.StatusNo,NetAmount=PAM.NetAmount,CreatedBy=PAM.CreatedBy,CreatedDate=PAM.CreatedDate
+							,AuthorizedBy=PAM.AuthorizedBy,AuthorizedDate=PAM.AuthorizedDate
+							,DivisibilityRate=PAM.DivisibilityRate,MultiplicativeRate=PAM.MultiplicativeRate,POAgainst=PAM.POAgainst
+							,IsCSAgainstAgreement=0,IsAuthorizedInERP=0
+							,IsReadyForAuthorization=IsNull(PAM.IsReadyToAuthorize,0)
+							,IsPublishInPortal=0
+							,ERPPONo=PAM.pono						
+							,ERPPOAmendmentNo=PAM.POAmendmentNo
+							From Purchase.POAmendmentMain PAM
+							Inner Join (
+											Select CM.CompanyCode,CM.DBNo,CM.CompanyNo
+											From ' + @PortalDBName + '.masterdata.mCompanyMaster CM
+											Inner Join ' + @PortalDBName + '.masterdata.mDBMaster DB on DB.DBNo=CM.DBNo 
+											And IsNumeric(CM.CompanyCode)=1
+											Where DBName=''' + @CurrentDB +''' And CM.CompanyCode not in (''RB'',''RU'',''SH'',''AP'')
+										  )PCM on IsNumeric(PCM.CompanyCode)=1 And PCM.CompanyCode=PAM.CompanyNo
+							Inner Join ' + @PortalDBName + '.Purchase.POAmendmentMain EPAM on EPAM.CompanyNo=PCM.CompanyNo
+																					And EPAM.ERPPOAmendmentNo=PAM.POamendmentNo
+							Inner Join ' + @PortalDBName + '.ERPMaster.eVendorLocationDetail EVLD on EVLD.ERPUniqueValue2=PAM.VendorLocationNo
+																							And EVLD.DBNo=PCM.DBNo
+																							And IsNumeric(EVLD.ERPUniqueValue2)=1
+							Inner Join ' + @PortalDBName + '.masterdata.mVendorLocationDetail EVD on EVD.VendorLocationNo=EVLD.VendorLocationNo
+							Where PAM.POAmendmentNo=' + Convert(Varchar,@POAmendmentNo) + '
+
+							
+					END '
+	Select @Query12='				
+					ELSE -- IF PO Not found
+					BEGIN
+
+					  INSERT INTO ' + @PortalDBName + '.[Purchase].[POAmendmentMain]
+						   ([CompanyNo],[YearNo],[POAmendmentDate],[PONo],[AmendmentNo],[DivisionNo]
+						   ,[DocumentNoYearly],[DocumentDate],[DocumentStatusNo],[PODocumentTypeNo]
+						   ,[IndentTypeNo],[POPurchaseCategoryNo],[PORefDocumentTypeNo],[RefDocumentNo],[VendorNo],[VendorLocationNo]
+						   ,[VendorContactNo],[ValidityDate],[CurrencyConversionNo],[DivisibilityRate]
+						   ,[MultiplicativeRate],[WayBillNo],[WaybillDate],[ConsigneeNo],[ConsigneeLocationNo],[FreightTypeNo]
+						   ,[FreightRateTypeNo],[FreightAmount],ToLocationNo ,[PayToPartyNo],[PayToPartyLocationNo],[BillToPartyNo]
+						   ,[BillTopartyLocationNo],[PaymentModeNo],[Remarks],[StatusNo],[NetAmount],[CreatedBy],[CreatedDate],[AuthorizedBy]
+						   ,[AuthorizedDate],Releasedby,ReleasedDate,POAgainst,DeptNo,FromLocationNo,AmendmentReason
+						   ,ReferenceNo ,ReferenceDate ,NoOfTrips,SubGroupNo,IsCSAgainstAgreement,BasicAmount,VehicleTypeNo,PaymentDueBasisNo	
+							,DueDays,DocumentSerialNo,CompanyShippingLocation,PartyRefNo,PartyRefDate,AuthorizationGroupNo	
+							,IsReadyForAuthorization,IsPublishInPortal	   
+							,ERPPONo,ERPPOAmendmentNo
+						   )	
+						Select PCM.[CompanyNo],MF.[YearNo],PAM.[POAmendmentDate]
+						   ,@PortalPONo,PAM.[AmendmentNo],Null [DivisionNo],@documentNoYearly [DocumentNoYearly],PAM.[DocumentDate]
+						   ,PAM.[DocumentStatusNo],PAM.[PODocumentTypeNo],PAM.[IndentTypeNo],PAM.[POPurchaseCategoryNo]
+						   ,Case When PAM.PortalRevisedQuotationNo is not null then 1 else  PAM.PORefDocumentTypeNo End [PORefDocumentTypeNo]
+						   ,PAM.PortalRevisedQuotationNo [RefDocumentNo],EVD.VendorNo [VendorNo],EVD.[VendorLocationNo],Null [VendorContactNo]
+						   ,PAM.[ValidityDate],Null [CurrencyConversionNo],PAM.[DivisibilityRate],PAM.[MultiplicativeRate],PAM.[WayBillNo],PAM.[WaybillDate]
+						   ,Null [ConsigneeNo],Null [ConsigneeLocationNo],PAM.[FreightTypeNo],PAM.[FreightRateTypeNo]
+						   ,Null [FreightAmount],Null ToLocationNo ,Null [PayToPartyNo],Null [PayToPartyLocationNo],Null [BillToPartyNo]
+						   ,Null [BillTopartyLocationNo],PAM.PaymentModeNo [PaymentModeNo],PAM.[Remarks],PAM.[StatusNo],PAM.[NetAmount]
+						   ,1 [CreatedBy],PAM.[CreatedDate],1 [AuthorizedBy],PAM.[AuthorizedDate],Null Releasedby,Null ReleasedDate
+						   ,PAM.POAgainst,Null DeptNo,Null FromLocationNo,PAM.AmendmentReason,PAM.ReferenceNo ,PAM.ReferenceDate ,Null NoOfTrips,Null SubGroupNo
+						  ,0 IsCSAgainstAgreement,0 BasicAmount,Null VehicleTypeNo,Null PaymentDueBasisNo,Null DueDays,Null DocumentSerialNo,Null CompanyShippingLocation,PAM.ReferenceNo PartyRefNo
+						  ,PAM.ReferenceDate PartyRefDate,Null AuthorizationGroupNo ,IsNull(PAM.IsReadyToAuthorize,0) IsReadyForAuthorization,0 IsPublishInPortal
+						  ,PAM.PONo,PAM.POAmendmentNo
+						From Purchase.POAmendmentMain PAM
+						Inner Join (
+											Select CM.CompanyCode,CM.DBNo,CM.CompanyNo
+											From ' + @PortalDBName + '.masterdata.mCompanyMaster CM
+											Inner Join ' + @PortalDBName + '.masterdata.mDBMaster DB on DB.DBNo=CM.DBNo 
+											And IsNumeric(CM.CompanyCode)=1
+											Where DBName=''' + @CurrentDB +''' And CM.CompanyCode not in (''RB'',''RU'',''SH'',''AP'')
+								 )PCM on IsNumeric(PCM.CompanyCode)=1 And PCM.CompanyCode=PAM.CompanyNo
+						Inner Join ' + @PortalDBName + '.masterdata.mFYear MF on PAM.POAmendmentDate between MF.StartDate and MF.EndDate
+						Inner Join ' + @PortalDBName + '.ERPMaster.eVendorLocationDetail EVLD on EVLD.ERPUniqueValue2=PAM.VendorLocationNo
+																							And EVLD.DBNo=PCM.DBNo
+																							And IsNumeric(EVLD.ERPUniqueValue2)=1
+						Inner Join ' + @PortalDBName + '.masterdata.mVendorLocationDetail EVD on EVD.VendorLocationNo=EVLD.VendorLocationNo					
+						Where PAM.POAmendmentNo=' + Convert(Varchar,@POAmendmentNo) + '
+						
+						Select @PortalPOAmendmentNo = Ident_Current(''' + @PortalDBName + '.[Purchase].[POAmendmentMain]'')
+						
+					END'
+					
+					
+Select @Query13='
+					If @AuthBy is not null
+					BEGIN						
+						Insert into ' + @PortalDBName + '.Purchase.POIndentDetail
+						Select @PortalPONo,POID.IndentNo,POID.ItemNo,POID.MakeNo IndentMakeNo,EMM.MakeNo MakeNo 
+						,PAID.FirstCF,EUM.UnitNo UnitNo,PAID.SecondCF,PAID.POQty POQty,PAID.PORate,PAID.ScheduleDate
+						,POID.IndentItemLineNo
+						From Purchase.POAmendmentIndentDetail PAID
+						Inner Join Inventory.IndentItemDetail IID on IID.IndentNo=PAID.IndentNo
+															And IID.ItemNo=PAID.ItemNo
+															And IsNull(IID.MakeNo,0) = IsNull(PAID.IndentMakeNo,0)
+						Inner Join Inventory.IndentMain IIM on IIM.IndentNo=IID.IndentNo
+						Left Join (
+									Select CM.CompanyCode,CM.DBNo
+									from ' + @PortalDBName + '.masterdata.mCompanyMaster CM
+									Inner Join ' + @PortalDBName + '.masterdata.mDBMaster DB on DB.DBNo=CM.DBNo 
+									And IsNumeric(CM.CompanyCode)=1
+									Where DBName=''' + @CurrentDB +''' And CM.CompanyCode not in (''RB'',''RU'',''SH'',''AP'')
+								  )PCM on IsNumeric(PCM.CompanyCode)=1 And PCM.CompanyCode=IIM.CompanyNo 
+						Inner Join ' + @PortalDBName + '.erpMaster.eUnitMaster EUM on EUM.ERPUniqueValue=PAID.POUnitNo and EUM.DBNo=PCM.DbNo And ISNUMERIC(EUM.ERPUniqueValue)=1
+						Left Join ' + @PortalDBName + '.erpMaster.eMakeMaster EMM on EMM.ERPUniqueValue=PAID.MakeNo and EMM.DBNo=PCM.DbNo And ISNUMERIC(EMM.ERPUniqueValue)=1
+						Inner Join ' + @PortalDBName + '.Customize.RealIndentMain RIM on RIM.EntityCode=PCM.CompanyCode
+																		And RIM.DBNo=PCM.DBNo
+																		And RIM.DocumentNoYearly=IIM.DocumentNoYearly
+																		And RIM.DocumentDate=IIM.DocumentDate
+						Inner Join ' + @PortalDBName + '.Customize.RealIndentBody RIB on RIB.IndentNo=RIM.IndentNo
+																			And RIB.SLNo=IID.IndentItemDetailNo
+						Inner Join ' + @PortalDBName + '.Inventory.IndentItemDetail POID on POID.IndentItemDetailNo=RIB.PortalIndentItemDetailNo
+						Where PAID.POAmendmentNo=' + Convert(Varchar,@POAmendmentNo) + '
+						
+						
+						Insert into ' + @PortalDBName + '.Purchase.POItemDetail
+						Select @PortalPONo,Null,Null,EIM.Itemno,EMM.MakeNo,PAID.TechSpecification,PAID.Quantity,EUM.UnitNo
+						,PAID.Rate,PAID.BasicAmount,PAID.NetAmount,PAID.Remark,PAID.StatusNo,PAID.ToleranceBasisNo,PAID.TolerancePlus,PAID.ToleranceMinus
+						,ECM.CostCenterNo,null,null
+						From Purchase.POAmendmentItemDetail PAID
+						Inner Join Purchase.POAmendmentMain PAM on PAM.POAmendmentNo=PAID.POAmendmentNo					
+						Left Join (
+									Select CM.CompanyCode,CM.DBNo
+									from ' + @PortalDBName + '.masterdata.mCompanyMaster CM
+									Inner Join ' + @PortalDBName + '.masterdata.mDBMaster DB on DB.DBNo=CM.DBNo 
+									And IsNumeric(CM.CompanyCode)=1
+									Where DBName=''' + @CurrentDB +''' And CM.CompanyCode not in (''RB'',''RU'',''SH'',''AP'')
+								  )PCM on IsNumeric(PCM.CompanyCode)=1 And PCM.CompanyCode=PAM.CompanyNo 
+						Inner Join ' + @PortalDBName + '.erpMaster.eUnitMaster EUM on EUM.ERPUniqueValue=PAID.UnitNo and EUM.DBNo=PCM.DbNo And ISNUMERIC(EUM.ERPUniqueValue)=1
+						Left Join ' + @PortalDBName + '.erpMaster.eMakeMaster EMM on EMM.ERPUniqueValue=PAID.MakeNo and EMM.DBNo=PCM.DbNo And ISNUMERIC(EMM.ERPUniqueValue)=1
+						Inner Join ' + @PortalDBName + '.erpMaster.eItemMaster EIM on EIM.ERPUniqueValue=PAID.Itemno and EIM.DBNo=PCM.DbNo And ISNUMERIC(EIM.ERPUniqueValue)=1
+						LEft Join ' + @PortalDBName + '.erpMaster.eCostCenterMaster ECM on ECM.ERPUniqueValue=PAID.CostCenterNo and EIM.DBNo=PCM.DbNo And ISNUMERIC(ECM.ERPUniqueValue)=1
+						Where PAID.POAmendmentNo=' + Convert(Varchar,@POAmendmentNo) + '
+					END	'
+
+	Select @Query14='				
+						Insert into ' + @PortalDBName + '.Purchase.POAmendmentIndentDetail
+						Select @PortalPOAmendmentNo,POID.IndentNo,POID.ItemNo,POID.MakeNo IndentMakeNo,EMM.MakeNo MakeNo 
+						,PAID.FirstCF,EUM.UnitNo UnitNo,PAID.SecondCF,PAID.POQty POQty,PAID.PORate,PAID.ScheduleDate
+						,POID.IndentItemLineNo
+						From Purchase.POAmendmentIndentDetail PAID
+						Inner Join Inventory.IndentItemDetail IID on IID.IndentNo=PAID.IndentNo
+															And IID.ItemNo=PAID.ItemNo
+															And IsNull(IID.MakeNo,0) = IsNull(PAID.IndentMakeNo,0)
+						Inner Join Inventory.IndentMain IIM on IIM.IndentNo=IID.IndentNo
+						Left Join (
+									Select CM.CompanyCode,CM.DBNo
+									from ' + @PortalDBName + '.masterdata.mCompanyMaster CM
+									Inner Join ' + @PortalDBName + '.masterdata.mDBMaster DB on DB.DBNo=CM.DBNo 
+									And IsNumeric(CM.CompanyCode)=1
+									Where DBName=''' + @CurrentDB +''' And CM.CompanyCode not in (''RB'',''RU'',''SH'',''AP'')
+								  )PCM on IsNumeric(PCM.CompanyCode)=1 And PCM.CompanyCode=IIM.CompanyNo 
+						Inner Join ' + @PortalDBName + '.erpMaster.eUnitMaster EUM on EUM.ERPUniqueValue=PAID.POUnitNo and EUM.DBNo=PCM.DbNo And ISNUMERIC(EUM.ERPUniqueValue)=1
+						Left Join ' + @PortalDBName + '.erpMaster.eMakeMaster EMM on EMM.ERPUniqueValue=PAID.MakeNo and EMM.DBNo=PCM.DbNo And ISNUMERIC(EMM.ERPUniqueValue)=1
+						Inner Join ' + @PortalDBName + '.Customize.RealIndentMain RIM on RIM.EntityCode=PCM.CompanyCode
+																		And RIM.DBNo=PCM.DBNo
+																		And RIM.DocumentNoYearly=IIM.DocumentNoYearly
+																		And RIM.DocumentDate=IIM.DocumentDate
+						Inner Join ' + @PortalDBName + '.Customize.RealIndentBody RIB on RIB.IndentNo=RIM.IndentNo
+																			And RIB.SLNo=IID.IndentItemDetailNo
+						Inner Join ' + @PortalDBName + '.Inventory.IndentItemDetail POID on POID.IndentItemDetailNo=RIB.PortalIndentItemDetailNo
+						Where PAID.POAmendmentNo=' + Convert(Varchar,@POAmendmentNo) + '
+						
+						
+						Insert into ' + @PortalDBName + '.Purchase.POAmendmentItemDetail
+						Select @PortalPOAmendmentNo,Null,EIM.Itemno,EMM.MakeNo,PAID.TechSpecification,PAID.Quantity,EUM.UnitNo
+						,PAID.Rate,PAID.BasicAmount,PAID.NetAmount,PAID.Remark,PAID.StatusNo,PAID.ToleranceBasisNo,PAID.TolerancePlus,PAID.ToleranceMinus
+						,ECM.CostCenterNo,null,null
+						From Purchase.POAmendmentItemDetail PAID
+						Inner Join Purchase.POAmendmentMain PAM on PAM.POAmendmentNo=PAID.POAmendmentNo					
+						Left Join (
+									Select CM.CompanyCode,CM.DBNo
+									from ' + @PortalDBName + '.masterdata.mCompanyMaster CM
+									Inner Join ' + @PortalDBName + '.masterdata.mDBMaster DB on DB.DBNo=CM.DBNo 
+									And IsNumeric(CM.CompanyCode)=1
+									Where DBName=''' + @CurrentDB +''' And CM.CompanyCode not in (''RB'',''RU'',''SH'',''AP'')
+								  )PCM on IsNumeric(PCM.CompanyCode)=1 And PCM.CompanyCode=PAM.CompanyNo 
+						Inner Join ' + @PortalDBName + '.erpMaster.eUnitMaster EUM on EUM.ERPUniqueValue=PAID.UnitNo and EUM.DBNo=PCM.DbNo And ISNUMERIC(EUM.ERPUniqueValue)=1
+						Left Join ' + @PortalDBName + '.erpMaster.eMakeMaster EMM on EMM.ERPUniqueValue=PAID.MakeNo and EMM.DBNo=PCM.DbNo And ISNUMERIC(EMM.ERPUniqueValue)=1
+						Inner Join ' + @PortalDBName + '.erpMaster.eItemMaster EIM on EIM.ERPUniqueValue=PAID.Itemno and EIM.DBNo=PCM.DbNo And ISNUMERIC(EIM.ERPUniqueValue)=1
+						LEft Join ' + @PortalDBName + '.erpMaster.eCostCenterMaster ECM on ECM.ERPUniqueValue=PAID.CostCenterNo and EIM.DBNo=PCM.DbNo And ISNUMERIC(ECM.ERPUniqueValue)=1
+						Where PAID.POAmendmentNo=' + Convert(Varchar,@POAmendmentNo) + '			
+				END
+			END
+		END
+	END '
+
+	Print @Query1
+	Print @Query2
+	Print @Query3
+	Print @Query4
+	Print @Query5
+	Print @Query6
+	Print @Query7
+	Print @Query8
+	Print @Query9
+	Print @Query10
+	Print @Query11
+	Print @Query12
+	Print @Query13
+	Print @Query14	
+
+	Exec(@Query1+@Query2+@Query3+@Query4+@Query5+@Query6+@Query7+@Query8+@Query9+@Query10+@Query11+@Query12+@Query13+@Query14)
+	Commit Transaction	  
+	
+	Select @OutputStatusNo = 1,@OutputStatusRemarks = 'Success'
+ 	   --Select 1
+ 	   
+
+End Try
+
+Begin Catch
+		Rollback Transaction
+		--Select 0 ,Error_Message()
+		select @OutputStatusNo = 0 , @OutputStatusRemarks = ERROR_MESSAGE ()		
+End Catch
+    
+END

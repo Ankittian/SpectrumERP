@@ -1,0 +1,74 @@
+Stored procedure Customize.AMRRFinancePosting. Called from Finance.FinancePostingFillValuesDocumentDetails.
+Reads: masterdata.mAccountMaster
+Parameters: @CompanyNo tinyint, @NetAmount decimal(15,2), @OtherDataInXml xml
+Code:
+-- =============================================
+-- Author:		<Akhil>
+-- Create date: <07 aug 2018>
+CREATE  procedure [Customize].[AMRRFinancePosting]
+
+(
+ @CompanyNo tinyint,
+ @NetAmount decimal(15,2)
+ ,@OtherDataInXml xml
+) as
+
+Begin
+begin try
+
+declare @Return table ([Add to Basic] bit,Particular varchar(500),[Debit Amount] decimal(15,2),
+								[Credit Amount] decimal(15,2),[Account Name] int,Amount decimal(15,2),[Type] tinyint,
+								MiscChargeNo smallint,TaxCodeMiscChargesDetailNo int,ItemNos varchar(5000),
+								SlNo smallint identity(1,1))
+ 
+ declare @FreeAmount decimal(12,2) ,@PaidAmount decimal(12,2)
+ 
+ SELECT @FreeAmount=v.value('FreeAmount[1]','decimal(12,2)')
+					,@PaidAmount=v.value('PaidAmount[1]','decimal(12,2)')
+			FROM @OtherDataInXml.nodes('/DocumentElement/Table') x(v)
+			
+		insert into @Return([Add to Basic] ,Particular ,[Debit Amount] ,
+						[Credit Amount] ,[Account Name] ,Amount ,[Type] ,
+						MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos)
+		  select 0, 'AMC Billed Till Now A/c' , @PaidAmount, null, IR.AccountNo ,@PaidAmount,
+					1 ,null, null, null
+		  from (select 1 cnt) I
+		  outer apply(select top 1 AccountNo from masterdata.mAccountMaster where AccountTypeNo = 65) IR
+		  where @PaidAmount>0
+		  union
+		   select 0, 'FM  Reembersement A/c' , @FreeAmount, null, IR.AccountNo ,@FreeAmount,
+					1 ,null, null, null
+		  from (select 1 cnt) I
+		  outer apply(select top 1 AccountNo from masterdata.mAccountMaster where AccountTypeNo = 66) IR
+		  where @FreeAmount>0
+		  union 
+		  select 0, 'AMC Revenue' , null, @PaidAmount, IR.AccountNo ,@PaidAmount,
+					2 ,null, null, null
+		  from (select 1 cnt) I
+		  outer apply(select top 1 AccountNo from masterdata.mAccountMaster where AccountTypeNo = 64) IR
+		  where @PaidAmount>0
+		  union 
+		  select 0, 'FM Revenue' , null, @FreeAmount, IR.AccountNo ,@FreeAmount,
+					2 ,null, null, null
+		  from (select 1 cnt) I
+		  outer apply(select top 1 AccountNo from masterdata.mAccountMaster where AccountTypeNo = 69) IR
+		  where @FreeAmount>0
+		  
+		  
+	select [Add to Basic] ,Particular 
+					,[Debit Amount] ,[Credit Amount] 
+					,[Account Name] 
+					,cast(null as varchar) [Ref. Detail] ,cast(null as varchar) [Cost Center] 
+					,Amount ,[Type] 
+					,SlNo
+					,MiscChargeNo,TaxCodeMiscChargesDetailNo,ItemNos
+			from @Return
+			where (isnull([Debit Amount],0)+isnull([Credit Amount],0)>0
+				or [Add to Basic]=1)
+
+ 
+end try
+begin catch
+	select ERROR_MESSAGE ()
+end catch
+end

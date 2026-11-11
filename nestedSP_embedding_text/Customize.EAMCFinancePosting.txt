@@ -1,0 +1,113 @@
+Stored procedure Customize.EAMCFinancePosting. Called from Finance.FinancePostingFillValuesDocumentDetails.
+Reads: Customize.mLiftMaster, Finance.ARDFinanceBookRule, masterdata.mAccountMaster, masterdata.mFBDivisionDetail, Sales.SalesOrderMain
+Parameters: @BasicAmount decimal(12,2), @OtherDataInXml xml, @CompanyNo tinyint
+Code:
+
+-- =============================================
+-- Author:		<Akhil>
+-- Create date: <07 aug 2018>
+CREATE  procedure [Customize].[EAMCFinancePosting]
+
+(
+ @BasicAmount decimal(12,2) ,
+ @OtherDataInXml xml
+,@CompanyNo tinyint
+) as
+
+Begin
+begin try
+
+declare @Return table ([Add to Basic] bit,Particular varchar(500),[Debit Amount] decimal(15,2),
+								[Credit Amount] decimal(15,2),[Account Name] Int,Amount decimal(15,2),[Type] tinyint,
+								MiscChargeNo smallint,TaxCodeMiscChargesDetailNo int,ItemNos varchar(5000),
+								SlNo smallint identity(1,1))
+
+
+Create table #LiftDetail(LiftNo int, DivisionNo int, Amount decimal(12,2),[Type] tinyint)
+ 
+ insert into #LiftDetail
+ SELECT v.value('LiftNo[1]','int') AS LiftNo,	
+		v.value('DivisionNo[1]','int') AS DivisionNo,
+		v.value('Amount[1]','decimal(12,2)') AS Amount ,
+		v.value('Type[1]','tinyint') AS [Type] 
+		FROM @OtherDataInXml.nodes('/DocumentElement/Table') x(v)
+		 
+	if exists (select 1 from 	#LiftDetail where [Type]=1)
+	begin
+		insert into @Return([Add to Basic] ,Particular ,[Debit Amount] ,
+						[Credit Amount] ,[Account Name] ,Amount ,[Type] ,
+						MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos)
+		  select 0, 'Inter FB Account' , sum(Amount), null, IR.AccountNo , sum(Amount),
+					1 ,null, null, null
+		  from #LiftDetail tt
+		    outer apply (select top 1 AccountNo from  Finance.ARDFinanceBookRule ard
+								CROSS apply(select fb.FBNo from 
+															masterdata.mFBDivisionDetail fb
+															inner join #LiftDetail ld on ld.DivisionNo = fb.DivisionNo and ard.FBNo = fb.FBNo
+															where ld.LiftNo = tt.LiftNo  ) fb1
+						where  exists (select fb.FBNo from #LiftDetail ld
+											inner join Customize.mLiftMaster lm on lm.LiftNo = ld.LiftNo 
+											inner join Sales.SalesOrderMain sam on sam.SalesOrderNo = lm.SalesOrderNo 
+											inner join masterdata.mFBDivisionDetail fb on fb.DivisionNo = sam.DivisionNo 
+											inner join Finance.ARDFinanceBookRule rd on rd.ARDNo = ard.ARDNo 
+											where fb.FBNo = rd.FBNo AND fb.DivisionNo <> tt.DivisionNo   and ld.LiftNo = tt.LiftNo  )
+						) IR
+			group by IR.AccountNo 
+		  
+			union
+			select 0, 'FM ReEmbrsement A/c' , null, SUM(Amount), IR.AccountNo ,SUM(Amount),
+					2 ,null, null, null
+		   from #LiftDetail tt
+		    outer apply (select top 1 AccountNo from masterdata.mAccountMaster where AccountTypeNo = 66 ) IR
+			group by IR.AccountNo
+  	end
+  	else
+  	begin
+  		insert into @Return([Add to Basic] ,Particular ,[Debit Amount] ,
+						[Credit Amount] ,[Account Name] ,Amount ,[Type] ,
+						MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos)
+		  select 0, 'Inter FB Account' ,  null,sum(Amount), IR.AccountNo , sum(Amount),
+					2 ,null, null, null
+		  from #LiftDetail tt
+		    outer apply (select top 1 AccountNo from  Finance.ARDFinanceBookRule ard
+								CROSS apply(select fb.FBNo from 
+															masterdata.mFBDivisionDetail fb
+															inner join #LiftDetail ld on ld.DivisionNo = fb.DivisionNo and ard.FBNo = fb.FBNo
+															where ld.LiftNo = tt.LiftNo  ) fb1
+						where  exists (select fb.FBNo from #LiftDetail ld
+											inner join Customize.mLiftMaster lm on lm.LiftNo = ld.LiftNo 
+											inner join Sales.SalesOrderMain sam on sam.SalesOrderNo = lm.SalesOrderNo 
+											inner join masterdata.mFBDivisionDetail fb on fb.DivisionNo = sam.DivisionNo 
+											inner join Finance.ARDFinanceBookRule rd on rd.ARDNo = ard.ARDNo 
+											where fb.FBNo = rd.FBNo AND fb.DivisionNo <> tt.DivisionNo   and ld.LiftNo = tt.LiftNo  )
+						) IR
+			group by IR.AccountNo 
+		  
+			union
+			select 0, 'FM Charges A/c' ,SUM(Amount), null,  IR.AccountNo ,SUM(Amount),
+					1 ,null, null, null
+		   from #LiftDetail tt
+		    outer apply (select top 1 AccountNo from masterdata.mAccountMaster where AccountTypeNo = 68 ) IR
+			group by IR.AccountNo
+  	end
+  	
+  				
+	select [Add to Basic] ,Particular 
+					,[Debit Amount] ,[Credit Amount] 
+					,[Account Name] 
+					,cast(null as varchar) [Ref. Detail] ,cast(null as varchar) [Cost Center] 
+					,Amount ,[Type] 
+					,SlNo
+					,MiscChargeNo,TaxCodeMiscChargesDetailNo,ItemNos
+			from @Return
+			where (isnull([Debit Amount],0)+isnull([Credit Amount],0)>0
+				or [Add to Basic]=1)
+
+
+
+
+end try
+begin catch
+	select ERROR_MESSAGE ()
+end catch
+end

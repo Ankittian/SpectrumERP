@@ -1,0 +1,75 @@
+Stored procedure Information.MonthWisePRValueForDept: Get Month Wise Purchase Request Value. Called from Inventory.MMPRGetDeptInfo.
+Reads: Inventory.IndentItemDetail, Inventory.IndentMain, masterdata.mFYear, masterdata.MonthList
+Parameters: @CompanyNo tinyint, @DocumentDate smalldatetime, @DeptNo int
+Author: Monika Rajput, created 2013/09/24
+Code:
+
+-- =============================================
+-- Author:		Monika Rajput
+-- Create date: 2013/09/24
+-- Description:Get Month Wise Purchase Request Value
+-- =============================================
+
+CREATE PROCEDURE [Information].[MonthWisePRValueForDept] 
+	-- Add the parameters for the stored procedure here
+	@CompanyNo tinyint,
+	@DocumentDate smalldatetime,
+	@DeptNo int
+AS
+BEGIN
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+
+    -- Insert statements for procedure here
+	
+    
+	declare @str varchar(max)
+    select @str=masterdata.JSForInformation('MMPR')
+    set @str=@str+masterdata.CSSForInformation('MMPR')
+	set @str=@str+'<table class="altrowstable" id="alternatecolorPRValInfo">'
+	set @str=@str+'<Caption><Font color="Maroon"><h3 align="Left"><b>Purchase Request Value</b></h3></Font></Caption>'
+    set @str=@str+'<tr><th>Sl. No.</th><th>Month</th><th>Value</th></tr>'
+	set @str=@str
+				 +(
+				   replace(
+				   replace(
+				   replace(
+					       (
+					        Select ROW_NUMBER() over (Order by ML.SortingMonth) as td1
+					              ,ML.MonthName td2
+								  ,isnull(IM.td2,0) td3 
+						   From masterdata.mFYear YR
+						   Inner Join masterdata.MonthList ML ON YR.YearNo=ML.YearNo
+						   LEFT Join
+						   ( 
+					        
+							Select     Month(IM.DocumentDate) [Month]
+									  ,IM.YearNo
+									  ,cast(Sum(ID.IndentQty* ID.Rate) as Decimal(15,2)) td2
+									
+								 From Inventory.IndentMain IM
+								 Inner Join Inventory.IndentItemDetail ID ON ID.IndentNo=IM.IndentNo
+								 where IM.AuthorizedBy is not Null 
+								       And IM.DeptNo=@DeptNo 
+								       And IM.DocumentDate<=@DocumentDate 
+								       And CompanyNo=@CompanyNo
+								
+							group by Month(IM.DocumentDate),IM.YearNo
+							)IM ON IM.Month=ML.MonthNo
+								And YR.YearNo=IM.YearNo
+								
+							Where @DocumentDate between YR.StartDate and YR.EndDate
+							Order by ML.SortingMonth
+							
+							for xml path('tr')
+							),'<td1>','<td style="text-align: center;">'),'<td2>','<td>')
+							,'<td3>','<td style="text-align: Right;">'))
+								
+								
+								
+				   
+	set @str=@str+'</table>'
+	
+	select @str
+END

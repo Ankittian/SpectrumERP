@@ -1,0 +1,247 @@
+Stored procedure Sales.SDSOAuthorize: Authorize. Called from Notifications.TANRSaveUserApproval.
+Writes: Notifications.TATAuthorizationDetail, Sales.SalesOrderAccountAssignmentDetail, Sales.SalesOrderAmendmentExportCostProvision, Sales.SalesOrderAmendmentTaxDetail, Sales.SalesOrderExportCostProvision, Sales.SalesOrderTaxDetail
+Reads: masterdata.mMiscCharges, masterdata.mTaxCode, masterdata.mTaxCodeMiscChargesDetail, masterdata.mTaxGroupSettingDetails, Notifications.MultiAuthorizationSetting, Notifications.TATAuthorizationDetail, Sales.SalesOrderAmendmentMain, Sales.SalesOrderTaxDetail, Security.LoginRoleDetail, Security.LoginTempRoleDetail, Security.mRoleMasterFormDetail
+Parameters: @SalesOrderNo Int, @SOAmendmentNo int = 0, @IsCallingForMultiLevelAuthorization bit = 0, @OutputStatusNo tinyint = null OUTPUT, @OutputStatusRemarks varchar(4000) = null OUTPUT
+Calls procedures: Finance.FOAMFillValuesOrderNo, Sales.SDSOSaveExportCostProvision, Sales.SDSOSendAuthorizationMail
+Author: Yusuf, created 17 MAY 2014
+Code:
+					-- =============================================
+-- Author:		Yusuf
+-- Create date: 17 MAY 2014
+-- Description: Authorize
+-- =============================================
+CREATE PROCEDURE [Sales].[SDSOAuthorize]
+(
+ @SalesOrderNo Int,
+ @SOAmendmentNo int = 0,
+ @IsCallingForMultiLevelAuthorization bit = 0, 
+  @OutputStatusNo tinyint = null output,
+    @OutputStatusRemarks varchar(4000)  = null output
+)
+AS
+
+BEGIN
+	SET NOCOUNT ON;
+	
+	BEGIN TRY
+		declare @GSTDNo int
+				,@DocumentDate smalldatetime
+				,@SalesOrderAmendmentNo int
+				
+		select @GSTDNo=GSTDNo 
+				,@DocumentDate=DocumentDate
+				,@SalesOrderAmendmentNo=SalesOrderAmendmentNo
+		from Sales.SalesOrderAmendmentMain where SalesOrderNo=@SalesOrderNo
+       if @IsCallingForMultiLevelAuthorization = 1   ---------- When 1 then  Notification for Multi Level Authorization will call
+	   Begin 
+	   
+		 declare @MAPValuationNo smallint,@AuthorizedBy int,@CompanyNo tinyint ,@DivisionNo int ,@DocumentStatusNo tinyint
+	 ,@AuthDetailNo int ,@CreatedBy smallint
+	
+ 		 select @AuthorizedBy = AuthorizedBy,@CompanyNo =CompanyNo  ,@DivisionNo = DivisionNo ,@DocumentStatusNo = DocumentStatusNo
+		,@CreatedBy = sam.CreatedBy  
+		from Sales.SalesOrderAmendmentMain sam where SalesOrderAmendmentNo = @SOAmendmentNo 
+	Declare  @UserCount int 
+	Declare @NextUsers table(SNo smallint,AuthDetailNo int,LevelNo int,LoginNo int) 
+	Declare @UserNO int,@LevelNo smallint,@UserCounter int =1
+	   
+	   If Exists (Select 1  From Notifications.MultiAuthorizationSetting where CompanyNo =@CompanyNo and ISNULL(DivisionNo,0) = ISNULL(@DivisionNo,0)
+ 					and FormCode ='SDSA') and @DocumentStatusNo = 20
+ 		BEGIN
+ 		
+ 			 if Exists (Select 1 From Notifications.TATAuthorizationDetail where FormCode ='SDSA' and InternalNo = @SOAmendmentNo  
+ 							and IsReady = 1 and IsEmailSent=0)
+				BEGIN
+						-- Send Email
+					
+					Insert into @NextUsers
+					select ROW_NUMBER () over (order by LoginNo) SlNo,AuthDetailNo, LevelNo, LoginNo  from (
+					Select LevelNo,LoginNo,AuthDetailNo
+					 From Notifications.TATAuthorizationDetail where FormCode ='SDSA' and InternalNo = @SOAmendmentNo  
+						and IsReady = 1 and IsEmailSent =0	and LoginNo is not null
+					union 
+					Select LevelNo,lrd.LoginNo,AuthDetailNo
+					 From Notifications.TATAuthorizationDetail tad
+					 inner join Security.mRoleMasterFormDetail rfd on rfd.RoleMasterNo = tad.RoleNo and rfd.FormNo in( 151,167,464)
+					 inner join Security.LoginRoleDetail lrd on rfd.RoleMasterNo = lrd.RoleMasterNo 
+					 where FormCode ='SDSA' and InternalNo = @SOAmendmentNo 
+						and IsReady = 1 and IsEmailSent =0	and tad.RoleNo  is not null	
+					union 
+					Select LevelNo,lrd.LoginNo,AuthDetailNo
+					 From Notifications.TATAuthorizationDetail tad
+					 inner join Security.mRoleMasterFormDetail rfd on rfd.RoleMasterNo = tad.RoleNo and rfd.FormNo in( 151,167,464)
+					 inner join Security.LoginTempRoleDetail lrd on rfd.RoleMasterNo = lrd.RoleMasterNo 
+					 where FormCode ='SDSA' and InternalNo = @SOAmendmentNo and CONVERT(smalldatetime,convert(varchar(15), GETDATE(),106))
+						 between lrd.FromDate and ISNULL( lrd.ToDate,CONVERT(smalldatetime,convert(varchar(15), GETDATE(),106)))
+						and IsReady = 1 and IsEmailSent =0	and tad.RoleNo  is not null	) tt
+						group by LevelNo, LoginNo 	,AuthDetailNo							
+					
+					
+					Set @UserCount = @@ROWCOUNT	
+					
+					While @UserCounter <= @UserCount
+					 Begin
+					
+						 Select @UserNO=LoginNo , @LevelNo = LevelNo,@AuthDetailNo=AuthDetailNo From @NextUsers Where SNo = @UserCounter
+								
+						 Exec [Sales].[SDSOSendAuthorizationMail] @SOAmendmentNo,@UserNo,@LevelNo ,@AuthDetailNo
+						 
+						Update Notifications.TATAuthorizationDetail  set IsEmailSent =1 where FormCode = 'SDSA' and InternalNo = @SOAmendmentNo 
+								and LevelNo = @LevelNo and IsReady =1
+						 Set @UserCounter=@UserCounter+1 
+					 End
+		 
+				END							   
+				
+				 
+			 					  	
+ 		 END
+ 	  else If Exists (Select 1  From Notifications.MultiAuthorizationSetting where CompanyNo =@CompanyNo and ISNULL(DivisionNo,0) = ISNULL(@DivisionNo,0)
+ 					and FormCode ='SDSA') and Exists (Select 1 From Notifications.TATAuthorizationDetail where FormCode ='SDSA' 
+ 						and InternalNo = @SOAmendmentNo and IsRejectedMailSend =1) -- rejection mail
+ 		BEGIN
+ 			 
+ 			 if Exists (Select 1 From Notifications.TATAuthorizationDetail where FormCode ='SDSA' and InternalNo = @SOAmendmentNo 
+ 							and IsRejectedMailSend =1)
+				BEGIN
+						-- Send Email
+					 
+					Insert into @NextUsers
+					select ROW_NUMBER () over (order by LoginNo) SlNo,AuthDetailNo, LevelNo, LoginNo  from (
+					Select LevelNo,LoginNo,AuthDetailNo
+					 From Notifications.TATAuthorizationDetail where FormCode ='SDSA' and InternalNo = @SOAmendmentNo 
+						and IsRejectedMailSend =1 and LoginNo is not null
+					union 
+					Select LevelNo,lrd.LoginNo,AuthDetailNo
+					 From Notifications.TATAuthorizationDetail tad
+					 inner join Security.mRoleMasterFormDetail rfd on rfd.RoleMasterNo = tad.RoleNo and rfd.FormNo in(151,167,464)
+					 inner join Security.LoginRoleDetail lrd on rfd.RoleMasterNo = lrd.RoleMasterNo 
+					 where FormCode ='SDSA' and InternalNo = @SOAmendmentNo 
+						and IsRejectedMailSend =1 and tad.RoleNo  is not null	
+					union 
+					Select LevelNo,lrd.LoginNo,AuthDetailNo
+					 From Notifications.TATAuthorizationDetail tad
+					 inner join Security.mRoleMasterFormDetail rfd on rfd.RoleMasterNo = tad.RoleNo and rfd.FormNo in(151,167,464)
+					 inner join Security.LoginTempRoleDetail lrd on rfd.RoleMasterNo = lrd.RoleMasterNo 
+					 where FormCode ='SDSA' and InternalNo = @SOAmendmentNo and CONVERT(smalldatetime,convert(varchar(15), GETDATE(),106))
+						 between lrd.FromDate and ISNULL( lrd.ToDate,CONVERT(smalldatetime,convert(varchar(15), GETDATE(),106)))
+						and IsRejectedMailSend =1 and tad.RoleNo  is not null	) tt
+						group by LevelNo, LoginNo 	,AuthDetailNo							
+					
+					
+					Set @UserCount = @@ROWCOUNT	
+					
+					
+					While @UserCounter <= @UserCount
+					 Begin
+					
+						 Select @UserNO=LoginNo , @LevelNo = LevelNo,@AuthDetailNo=AuthDetailNo From @NextUsers Where SNo = @UserCounter
+								
+						 Exec [Sales].[SDSOSendAuthorizationMail] @SOAmendmentNo,@UserNo,@LevelNo ,@AuthDetailNo ,1
+						 
+						Update Notifications.TATAuthorizationDetail  set IsRejectedMailSend =0 where FormCode = 'SDSA' and InternalNo = @SOAmendmentNo 
+								and LevelNo = @LevelNo and IsRejectedMailSend =1
+						 Set @UserCounter=@UserCounter+1 
+					 End
+				
+				
+				
+				END							   
+				
+				 
+			 					  	
+ 		 END 	 
+
+		--MultiAuthorization Query Ends here 
+		End 
+		Else if @IsCallingForMultiLevelAuthorization = 0 -- Code for Order Account Assignment
+		Begin 
+		update SOTD set TaxCodeMiscChargesDetailNo = TCCD.TaxCodeMiscChargesDetailNo
+		FROM Sales.SalesOrderTaxDetail SOTD
+			inner join masterdata.mMiscCharges MiscC on MiscC.MiscChargeNo=SOTD.MiscChargeNo
+			left join masterdata.mTaxGroupSettingDetails gts on gts.TaxNo = miscC.MiscChargeNo
+															and gts.GSTDNo=@GSTDNo
+			left join (select TCMD.TaxCodeMiscChargesDetailNo ,TCMD.TaxCodeNo ,TCMD.MiscChargeNo
+						From masterdata.mTaxCode TC
+							inner join masterdata.mTaxCodeMiscChargesDetail TCMD on tcmd.TaxCodeNo = TC.TaxCodeNo 
+						where TC.Inactive =0 and 
+							TC.EffectiveFrom = (select MAX(EffectiveFrom) from   masterdata.mTaxCode PTC
+												inner join masterdata.mTaxCodeMiscChargesDetail PTCMD on PTCMD.TaxCodeNo = PTC.TaxCodeNo 
+												where PTCMD.MiscChargeNo= TCMD.MiscChargeNo
+													and PTC.EffectiveFrom <= @DocumentDate 
+													and PTCMD.TaxCodeNo=TCMD.TaxCodeNo )) TCCD on TCCD.MiscChargeNo = gts.TaxNo 
+																							and TCCD.TaxCodeNo = gts.TaxCodeNo 
+		where SOTD.SalesOrderNo=@SalesOrderNo
+	    
+	    update SOATD set TaxCodeMiscChargesDetailNo = TCCD.TaxCodeMiscChargesDetailNo
+		FROM Sales.SalesOrderAmendmentTaxDetail SOATD
+			inner join masterdata.mMiscCharges MiscC on MiscC.MiscChargeNo=SOATD.MiscChargeNo
+			left join masterdata.mTaxGroupSettingDetails gts on gts.TaxNo = miscC.MiscChargeNo
+															and gts.GSTDNo=@GSTDNo
+			left join (select TCMD.TaxCodeMiscChargesDetailNo ,TCMD.TaxCodeNo ,TCMD.MiscChargeNo
+						From masterdata.mTaxCode TC
+							inner join masterdata.mTaxCodeMiscChargesDetail TCMD on tcmd.TaxCodeNo = TC.TaxCodeNo 
+						where TC.Inactive =0 and 
+							TC.EffectiveFrom = (select MAX(EffectiveFrom) from   masterdata.mTaxCode PTC
+												inner join masterdata.mTaxCodeMiscChargesDetail PTCMD on PTCMD.TaxCodeNo = PTC.TaxCodeNo 
+												where PTCMD.MiscChargeNo= TCMD.MiscChargeNo
+													and PTC.EffectiveFrom <= @DocumentDate 
+													and PTCMD.TaxCodeNo=TCMD.TaxCodeNo )) TCCD on TCCD.MiscChargeNo = gts.TaxNo 
+																							and TCCD.TaxCodeNo = gts.TaxCodeNo 
+		where SOATD.SalesOrderAmendmentNo=@SalesOrderAmendmentNo
+		
+		if exists (select 1 from Sales.SalesOrderTaxDetail where SalesOrderNo=@SalesOrderNo 
+						and TaxCodeMiscChargesDetailNo is null and MiscChargeNo is not null and IncludeInBasic=0)
+		begin
+			raiserror('Tax Rule is not set against charges.',16,-1)
+		end
+		
+		declare @Return table (AccountType varchar(50),Particular varchar(500),AccountNo Int
+								,AccountTypeNo tinyint,Id int,Flag varchar(10))
+								
+		insert into @Return				
+		exec [Finance].[FOAMFillValuesOrderNo]
+			@OrderTypeNo = 2
+			,@OrderNo = @SalesOrderNo
+	
+		delete from Sales.SalesOrderAccountAssignmentDetail where SalesOrderNo = @SalesOrderNo
+		INSERT INTO  Sales.SalesOrderAccountAssignmentDetail
+		   (
+		    SalesOrderNo
+		   ,Particular
+		   ,AccountNo
+		   ,AccountTypeNo
+		   ,Id
+		   ,Flag
+		   )
+		select
+		    @SalesOrderNo
+		   ,Particular
+		   ,AccountNo
+		   ,AccountTypeNo
+		   ,Id
+		   ,Flag
+		from @Return
+		where AccountNo is not null
+			  
+		  Select @OutputStatusNo = 1,@OutputStatusRemarks = 'Success'				  	  
+	    Select 1,'Success'
+	    End 
+
+		Delete from Sales.SalesOrderAmendmentExportCostProvision where ISNULL(SalesOrderAmendmentNo,0) = IsNULL(@SalesOrderAmendmentNo,0)
+		Delete from Sales.SalesOrderExportCostProvision where ISNULL(SalesOrderNo,0) = IsNULL(@SalesOrderNo,0)
+
+		exec [Sales].[SDSOSaveExportCostProvision] @SalesOrderNo,@OutputStatusNo output,@OutputStatusRemarks output	  
+		  IF @OutputStatusNo =0
+		  Raiserror (@OutputStatusRemarks,16,-1)
+
+		  Select @OutputStatusNo = 1,@OutputStatusRemarks = 'Success'				  	  
+	    Select 1,'Success'
+
+	END TRY
+	
+	BEGIN CATCH
+		Select 0,Error_Message()
+		Select @OutputStatusNo = 0,@OutputStatusRemarks = ERROR_MESSAGE()				  
+	END CATCH
+END

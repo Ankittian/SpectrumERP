@@ -1,0 +1,117 @@
+Stored procedure Information.ItemSummaryForCost: Item Summary for CostCenter. Called from Inventory.MMPRGetCostCenterInfo, Inventory.IDMRGetCostCenterInfo.
+Reads: Inventory.InvLotBillDetail, Inventory.InvLotDetail, Inventory.InvLotSummary, masterdata.mFYear, masterdata.MonthList
+Parameters: @CompanyNo tinyint, @DocumentDate smalldatetime, @ItemNo int, @CostCenterNo int
+Author: Monika Rajput, created 2013/09/27
+Code:
+
+-- =============================================
+-- Author:		Monika Rajput
+-- Create date: 2013/09/27
+-- Description:	Item Summary for CostCenter
+-- =============================================
+CREATE PROCEDURE [Information].[ItemSummaryForCost] --4,'2013/09/27',35,181
+	-- Add the parameters for the stored procedure here
+	@CompanyNo tinyint,
+	@DocumentDate smalldatetime,
+	@ItemNo int,
+	@CostCenterNo int
+AS
+BEGIN
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+
+    -- Insert statements for procedure here
+	
+
+	declare @str varchar(max)
+    select @str=masterdata.JSForInformation('SDCE')
+    set @str=@str+masterdata.CSSForInformation('SDCE')
+	set @str=@str+'<table class="altrowstable" id="alternatecolorItemSummaryInfoCost">'
+	set @str=@str+'<Caption><Font color="Maroon"><h3 align="Left"><b>Item Summary</b></h3></Font></Caption>'
+    set @str=@str+'<tr><th>Sl. No.</th><th>Month</th><th>Received Quantity</th><th>Received Amount</th><th>Issued Quantity</th><th>Issued Amount</th><th>Returned Quantity</th><th>Returned Amount</th></tr>'
+	set @str=@str
+				 +( REPLACE(
+					replace(
+					replace(
+					replace(
+					replace(
+					replace(
+					replace(
+					replace(
+				(    
+							Select ROW_NUMBER() over (Order by ML.SortingMonth) as td1
+							      ,ML.MonthName td2
+								  ,isnull(LD.td2,0) td3 
+							      ,isnull(LD.td3,0) td4
+							      ,isnull(LD.td4,0) td5
+								  ,isnull(LD.td5,0) td6
+								  ,isnull(LD.td6,0) td7
+								  ,isnull(LD.td7,0) td8
+							From masterdata.mFYear YR
+							Inner Join masterdata.MonthList ML ON YR.YearNo=ML.YearNo
+							LEFT Join
+							( 
+                                Select     Month(ld.DocumentDate) [Month]
+										   ,ld.YearNo
+								           ,sum(isnull(ld.ReceivedQty,0)) td2
+										   ,isnull(cast(tt2.ReceivedAmt as Decimal(15,2)),0) td3
+										   ,Sum(isnull(ld.IssuedQty,0)) td4
+										   ,cast(Sum(isnull(ld.IssuedQty* ld.VRate,0)) as Decimal(15,2)) td5
+										   ,Sum(isnull(ld.ReturnQty,0)) td6
+										   ,cast(Sum(isnull(ld.ReturnQty*ld.VRate,0)) as Decimal(15,2)) td7
+										   
+								from inventory.invlotDetail ld 
+								Left Join ( Select  MONTH(INV.DocumentDate) [Month]
+												   ,ILS.ItemNo
+												   ,INV.YearNo
+												   ,Sum(ilbd.LotBalanceQty * 
+									              (Case when ILBD.TransactionFlag = ILS.TransactionFlag 
+									                    then ILBD.VRate 
+									               else ILBD.DiffRate end
+									               )
+									                    ) ReceivedAmt
+											   from Inventory.InvLotSummary ILS 
+											   Inner Join Inventory.InvLotDetail INV ON INV.InvLotSummaryNo=ILS.InvLotSummaryNo
+											   Inner join Inventory.InvLotBillDetail ILBD on ILBD.InvLotDetailNo = INV.InvLotDetailNo
+
+											  where ILBD.BillDate <=@DocumentDate
+													 And ILS.CompanyNo=@CompanyNo 
+													 And ILS.ItemNo = @ItemNo
+													 And ILBD.TransactionFlag not in ('SDDC', 'SDEI', 'SDCI')
+													 And ILS.StockNatureNo=1 
+													 And ILS.CostCenterNo=@CostCenterNo
+													 And Inv.ReceivedQty>0 ------ To find the Recived Amount
+												group by  ILS.ItemNo ,MONTH(INV.DocumentDate),INV.YearNo
+												
+							                )tt2 On tt2.ItemNo=ld.ItemNo
+												 And tt2.Month= MONTH(ld.DocumentDate)
+												 And tt2.YearNo=ld.YearNo
+								
+								Where ld.DocumentDate<=@DocumentDate
+									  And ld.ItemNo=@ItemNo 
+									  And ld.CompanyNo=@CompanyNo
+									  And ld.CostCenterNo=@CostCenterNo
+								Group by Month(ld.DocumentDate),ld.ItemNo ,tt2.ReceivedAmt,ld.YearNo
+							)LD ON LD.Month=ML.MonthNo
+								And YR.YearNo=LD.YearNo
+								
+							Where @DocumentDate between YR.StartDate and YR.EndDate
+							Order by ML.SortingMonth
+			
+						 for xml path('tr')
+				),'<td1>','<td style="text-align: center;">'),'<td2>','<td>')
+											 ,'<td3>','<td style="text-align: Right;">')
+											 ,'<td4>','<td style="text-align: Right;">')
+											 ,'<td5>','<td style="text-align: Right;">')
+											 ,'<td6>','<td style="text-align: Right;">')
+											 ,'<td7>','<td style="text-align: Right;">')
+											 ,'<td8>','<td style="text-align: Right;">')
+											
+											)
+								
+				   
+	set @str=@str+'</table>'
+	
+	select @str
+END

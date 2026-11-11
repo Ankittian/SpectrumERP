@@ -1,0 +1,111 @@
+Stored procedure Sales.SDSEFillValuesAccountAssignment: Fill Values Dependent Script For SDSEFillValuesAccountAssignment. Called from Finance.FOAMFillValuesOrderNo.
+Reads: Finance.ARDItemRule, Finance.ARDMain, Finance.ARDSaleAccountRule, Finance.ARDVendorLocationRule, masterdata.mAccountMaster, masterdata.mItemMaster, masterdata.mVendorLocationDetail, Sales.SalesServiceOrderAccountAssignmentDetail
+Parameters: @ItemNos xml, @PaymentTermNos xml, @CustomerLocationNo int, @DocumentDate smalldatetime, @SalesServiceOrderNo int
+Author: Yusuf, created 31 Mar 2014
+Code:
+-- =============================================
+-- Author:		Yusuf
+-- Create date: 31 Mar 2014
+-- Description: Fill Values Dependent Script For SDSEFillValuesAccountAssignment
+-- =============================================
+CREATE PROCEDURE [Sales].[SDSEFillValuesAccountAssignment]
+(
+	@ItemNos xml
+	,@PaymentTermNos xml
+	,@CustomerLocationNo int
+	,@DocumentDate smalldatetime
+	,@SalesServiceOrderNo int
+)
+AS
+
+BEGIN
+	SET NOCOUNT ON;
+	
+	BEGIN TRY
+		
+		declare @ItemDetail table(ItemNo int)
+		insert into @ItemDetail
+		SELECT v.value('Item_x0020_Code[1]','int') AS ItemNo
+		FROM @ItemNos.nodes('/DocumentElement/Table') x(v)
+		where v.value('Item_x0020_Code[1]','int')>0
+		
+		declare @PaymentTermDetail table (PaymentTypeNo tinyint)
+		insert into @PaymentTermDetail
+		SELECT v.value('Payment_x0020_Type[1]','int') AS PaymentTypeNo
+		FROM @PaymentTermNos.nodes('/DocumentElement/Table') x(v)
+		where v.value('Payment_x0020_Type[1]','int')>0
+		
+	--0
+		select 'Sales Revenue A/c' [Account Type],IM.ItemDescription+ISNULL(REPLACE(AD.Flag,AD.Flag,''),' *') [Particular]
+				,isnull(AD.AccountNo,tt.AccountNo)[Account Name]
+				,11 AccountTypeNo,ID.ItemNo Id,'IM' [Flag]
+		from @ItemDetail ID 
+			inner join masterdata.mItemMaster IM on IM.ItemNo=ID.ItemNo
+			outer apply (select sum(AM.AccountNo)AccountNo,sum(IR.ItemNo)ItemNo
+					     from Finance.ARDItemRule IR 
+						  inner join Finance.ARDMain ARDM on ARDM.ARDNo=IR.ARDNo
+						  cross apply (select MAX(ARDMIn.EffectiveFrom) EffectiveFrom
+									 from Finance.ARDMain ARDMIn
+									 where ARDMIn.ARDNo=IR.ARDNo
+										and ARDMIn.EffectiveFrom<=@DocumentDate
+									having MAX(ARDMIn.EffectiveFrom)=ARDM.EffectiveFrom) MaxARD
+						  inner join masterdata.mAccountMaster AM on AM.AccountNo=IR.AccountNo
+															and AM.AccountTypeNo=11
+						where ARDM.ARDNo not in (select ARDNo
+													from Finance.ARDSaleAccountRule)
+							and IR.ItemNo=IM.ItemNo
+						having sum(IR.ItemNo)=IM.ItemNo)tt 			
+			left join Sales.SalesServiceOrderAccountAssignmentDetail AD on AD.Id=id.ItemNo
+															and AD.Flag='IM'
+															and AD.AccountTypeNo=11
+															and AD.SalesServiceOrderNo=@SalesServiceOrderNo
+		union all
+		select top 1 'Customer Receivable Account',VLD.VendorName+ISNULL(REPLACE(AD.Flag,AD.Flag,''),' *')
+				,isnull(AD.AccountNo,LR.AccountNo)
+				,7,@CustomerLocationNo Id,'CRA' [Flag]
+		from masterdata.mVendorLocationDetail VLD 
+			left join Finance.ARDVendorLocationRule LR on LR.VendorLocationNo=VLD.VendorLocationNo
+													and LR.AccountTypeNo=7
+			left join Sales.SalesServiceOrderAccountAssignmentDetail AD on AD.Id=@CustomerLocationNo
+															and AD.Flag='CRA'
+															and AD.AccountTypeNo=7
+															and AD.SalesServiceOrderNo=@SalesServiceOrderNo
+		where vld.VendorLocationNo=@CustomerLocationNo
+		union all
+		select top 1 'Customer Prepayable Account',VLD.VendorName+ISNULL(REPLACE(AD.Flag,AD.Flag,''),' *')
+				,isnull(AD.AccountNo,LR.AccountNo)
+				,8,@CustomerLocationNo Id,'CPA' [Flag]
+		from masterdata.mVendorLocationDetail VLD 
+			left join Finance.ARDVendorLocationRule LR on LR.VendorLocationNo=VLD.VendorLocationNo
+													and LR.AccountTypeNo=8
+			left join Sales.SalesServiceOrderAccountAssignmentDetail AD on AD.Id=@CustomerLocationNo
+															and AD.Flag='CPA'
+															and AD.AccountTypeNo=8
+															and AD.SalesServiceOrderNo=@SalesServiceOrderNo
+		where vld.VendorLocationNo=@CustomerLocationNo
+			and exists (select 1 from @PaymentTermDetail where PaymentTypeNo=2)
+		
+	END TRY
+	BEGIN CATCH
+		INSERT INTO [masterdata].[mErrorLog]
+			   ([ErrorDate]
+			   ,[ErrorNo]
+			   ,[ErrorSeverity]
+			   ,[ErrorState]
+			   ,[ErrorProcedure]
+			   ,[ErrorLine]
+			   ,[ErrorDescription]
+			   ,[UserName]
+			   ,[FormCode])
+		VALUES
+			   (getdate()
+			   ,ERROR_NUMBER()
+			   ,ERROR_SEVERITY()
+			   ,ERROR_STATE()
+			   ,ERROR_PROCEDURE()
+			   ,ERROR_LINE()
+			   ,ERROR_MESSAGE()
+			   ,SUSER_SNAME()
+			   ,'SDSE')
+	END CATCH
+END

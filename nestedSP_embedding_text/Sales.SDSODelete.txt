@@ -1,0 +1,834 @@
+Stored procedure Sales.SDSODelete: Delete Script For SDSODelete. Called from Notifications.TANRSaveUserApproval.
+Writes: Notifications.TATAuthorizationDetail, Purchase.FreightOrderOrderDetail, Sales.HoldAgentCommissionDetail, Sales.QuotationMain, Sales.RevisedQuotationMain, Sales.SalesOrderAccountAssignmentDetail, Sales.SalesOrderAmendmentConsigneeDetail, Sales.SalesOrderAmendmentCustomFieldDetail, Sales.SalesOrderAmendmentDocDetail, Sales.SalesOrderAmendmentExpenseHeadFormDetail, Sales.SalesOrderAmendmentExportCostDetail, Sales.SalesOrderAmendmentExportCostProvision, Sales.SalesOrderAmendmentInspectiondetail, Sales.SalesOrderAmendmentItemDetail, Sales.SalesOrderAmendmentItemPriceFactorDetail, Sales.SalesOrderAmendmentItemScheduleDetail, Sales.SalesOrderAmendmentItemSpecificationDetail, Sales.SalesOrderAmendmentItemTaxDetail, Sales.SalesOrderAmendmentMain, Sales.SalesOrderAmendmentNotesDetail (+30 more)
+Reads: masterdata.mCostCenterMaster, Sales.RevisedQuotationMain, Sales.SalesOrderAmendmentConsigneeDetail, Sales.SalesOrderAmendmentCustomFieldDetail, Sales.SalesOrderAmendmentDocDetail, Sales.SalesOrderAmendmentExpenseHeadFormDetail, Sales.SalesOrderAmendmentExportCostDetail, Sales.SalesOrderAmendmentExportCostProvision, Sales.SalesOrderAmendmentInspectiondetail, Sales.SalesOrderAmendmentItemDetail, Sales.SalesOrderAmendmentItemPriceFactorDetail, Sales.SalesOrderAmendmentItemScheduleDetail, Sales.SalesOrderAmendmentItemSpecificationDetail, Sales.SalesOrderAmendmentItemTaxDetail, Sales.SalesOrderAmendmentMain, Sales.SalesOrderAmendmentNotesDetail, Sales.SalesOrderAmendmentOtherDetailVTPL, Sales.SalesOrderAmendmentPaymentTermDetail, Sales.SalesOrderAmendmentProjectDetail, Sales.SalesOrderAmendmentRateBifurcationDetail, Sales.SalesOrderAmendmentTaxConcessionFormDetail, Sales.SalesOrderAmendmentTaxDetail, Sales.SalesOrderAmendmentTermsNConditionDetail, Sales.SalesOrderExportCostDetail, Sales.SalesOrderItemDetail (+3 more)
+Parameters: @SalesOrderNo int, @LoginNo Smallint, @SalesOrderAmendmentNo int, @FormTag char(4), @ResultVal Bit = Null OUTPUT, @RsltMsg Varchar(1000) = Null OUTPUT, @IsCopy bit = 0
+Calls procedures: masterdata.CCCMDelete, Sales.SalesAgreementStatus, Sales.SDSOUpdateItemSchedule, Sales.SOStatus
+Author: Namrata, created 21 Feb 2012
+Code:
+					-- =============================================
+-- Author:		Namrata
+-- Create date: 21 Feb 2012
+-- Description: Delete Script For SDSODelete
+-- =============================================
+CREATE PROCEDURE [Sales].[SDSODelete] 
+(
+ @SalesOrderNo  int,
+ @LoginNo Smallint,
+ @SalesOrderAmendmentNo int,
+ @FormTag char(4),
+ @ResultVal Bit = Null output ,
+ @RsltMsg Varchar(1000) = Null output,
+ @IsCopy bit = 0
+)
+AS
+
+BEGIN
+	SET NOCOUNT ON;
+	
+	BEGIN TRY
+
+		BEGIN Transaction 
+	Declare @RowCnt Int
+	Declare @RefSalesOrderNo int,@ItemNo int,@MakeNo smallint,@CombinationNo Int
+	,@Output bit,@Result bit ,@ResultMsg varchar(2000) 
+	,@RefDocNo int,@SOSourceNo TinyInt
+	
+	-------- IF ALREADY Revised ( MAIN ONLY) ----- VALIDATION --------
+	IF @FormTag ='SDSO'AND  EXISTS
+					(
+					SELECT 1
+					FROM Sales.SalesOrderMain
+					WHERE  AmendmentNo >0
+					AND SalesOrderNo = @SalesOrderNo
+					)
+		BEGIN
+	    RaisError('Can''t be deleted as some record exist against this entry.',16,-1)
+	    END
+---------------------------------------------------------------
+	-------- IF ALREADY Revised ( MAIN ONLY) ----- VALIDATION --------
+	IF @FormTag ='SDAG'AND  EXISTS
+					(
+					SELECT 1
+					FROM Sales.SalesOrderMain
+					WHERE  FormTag='SDSO'
+					AND SalesOrderSourceNo=3-- Against Agreement
+					And RefDocumentNo=@SalesOrderAmendmentNo
+					)
+		BEGIN
+	    RaisError('Can''t be deleted as some record exist against this entry.',16,-1)
+	    END
+---------------------------------------------------------------
+			
+--- GET THE PREVIOUS AMENDMENT NO TO INSERT IN MAIN TABLE
+	
+	DECLARE @PrevSalesOrderAmendmentNo int
+	SELECT @PrevSalesOrderAmendmentNo = SalesOrderAmendmentNo 
+	FROM  Sales.SalesOrderAmendmentMain
+	WHERE AmendmentNo =( SELECT AmendmentNo -1
+	                     FROM Sales.SalesOrderAmendmentMain
+	                     WHERE SalesOrderAmendmentNo = @SalesOrderAmendmentNo ) 
+    AND SalesOrderNo =( SELECT SalesOrderNo 
+                        FROM Sales.SalesOrderAmendmentMain
+                        WHERE SalesOrderAmendmentNo = @SalesOrderAmendmentNo )
+                        
+---------------- Update Status of Quotation if it is  oth amendment-----------
+	
+	Update Sales.RevisedQuotationMain 
+	Set StatusNo =1 
+	where RevisedQuotationNo = 
+			(Select refDocumentno 
+			 From Sales.SalesOrderAmendmentMain 
+			 Where SalesOrderAmendmentNo = @SalesOrderAmendmentNo	and SalesOrderSourceNo =2
+			 )
+	and @PrevSalesOrderAmendmentNo is Null		 
+			 
+	Update Qm set  StatusNo = 1
+	From Sales.RevisedQuotationMain  rqm,Sales.QuotationMain qm
+	where qm.QuotationNo = rqm.QuotationNo 
+	And RevisedQuotationNo = 
+					(Select refDocumentno 
+					From Sales.SalesOrderAmendmentMain 
+					where SalesOrderAmendmentNo = @SalesOrderAmendmentNo	
+					and SalesOrderSourceNo =2) 					                        
+	and @PrevSalesOrderAmendmentNo is Null					
+
+--- DELETE MAIN TABLE IF
+	
+	IF @prevSalesOrderAmendmentNo    IS NULL -- IF ITS 0th AMENDMENT
+	OR EXISTS ( SELECT 1 FROM Sales.SalesOrderAmendmentMain -- OR IF IT IS AUTHORIZED
+				WHERE SalesOrderAmendmentNo = @SalesOrderAmendmentNo 
+				AND ISNULL([AuthorizedBy],0)<>0 )
+			
+	BEGIN
+	   	if @IsCopy = 1
+	  set @PrevSalesOrderAmendmentNo = @SalesOrderAmendmentNo 
+
+
+			-- SO Status
+		Declare @ItemDetail Table(IDNo tinyint identity(1,1),SalesOrderNo Int,ItemNo Int,MakeNo SMallInt,CombinationNo Int,RefDocNo Int,SOSourceDocNo TinyInt)
+
+		
+		Insert into @ItemDetail
+		Select SAGM.SalesOrderNo,ID.ItemNo,ID.MakeNo,ID.CombinationNo
+		,SOM.RefDocumentNo,SOM.SalesOrderSourceNo
+		From Sales.SalesOrderMain SOM -- Current SO
+		Inner Join Sales.SalesOrderItemDetail ID on ID.SalesOrderNo=SOM.SalesOrderNo -- Item of SO
+		Inner Join Sales.SalesOrderAmendmentMain SAGM on SAGM.SalesOrderAmendmentNo=SOM.RefDocumentNo -- Agrrment of SO
+		Where SOM.SalesOrderSourceNo=3 --against agreement 
+		And SOM.SalesOrderNo=@SalesOrderNo And @PrevSalesOrderAmendmentNo is Null
+		
+		Set @RowCnt=@@ROWCOUNT					
+		-- SO Status	
+		
+		
+	-- Delete  main Details Table
+
+		Delete From Sales.SalesOrderRateBifurcationDetail  Where SalesOrderNo=@SalesOrderNo
+
+		Delete SOFD
+		from Sales.SalesOrderExpenseHeadFormDetail SOFD
+		Inner Join Sales.SalesOrderExportCostDetail SOED On SOFD.SOExportCostNo = SOED.SOExportCostNo
+		where SOED.SalesOrderNo = @SalesOrderNo 
+
+		Delete From Sales.SalesOrderExportCostProvision  Where SalesOrderNo=@SalesOrderNo
+		Delete From Sales.SalesOrderExportCostDetail  Where SalesOrderNo=@SalesOrderNo
+		Delete From Sales.SalesOrderInspectionDetail  Where SalesOrderNo=@SalesOrderNo
+		Delete From Purchase.FreightOrderOrderDetail Where SalesOrderNo=@SalesOrderNo And @PrevSalesOrderAmendmentNo is Null
+		
+		Delete From Sales.SalesOrderItemPriceFactorDetail Where SalesOrderNo=@SalesOrderNo
+		Delete From Sales.SalesOrderItemSpecificationDetail Where SalesOrderNo=@SalesOrderNo
+		Delete From Sales.SalesOrderConsigneeDetail Where SalesOrderNo=@SalesOrderNo
+	    Delete From Sales.SalesOrderCustomFieldDetail Where SalesOrderNo=@SalesOrderNo
+	    Delete From Sales.SalesOrderDocDetail Where SalesOrderNo=@SalesOrderNo
+	    Delete From Sales.SalesOrderItemTaxDetail Where SalesOrderNo=@SalesOrderNo
+	    delete from Sales.SalesOrderItemScheduleDetail Where SalesOrderNo=@SalesOrderNo
+	    Delete From VTPL.SalesOrderAttributeCombinationDetail Where SalesOrderNo=@SalesOrderNo
+		Delete From Sales.SalesOrderItemDetail Where SalesOrderNo=@SalesOrderNo
+	    Delete From Sales.SalesOrderNotesDetail Where SalesOrderNo=@SalesOrderNo
+	    Delete From Sales.[SalesOrderTaxConcessionFormDetail] Where SalesOrderNo=@SalesOrderNo
+	    Delete From Sales.SalesOrderProjectDetail Where SalesOrderNo=@SalesOrderNo
+	    Delete From Sales.SalesOrderTaxDetail Where SalesOrderNo=@SalesOrderNo
+	    Delete From Sales.SalesOrderTermsNConditionDetail Where SalesOrderNo=@SalesOrderNo
+		Delete From Sales.SalesOrderPaymentTermDetail Where SalesOrderNo=@SalesOrderNo
+		Delete From Sales.HoldAgentCommissionDetail Where SalesOrderNo=@SalesOrderNo And @PrevSalesOrderAmendmentNo is Null
+		----vtpl other Detail Table
+		Delete From Sales.SalesOrderOtherDetailVTPL Where SalesOrderNo=@SalesOrderNo
+		
+			
+		
+ END -- DELETE MAIN TABLE IF	
+			 
+	IF Exists(SELECT 1 FROM Sales.SalesOrderAmendmentMain  WHERE 
+			  SalesOrderAmendmentNo = @prevSalesOrderAmendmentNo  AND ISNULL([AuthorizedBy],0)<>0) 
+	AND						 
+	Exists(SELECT 1 FROM Sales.SalesOrderAmendmentMain WHERE 
+	       SalesOrderAmendmentNo = @SalesOrderAmendmentNo    AND ISNULL([AuthorizedBy],0)<>0) 
+	
+	BEGIN
+	
+	-- INSERT PREIVOUS DETAILS IN TO MAIN TABLE (ROLLBACK)	 
+
+			INSERT INTO  [Sales].[SalesOrderConsigneeDetail]
+				   (
+				    SalesOrderNo
+				   ,ConsigneeLocationNo
+				   ,FreightRate
+				   ,Remark
+				   ,FromLocationNo, ToLocationNo, FreightRateTypeNo
+				   ,ContactNo
+				   ) 
+			SELECT 
+				    @SalesOrderNo
+				   ,ConsigneeLocationNo
+				   ,FreightRate
+				   ,Remark
+				   ,FromLocationNo, ToLocationNo, FreightRateTypeNo,ContactNo
+		 	FROM Sales.SalesOrderAmendmentConsigneeDetail
+		 	WHERE SalesOrderAmendmentNo = @prevSalesOrderAmendmentNo
+		 
+	 			 
+		 INSERT INTO  [Sales].[SalesOrderPaymentTermDetail]
+				   (
+				    SalesOrderNo 
+				   ,PayCode
+				   ,SalesPaymentTypeNo
+				   ,PaymentDescription
+				   ,PayValue
+				   ,CreditDays
+				   ,Remarks
+				   ,PaymentModeNo 
+				   )
+			Select
+					@SalesOrderNo
+				   ,PayCode
+				   ,SalesPaymentTypeNo
+				   ,PaymentDescription
+				   ,PayValue
+				   ,CreditDays
+				   ,Remarks  
+				   ,PaymentModeNo 
+			From Sales.SalesOrderAmendmentPaymentTermDetail
+			Where SalesOrderAmendmentNo=@prevSalesOrderAmendmentNo
+			
+		  INSERT INTO  [Sales].[SalesOrderCustomFieldDetail]
+				   (
+				    SalesOrderNo
+				   ,CustomFieldNo
+				   ,FieldValue
+				   )
+		  SELECT 
+					@SalesOrderNo
+				   ,CustomFieldNo
+				   ,FieldValue
+		  FROM Sales.SalesOrderAmendmentCustomFieldDetail
+		  WHERE SalesOrderAmendmentNo = @prevSalesOrderAmendmentNo
+		  
+		  INSERT INTO  [Sales].[SalesOrderDocDetail]
+				   (
+				    SalesOrderNo
+				   ,DocumentNo
+				   ,NoOfCopy
+				   ,Remarks
+				   )
+		  SELECT 
+					@SalesOrderNo
+				   ,DocumentNo
+				   ,NoOfCopy
+				   ,Remarks
+		  FROM Sales.SalesOrderAmendmentDocDetail
+		  WHERE SalesOrderAmendmentNo = @prevSalesOrderAmendmentNo 
+		  
+		  
+		  INSERT INTO  [Sales].[SalesOrderNotesDetail]
+				   (
+				    SalesOrderNo
+				   ,PrintAreaNo
+				   ,Notes
+				   ,IsDefault
+				   )
+
+		  SELECT 
+					@SalesOrderNo
+				   ,PrintAreaNo
+				   ,Notes
+				   ,IsDefault
+		  FROM Sales.SalesOrderAmendmentNotesDetail
+		  WHERE SalesOrderAmendmentNo = @prevSalesOrderAmendmentNo 
+		  
+		  INSERT INTO  [Sales].[SalesOrderTaxConcessionFormDetail]
+				   (
+				    SalesOrderNo
+				   ,[IssueReceiveNo]
+				   ,[TaxConcessionFormNo]
+				   ,[PartyNo]
+				   ,[PartyLocationNo]
+				   )
+
+		  SELECT 
+					@SalesOrderNo
+				   ,[IssueReceiveNo]
+				   ,[TaxConcessionFormNo]
+				   ,[PartyNo]
+				   ,[PartyLocationNo]
+		  FROM Sales.[SalesOrderAmendmentTaxConcessionFormDetail]
+		  WHERE SalesOrderAmendmentNo = @prevSalesOrderAmendmentNo 
+		  
+		  INSERT INTO  [Sales].[SalesOrderItemDetail]
+				   (
+				    SalesOrderNo
+				   ,ItemNo
+				   ,MakeNo 
+				   ,UnitNo 
+				   ,TechSpecification
+				   ,Quantity
+				   ,Pcs
+				   ,Rate
+				   ,BasicAmount
+				   ,NetAmount
+				   ,CustomerItemCode
+				   ,CustomerItemDescription
+				   ,Remarks
+				   ,StatusNo
+				   ,ProcessingTypeNo 
+				   ,ItemBasedPriceNo
+				   ,ItemAttributeBookingNatureNo
+				   ,CombinationNo
+				   ,ToleranceBasisNo
+				   ,ToleranceMinus
+				   ,TolerancePlus				   
+				   ,QuotationCombinationNo
+				   ,CashDiscountBasisNo
+				   ,CashDiscountValue
+				   ,OutputUnitNo 
+				   ,FirstCF 
+				   ,SecondCF
+				   ,SpecificationNo
+				   ,StockFirstCF
+				   ,StockSecondCF
+				   ,Process
+				   ,CostCenterNo
+				   ,MaterialCost
+				   ,LabourCost	
+				   ,HSNSACCodeNo,ActivityNos,Activity
+				   ,PriceVariancePercent,PriceVarianceAmt
+				   ,RecipeRevisionNo
+				   )
+		   SELECT 
+					@SalesOrderNo
+				   ,ItemNo
+				   ,MakeNo 
+				   ,UnitNo
+				   ,TechSpecification
+				   ,Quantity
+				   ,Pcs
+				   ,Rate
+				   ,BasicAmount
+				   ,NetAmount
+				   ,CustomerItemCode
+				   ,CustomerItemDescription
+				   ,Remarks
+				   ,StatusNo
+				   ,ProcessingTypeNo 
+				   ,ItemBasedPriceNo
+				   ,ItemAttributeBookingNatureNo
+				   ,CombinationNo
+				   ,ToleranceBasisNo
+				   ,ToleranceMinus
+				   ,TolerancePlus				   
+				   ,QuotationCombinationNo
+				   ,CashDiscountBasisNo
+				   ,CashDiscountValue
+				    ,OutputUnitNo 
+				   ,FirstCF 
+				   ,SecondCF 
+				   ,SpecificationNo
+				   ,StockFirstCF
+				   ,StockSecondCF
+				   ,Process
+				   ,CostCenterNo
+				   ,MaterialCost
+				   ,LabourCost		
+				   ,HSNSACCodeNo,ActivityNos,Activity
+				   ,PriceVariancePercent ,PriceVarianceAmt
+				   ,RecipeRevisionNo
+		  FROM Sales.SalesOrderAmendmentItemDetail
+		  WHERE SalesOrderAmendmentNo = @prevSalesOrderAmendmentNo 
+		  
+		  		   	
+		   INSERT INTO  VTPL.SalesOrderAttributeCombinationDetail
+				   (
+				    SalesOrderNo 
+				   ,CombinationNo
+				   ,Qty
+				   ,Rate
+				   ,Amount
+				   ,SOItemDetailNo
+				   )
+			Select
+					@SalesOrderNo 
+				   ,SOAACD.CombinationNo
+				   ,SOAACD.Qty
+				   ,SOAACD.Rate
+				   ,SOAACD.Amount
+				   ,SOID.SalesOrderItemDetailNo
+			From VTPL.SalesOrderAmendmentAttributeCombinationDetail SOAACD
+			inner Join Sales.SalesOrderAmendmentItemDetail SOAID on SOAID.SOAmendmentItemDetailNo = SOAACD.SOAmendmentItemDetailNo
+			inner Join [Sales].[SalesOrderItemDetail] SOID On SOID.SalesOrderNo = @SalesOrderNo And SOID.ItemNo = SOAID.ItemNo
+															And IsNull(SOID.MakeNo,0) = IsNull(SOAID.MakeNo,0)
+															And IsNull(SOID.CombinationNo,0) = IsNull(SOAID.CombinationNo,0)
+															And IsNull(SOID.QuotationCombinationNo,0) = IsNull(SOAID.QuotationCombinationNo,0)
+			Where SOAACD.SalesOrderAmendmentNo=@prevSalesOrderAmendmentNo
+		  
+		  INSERT INTO  [Sales].[SalesOrderItemTaxDetail]
+				   (
+				    SalesOrderNo
+				   ,Selected
+				   ,ItemNo
+				   ,MiscChargeNo
+				   ,ChargeType
+				   ,Nature
+				   ,ChargeOn
+				   ,ChargeValue
+				   ,TotalAmount
+				   ,CombinationNo
+				   )
+		  SELECT 
+					@SalesOrderNo
+				   ,Selected
+				   ,ItemNo
+				   ,MiscChargeNo
+				   ,ChargeType
+				   ,Nature
+				   ,ChargeOn
+				   ,ChargeValue
+				   ,TotalAmount
+				   ,CombinationNo
+		  FROM Sales.SalesOrderAmendmentItemTaxDetail
+		  WHERE SalesOrderAmendmentNo = @prevSalesOrderAmendmentNo 
+		  
+		  
+		  INSERT INTO  [Sales].[SalesOrderItemScheduleDetail]
+				   (
+				    SalesOrderNo
+				   ,[ItemNo]
+				   ,[DeliveryDate]
+				   ,[Quantity]
+				   ,CombinationNo
+				   ,SLNo
+				   ,FromQty
+				   ,ToQty)
+		 SELECT 
+					@SalesOrderNo
+				    ,[ItemNo]
+				   ,[DeliveryDate]
+				   ,[Quantity]
+				   ,CombinationNo
+				   ,SLNo
+				   ,1.000
+				   ,1.000
+		  FROM Sales.SalesOrderAmendmentItemScheduleDetail
+		  WHERE SalesOrderAmendmentNo = @prevSalesOrderAmendmentNo  
+		 
+		 Insert Into Sales.SalesOrderItemPriceFactorDetail(SalesOrderNo,SalesOrderItemDetailNo,PricingFactorNo,MPFactDetailNo,RateVariation)
+		 Select @SalesOrderNo,SOID.SalesOrderItemDetailNo,IPF.PricingFactorNo,IPF.MPFactDetailNo,IPF.RateVariation
+		 From Sales.SalesOrderAmendmentItemDetail ID
+		 Inner Join Sales.SalesOrderAmendmentItemPriceFactorDetail IPF on IPF.SalesOrderAmendmentNo=ID.SalesOrderAmendmentNo
+																		And IPF.SOAmendmentItemDetailNo=ID.SOAmendmentItemDetailNo
+		 Left Join Sales.SalesOrderItemDetail SOID on SOID.SalesOrderNo=@SalesOrderNo
+												   And SOID.ItemNo=ID.ItemNo
+												   And IsNull(SOID.MakeNo,0)=IsNull(ID.MakeNo,0)
+												   And IsNull(SOID.CombinationNo,0)=IsNull(ID.CombinationNo,0)
+		 Where IPF.SalesOrderAmendmentNo=@PrevSalesOrderAmendmentNo
+		 
+		 Insert into Sales.SalesOrderItemSpecificationDetail 
+				(SalesOrderNo,SalesOrderItemDetailNo,QualityParameterNo
+				 ,Value,QPStandardValueNo,LowerLimit,UpperLimit)
+		 Select @SalesOrderNo,SOID.SalesOrderItemDetailNo,ISD.QualityParameterNo
+			   ,ISD.Value,ISD.QPStandardValueNo,ISD.LowerLimit,ISD.UpperLimit
+		 From Sales.SalesOrderAmendmentItemDetail ID
+		 Inner Join Sales.SalesOrderAmendmentItemSpecificationDetail ISD on ISD.SalesOrderAmendmentNo=ID.SalesOrderAmendmentNo
+																		And ISD.SOAmendmentItemDetailNo=ID.SOAmendmentItemDetailNo
+		 Left Join Sales.SalesOrderItemDetail SOID on SOID.SalesOrderNo=@SalesOrderNo
+												   And SOID.ItemNo=ID.ItemNo
+												   And IsNull(SOID.MakeNo,0)=IsNull(ID.MakeNo,0)
+												   And IsNull(SOID.CombinationNo,0)=IsNull(ID.CombinationNo,0)
+		 Where ISD.SalesOrderAmendmentNo=@PrevSalesOrderAmendmentNo				
+		  -- Udpate From Qty and To Qty
+		  
+		  Exec [Sales].[SDSOUpdateItemSchedule]	@SalesOrderNo,@Output output,@resultmsg output	  
+		  IF @Output =0
+		  Raiserror (@resultmsg,16,-1)
+					   		  				   
+		  INSERT INTO  [Sales].[SalesOrderProjectDetail]
+				   (
+				    SalesOrderNo
+				   ,Particular
+				   ,Description
+				   ,EstimatedAmount
+				   ,EstimatedStartDate
+				   ,EstimatedEndDate
+				   ,Remarks
+				   )
+		   SELECT 
+					@SalesOrderNo
+				    ,Particular
+				   ,Description
+				   ,EstimatedAmount
+				   ,EstimatedStartDate
+				   ,EstimatedEndDate
+				   ,Remarks
+		  FROM Sales.SalesOrderAmendmentProjectDetail
+		  WHERE SalesOrderAmendmentNo = @prevSalesOrderAmendmentNo  
+		  
+		  INSERT INTO  [Sales].[SalesOrderTaxDetail]
+				   (
+				    SalesOrderNo
+				   ,MiscChargeNo
+				   ,ChargeType
+				   ,Nature
+				   ,ChargeOn
+				   ,ChargeValue
+				   ,TotalValue
+				   ,TaxCodeMiscChargesDetailNo
+				   ,IncludeInBasic
+				   )
+		  SELECT 
+					@SalesOrderNo
+				   ,MiscChargeNo
+				   ,ChargeType
+				   ,Nature
+				   ,ChargeOn
+				   ,ChargeValue
+				   ,TotalValue
+				   ,TaxCodeMiscChargesDetailNo
+				   ,IncludeInBasic
+		  FROM Sales.SalesOrderAmendmentTaxDetail
+		  WHERE SalesOrderAmendmentNo = @prevSalesOrderAmendmentNo  
+		  
+		INSERT INTO  [Sales].[SalesOrderTermsNConditionDetail]
+				   (
+				    SalesOrderNo
+				   ,TermsNConditionHeadNo
+				   ,TermsNCondition
+				   )
+		 SELECT 
+					@SalesOrderNo
+				   ,TermsNConditionHeadNo
+				   ,TermsNCondition
+		  FROM Sales.SalesOrderAmendmentTermsNConditionDetail
+		  WHERE SalesOrderAmendmentNo = @prevSalesOrderAmendmentNo  
+		  
+		  
+		INSERT INTO  [Sales].[SalesOrderOtherDetailVTPL]
+				   (
+				    SalesOrderNo
+				   ,ApprovedByNo
+				   ,ContractorName
+				   ,LDClause
+				   ,LOANo
+				   ,LOIDate
+				   ,LOINumber
+				   ,ManufacturerName
+				   ,MicronNo
+				   ,OrderNatureNo
+				   ,OwnerName
+				   ,PVClause
+				   ,Project
+				   )
+		 SELECT 
+					@SalesOrderNo
+				   ,O.ApprovedByNo
+				   ,O.ContractorName
+				   ,O.LDClause
+				   ,O.LOANo
+				   ,O.LOIDate
+				   ,O.LOINumber
+				   ,O.ManufacturerName
+				   ,O.MicronNo
+				   ,O.OrderNatureNo
+				   ,O.OwnerName
+				   ,O.PVClause
+				   ,O.Project
+		  FROM Sales.[SalesOrderAmendmentOtherDetailVTPL] O
+		  WHERE SalesOrderAmendmentNo = @prevSalesOrderAmendmentNo  
+
+		  INSERT INTO  [Sales].[SalesOrderInspectionDetail] 
+				   (
+				    SalesOrderNo
+				   ,InspectionByNo
+				   ,FormNo
+				   ) 
+			SELECT 
+				    @SalesOrderNo
+				   ,InspectionByNo 
+				   ,FormNo
+		 	FROM Sales.SalesOrderAmendmentInspectiondetail 
+		 	WHERE SalesOrderAmendmentNo = @prevSalesOrderAmendmentNo
+
+			INSERT INTO  Sales.SalesOrderExportCostDetail
+				   (
+				    SalesOrderNo
+				   ,CostHeadNo 
+				   ,UnitNo
+				   ,Quantity 
+				   ,Rate
+				   ,Remarks
+				   ,SLNo
+				   ,Amount
+				   ,AmountInBaseCurrency
+				   ,AmountInExportCurrency
+				   ,CurrencyConversionNo
+				   ,DivisibilityRate
+				   ,MultiplicativeRate
+				   ,IsCalculateOnItemQty
+				   )
+			SELECT 
+				    @SalesOrderNo
+				   ,CostHeadNo
+				   ,UnitNo
+				   ,Quantity,Rate
+				   ,Remarks
+				   ,SLNo
+				   ,Amount
+				   ,AmountInBaseCurrency
+				   ,AmountInExportCurrency
+				   ,CurrencyConversionNo
+				   ,DivisibilityRate
+				   ,MultiplicativeRate
+				   ,IsCalculateOnItemQty
+		 	FROM Sales.SalesOrderAmendmentExportCostDetail 
+		 	WHERE SalesOrderAmendmentNo = @prevSalesOrderAmendmentNo
+
+			Insert into Sales.SalesOrderExportCostProvision 
+			(
+				SalesOrderNo,
+				SOExportCostNo,
+				SalesOrderItemDetailNo,
+				RatePerUnit
+			)
+			Select @SalesOrderNo 
+			,SOCD.SOExportCostNo
+			,SOID.SalesOrderItemDetailNo
+			,SOAACD.RatePerUnit
+			from Sales.SalesOrderAmendmentExportCostProvision SOAACD
+			inner Join Sales.SalesOrderAmendmentItemDetail SOAID on SOAID.SOAmendmentItemDetailNo = SOAACD.SOAmendmentItemDetailNo
+			inner Join [Sales].[SalesOrderItemDetail] SOID On SOID.SalesOrderNo = @SalesOrderNo And SOID.ItemNo = SOAID.ItemNo
+															And IsNull(SOID.MakeNo,0) = IsNull(SOAID.MakeNo,0)
+															And IsNull(SOID.CombinationNo,0) = IsNull(SOAID.CombinationNo,0)
+															And IsNull(SOID.QuotationCombinationNo,0) = IsNull(SOAID.QuotationCombinationNo,0)
+			Inner Join Sales.SalesOrderAmendmentExportCostDetail  SOCP On SOCP.SalesOrderAmendmentExportCostNo = SOAACD.SalesOrderAmendmentExportCostNo 
+			Inner Join Sales.SalesOrderExportCostDetail SOCD On SOCD.SalesOrderNo = SOID.SalesOrderNo
+																and SOCP.CostHeadNo = SOCD.CostHeadNo
+			Where SOAACD.SalesOrderAmendmentNo = @prevSalesOrderAmendmentNo
+
+			Insert into Sales.SalesOrderExpenseHeadFormDetail 
+			(
+				SOExportCostNo,
+				FormNo
+			)
+		 	Select SOCD.SOExportCostNo,SOFD.FormNo
+			from sales.SalesOrderAmendmentExpenseHeadFormDetail SOFD 
+			Inner Join Sales.SalesOrderAmendmentExportCostDetail  SOCP On SOFD.SalesOrderAmendmentExportCostNo = SOCP.SalesOrderAmendmentExportCostNo
+			Inner Join Sales.SalesOrderAmendmentMain SOAM On SOAM.SalesOrderAmendmentNo = SOCP.SalesOrderAmendmentNo
+			Inner Join Sales.SalesOrderExportCostDetail SOCD On SOCD.SalesOrderNo = SOAM.SalesOrderNo
+																and SOCP.CostHeadNo = SOCD.CostHeadNo
+			Where SOCP.SalesOrderAmendmentNo = @PrevSalesOrderAmendmentNo
+
+			INSERT INTO  Sales.SalesOrderRateBifurcationDetail
+				   ([SalesOrderNo]
+				   ,[CostHeadNo]
+				   ,[Rate]
+				   ,[SalesOrderItemDetailNo]
+				   ,[ItemBasedPriceNo])
+			SELECT 
+				    @SalesOrderNo
+				   ,CostHeadNo
+				   ,BFD.Rate
+				   ,SOID.SalesOrderItemDetailNo
+				   ,BFD.ItemBasedPriceNo 
+		 	FROM Sales.SalesOrderAmendmentRateBifurcationDetail BFD
+		 	inner Join Sales.SalesOrderAmendmentItemDetail SOAID on SOAID.SOAmendmentItemDetailNo = BFD.SOAmendmentItemDetailNo
+			inner Join [Sales].[SalesOrderItemDetail] SOID On SOID.SalesOrderNo = @SalesOrderNo 
+																And SOID.ItemNo = SOAID.ItemNo
+																And IsNull(SOID.MakeNo,0) = IsNull(SOAID.MakeNo,0)
+																And IsNull(SOID.CombinationNo,0) = IsNull(SOAID.CombinationNo,0)
+																And IsNull(SOID.QuotationCombinationNo,0) = IsNull(SOAID.QuotationCombinationNo,0)
+		 	WHERE BFD.SalesOrderAmendmentNo = @prevSalesOrderAmendmentNo
+
+		  -- UPDATE  main TABLE	
+		  	UPDATE  [Sales].[SalesOrderMain]
+				SET 
+				    DocumentNoYearly =  SAM.DocumentNoYearly
+				   ,DocumentDate =  SAM.DocumentDate
+				   ,AmendmentNo =  SAM.AmendmentNo
+				   ,SalesOrderTypeNo =  SAM.SalesOrderTypeNo
+				   ,SalesOrderSourceNo =  SAM.SalesOrderSourceNo
+				   ,RefDocumentNo =  SAM.RefDocumentNo
+				   ,CustomerLocationNo =  SAM.CustomerLocationNo
+				   ,CustomerOrderNo =  SAM.CustomerOrderNo
+				   ,CustomerOrderDate =  SAM.CustomerOrderDate
+				   ,CustomerProjectCode =  SAM.CustomerProjectCode
+				   ,SalesCategoryNo =  SAM.SalesCategoryNo
+				   ,NetAmount =  SAM.NetAmount
+				   ,AgentNo =  SAM.AgentNo
+				   ,FreightTypeNo =  SAM.FreightTypeNo				   
+				   ,BillToPartyLocationNo =  SAM.BillToPartyLocationNo				   
+				   ,CT1CT3NoDate =  SAM.CT1CT3NoDate
+				   ,BondNoDate =  SAM.BondNoDate
+				   ,DeclarationAmount =  SAM.DeclarationAmount
+				   ,LUTID =  SAM.LUTID
+				   ,CurrencyConversionNo =  SAM.CurrencyConversionNo
+				   ,DivisibilityRate =  SAM.DivisibilityRate
+				   ,MultiplicativeRate=SAM.MultiplicativeRate
+				   ,Remarks =  SAM.Remarks
+				   ,ModifiedBy =  @LoginNo
+				   ,ModifiedDate = Getdate()
+				   ,AuthorizedBy =  SAM.AuthorizedBy
+				   ,AuthorizedDate =  SAM.AuthorizedBy 
+				   ,StatusNo =  SAM.StatusNo
+				   ,DocumentStatusNo =  SAM.DocumentStatusNo
+				   ,DivisionNo=SAM.DivisionNo
+				   ,BookingTime=SAM.BookingTime
+				   ,SalesOrganizationNo=SAM.SalesOrganizationNo
+				   ,SalesPersonNo=SAM.SalesPersonNo
+				   ,FormTag=SAM.FormTag
+				   ,ValidityFromDate=SAM.ValidityFromDate
+				   ,ValidityToDate=SAM.ValidityToDate					   
+				   ,AgreementTypeNo=SAM.AgreementTypeNo
+				   ,GSTDNo=SAM.GSTDNo
+				   ,AgreementQtyValidationNo=SAM.AgreementQtyValidationNo
+				   ,AgreementQty=SAM.AgreementQty
+				   ,AgreementUnitNo=SAM.AgreementUnitNo				   					   			   
+				   ,CashDiscountBasisNo=SAM.CashDiscountBasisNo
+				   ,CashDiscountLevelNo=SAM.CashDiscountLevelNo
+				   ,CashDiscountValue=SAM.CashDiscountValue
+				   ,IsSDApplicable=SAM.IsSDApplicable
+				   ,SDPercentage=SAM.SDPercentage
+				   ,PaymentTermsSettingNo=SAM.PaymentTermsSettingNo
+				   ,LiftNo = SAM.LiftNo 
+				   ,DistributorNo= SAM.DistributorNo 
+				   ,SalesSupplyTypeNo = SAM.SalesSupplyTypeNo
+				   ,ContactNo = SAM.ContactNo
+				   ,BankAccountNo = SAM.BankAccountNo
+				   ,BuyerContactNo = SAM.BuyerContactNo
+				   ,NotifyFirmName = SAM.NotifyFirmName
+				   ,FirmLocation = SAM.FirmLocation
+				   ,NotifyContactPerson = SAM.NotifyContactPerson
+				   ,NotifyContactNo = SAM.NotifyContactNo
+				   ,NotifyEmailId = SAM.NotifyEmailId
+				   ,IncoTermNo = SAM.IncoTermNo
+				   ,MethodOfShipmentNo = SAM.MethodOfShipmentNo
+				   ,TypeOfDispatchNo = SAM.TypeOfDispatchNo
+				   ,PlaceOfReceiptNo = SAM.PlaceOfReceiptNo
+				   ,PortOfLoadingNo = SAM.PortOfLoadingNo
+				   ,PortOfDischargeNo = SAM.PortOfDischargeNo
+				   ,PlaceOfDeliveryNo = SAM.PlaceOfDeliveryNo
+				   ,PreCarriageNo = SAM.PreCarriageNo
+				   ,CountryOfOriginNo = SAM.CountryOfOriginNo
+				   ,PackingInstructions = SAM.PackingInstructions
+				   ,IsQCRequired = SAM.IsQCRequired 				   
+				   ,IsAdditionalCost=SAM.IsAdditionalCost
+				   ,SalesClassificationNo = SAM.SalesClassificationNo
+				   ,VesselNo = SAM.VesselNo 
+			FROM Sales.SalesOrderAmendmentMain SAM
+		  WHERE SalesOrderAmendmentNo = @prevSalesOrderAmendmentNo  
+		   And [Sales].[SalesOrderMain].SalesOrderNo=SAM.SalesOrderNo		
+		 
+		END 
+		
+		if @IsCopy = 1
+		 set @SalesOrderAmendmentNo = null
+
+
+		-- Delete SalesOrderNo amendment Details Table
+		Delete from Sales.SalesOrderAmendmentRateBifurcationDetail Where SalesOrderAmendmentNo= @SalesOrderAmendmentNo
+
+		Delete SOFD
+		from Sales.SalesOrderAmendmentExpenseHeadFormDetail SOFD
+		Inner join Sales.SalesOrderAmendmentExportCostDetail SOED On SOFD.SalesOrderAmendmentExportCostNo = SOED.SalesOrderAmendmentExportCostNo
+		Where SOED.SalesOrderAmendmentNo = @SalesOrderAmendmentNo
+
+		Delete from Sales.SalesOrderAmendmentExportCostProvision Where SalesOrderAmendmentNo= @SalesOrderAmendmentNo
+		Delete From Sales.SalesOrderAmendmentExportCostDetail Where SalesOrderAmendmentNo=@SalesOrderAmendmentNo
+		Delete From Sales.SalesOrderAmendmentInspectiondetail Where SalesOrderAmendmentNo=@SalesOrderAmendmentNo
+
+		delete from Notifications.TATAuthorizationDetail where InternalNo = @SalesOrderAmendmentNo And FormCode ='SDSA'
+		Delete From Sales.SalesOrderAmendmentItemPriceFactorDetail Where SalesOrderAmendmentNo=@SalesOrderAmendmentNo
+		Delete From Sales.SalesOrderAmendmentItemSpecificationDetail Where SalesOrderAmendmentNo=@SalesOrderAmendmentNo
+		Delete From Sales.SalesOrderAmendmentConsigneeDetail  Where SalesOrderAmendmentNo=@SalesOrderAmendmentNo
+	    Delete From Sales.SalesOrderAmendmentCustomFieldDetail  Where SalesOrderAmendmentNo=@SalesOrderAmendmentNo
+	    Delete From Sales.SalesOrderAmendmentDocDetail  Where SalesOrderAmendmentNo=@SalesOrderAmendmentNo
+	    Delete From Sales.SalesOrderAmendmentItemTaxDetail  Where SalesOrderAmendmentNo=@SalesOrderAmendmentNo
+	    delete from Sales.SalesOrderAmendmentItemScheduleDetail Where SalesOrderAmendmentNo=@SalesOrderAmendmentNo
+	    Delete From VTPL.SalesOrderAmendmentAttributeCombinationDetail Where SalesOrderAmendmentNo=@SalesOrderAmendmentNo
+	    Delete From Sales.SalesOrderAmendmentItemDetail  Where SalesOrderAmendmentNo=@SalesOrderAmendmentNo
+	    Delete From Sales.SalesOrderAmendmentNotesDetail  Where SalesOrderAmendmentNo=@SalesOrderAmendmentNo
+	    Delete From Sales.SalesOrderAmendmentProjectDetail  Where SalesOrderAmendmentNo=@SalesOrderAmendmentNo
+	    Delete From Sales.SalesOrderAmendmentTaxDetail  Where SalesOrderAmendmentNo=@SalesOrderAmendmentNo
+	    Delete From Sales.SalesOrderAmendmentPaymentTermDetail Where SalesOrderAmendmentNo=@SalesOrderAmendmentNo
+	    Delete From Sales.SalesOrderAmendmentTermsNConditionDetail Where SalesOrderAmendmentNo=@SalesOrderAmendmentNo 
+	    Delete From Sales.SalesOrderAmendmentTaxConcessionFormDetail Where SalesOrderAmendmentNo=@SalesOrderAmendmentNo 
+	    --vtpl other Detail Table
+	    Delete From Sales.SalesOrderAmendmentOtherDetailVTPL Where SalesOrderAmendmentNo=@SalesOrderAmendmentNo    
+		
+-- DELETE AMENDMENT MAIN TABLE	
+    Delete From Sales.SalesOrderAmendmentMain  Where SalesOrderAmendmentNo=@SalesOrderAmendmentNo   
+
+-- DELETE MAIN TABLE
+
+	Delete from Sales.SalesOrderAccountAssignmentDetail where SalesOrderNo = @SalesOrderNo AND isnull(@prevSalesOrderAmendmentNo ,0)=0
+	
+	-- for RCF
+	if exists (select 1 from Sales.SalesOrderMain sm , Sales.Setting S where S.CompanyNo = sm.CompanyNo and IsCreateCostCenterINSO =1
+					and sm.SalesOrderNo = @SalesOrderNo AND @prevSalesOrderAmendmentNo IS NULL )
+	begin
+	    Declare @CostCenterNo int
+	    select @CostCenterNo = CostCenterNo from masterdata.mCostCenterMaster cm , Sales.SalesOrderMain sm 
+						where cm.CostCenterName = sm.CustomerOrderNo and sm.SalesOrderNo = @SalesOrderNo
+			exec [masterdata].[CCCMDelete]  @CostCenterNo, null
+	end
+	
+	Delete From Sales.SalesOrderMain  Where SalesOrderNo=@SalesOrderNo AND @prevSalesOrderAmendmentNo IS NULL
+	  
+
+		-- SO Status		    			
+
+		
+	    While @RowCnt>0
+	    BEGIN
+	    			    
+			Select @RefSalesOrderNo =SalesOrderNo,@ItemNo =ItemNo,@MakeNo =MakeNo,@CombinationNo =CombinationNo
+			,@RefDocNo=RefDocNo,@SOSourceNo=SOSourceDocNo
+			From @ItemDetail
+			Where IDNo=@RowCnt
+
+			EXEC Sales.SOStatus @RefSalesOrderNo ,@ItemNo,@MakeNo,@CombinationNo,2,@Output output,@resultmsg output
+			
+			IF @Output =0
+			   raiserror (@resultmsg,16,-1)				
+			 
+			 If @SOSourceNo=3 -- Against Agreement			 
+			 BEGIN 
+				EXEC [Sales].[SalesAgreementStatus] @RefSalesOrderNo 
+				,@ItemNo,@MakeNo,@CombinationNo,2,@Output output,@resultmsg output
+					
+				If @Output =0
+					   raiserror (@resultmsg,16,-1)   				
+			 END						
+				Set @RowCnt=@RowCnt-1				
+				
+	    END
+	    -- SO Status	
+	    		     
+
+			Select 1,'Success'
+			
+	Select @ResultVal =1,@RsltMsg ='Success'
+		COMMIT Transaction 
+	END TRY
+	BEGIN CATCH
+		Rollback Transaction
+			Select 0,Error_Message()
+			Select @ResultVal =0,@RsltMsg =Error_Message()
+	END CATCH
+END

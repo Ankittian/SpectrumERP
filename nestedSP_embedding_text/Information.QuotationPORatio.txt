@@ -1,0 +1,63 @@
+Stored procedure Information.QuotationPORatio: Quotation PO Ratio. Called from Purchase.POMQGetVendorInfo.
+Reads: Purchase.POMain, Purchase.RevisedQuotationMain
+Parameters: @CompanyNo tinyint, @DocumentDate smalldatetime, @VendorLocationNo int
+Author: Arvinder kaur Vadrah, created 2013/10/08
+Code:
+
+-- =============================================
+-- Author:		Arvinder kaur Vadrah
+-- Create date: 2013/10/08
+-- Description:	Quotation PO Ratio
+-- =============================================
+CREATE PROCEDURE [Information].[QuotationPORatio] 
+	-- Add the parameters for the stored procedure here
+	@CompanyNo tinyint,
+	@DocumentDate smalldatetime,
+	@VendorLocationNo int
+	
+AS
+BEGIN
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+
+    -- Insert statements for procedure here
+	
+
+	declare @str varchar(max)
+    select @str=masterdata.JSForInformation('POMQ')
+    set @str=@str+masterdata.CSSForInformation('POMQ')
+	set @str=@str+'<table class="altrowstable" id="alternatecolorQuotationPORatioInfo">'
+	set @str=@str+'<Caption><Font color="Maroon"><h3 align="Left"><b>Quotation-PO Ratio</b></h3></Font></Caption>'
+    set @str=@str+'<tr><th>Sl. No.</th><th>Total Quotation</th><th>Total PO</th><th>Conversion Ratio</th></tr>'
+	set @str=@str
+				 +( 
+					replace(
+					replace(
+					replace(
+					replace(    
+					        (SELECT ROW_NUMBER() over ( Order by Count(RQM.RevisedQuotationNo) desc) as td1
+							       ,Count(RQM.RevisedQuotationNo) td2
+							       ,Count(PO.PONo) td3
+							       ,cast((Cast(Count(PO.PONo) as Decimal(5,2))/Nullif(Count(RQM.RevisedQuotationNo),0))*100 as Decimal(5,2))td4
+							FROM Purchase.RevisedQuotationMain RQM
+							Left Join Purchase.POMain PO ON PO.RefDocumentNo=RQM.RevisedQuotationNo
+								     And PO.PORefDocumentTypeNo=1----Quotation
+							Where 
+							RQM.CompanyNo=@CompanyNo
+							and RQM.DocumentDate<=@DocumentDate
+							and RQM.VendorLocationNo=@VendorLocationNo
+							And RQM.RevisedNo = (Select Max(RevisedNo) from Purchase.RevisedQuotationMain
+											     where [QuotationNo] =RQM.[QuotationNo])
+											 
+							for xml path('tr')),'<td1>','<td style="text-align: Center;">')
+							               ,'<td2>','<td style="text-align: Right;">')
+		   								   ,'<td3>','<td style="text-align: Right;">')				
+										   ,'<td4>','<td style="text-align: Right;">')		
+									    	)
+								
+				   
+	set @str=@str+'</table>'
+	
+	select @str
+END

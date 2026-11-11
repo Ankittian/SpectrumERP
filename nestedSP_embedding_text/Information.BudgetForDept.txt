@@ -1,0 +1,86 @@
+Stored procedure Information.BudgetForDept: Get Pending Purchase Request. Called from Inventory.MMPRGetDeptInfo, Inventory.IDMRGetDeptInfo, Purchase.PMPOGetDeptInfo.
+Reads: Inventory.BudgetDeptDetail, Inventory.BudgetMain, masterdata.mFYear, payroll.tblDeptMaster, payroll.tblDivisionMaster, Security.Login
+Parameters: @CompanyNo tinyint, @DocumentDate smalldatetime, @DeptNo int
+Author: Monika Rajput, created 2013/09/24
+Code:
+
+-- =============================================
+-- Author:		Monika Rajput
+-- Create date: 2013/09/24
+-- Description:	Get Pending Purchase Request
+-- =============================================
+-- [Information].[BudgetForDept] 4,'2013/09/25',31
+CREATE PROCEDURE [Information].[BudgetForDept] 
+	-- Add the parameters for the stored procedure here
+	@CompanyNo tinyint,
+	@DocumentDate smalldatetime,
+	@DeptNo int
+AS
+BEGIN
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+
+    -- Insert statements for procedure here
+	
+    
+	declare @str varchar(max)
+    select @str=masterdata.JSForInformation('MMPR')
+    set @str=@str+masterdata.CSSForInformation('MMPR')
+	set @str=@str+'<table class="altrowstable" id="alternatecolorBUInfo">'
+	set @str=@str+'<Caption><Font color="Maroon"><h3 align="Left"><b>Budget Information</b></h3></Font></Caption>'
+    set @str=@str+'<tr><th>Sl. No.</th><th>Division</th><th>Budget Code</th><th>Validate From</th><th>Validate To</th><th>Budget Amount</th><th>Utilized Amount</th><th>Balance Amount</th><th>Created By</th><th>Authorized By</th></tr>'
+	set @str=@str
+				 +(Replace(
+				   Replace(
+				   REPLACE( 
+				   REPLACE(
+				    REPLACE(
+				    replace(
+					replace(
+					replace(
+					replace(
+					replace(
+					       (    
+							     Select  ROW_NUMBER() over (Order by DV.DivisionName) as td1,
+                                         DV.DivisionName td2
+										,BM.BudgetCode td3
+										,convert(varchar(20),BM.ValdateFrom,103) td4
+										,convert(varchar(20),BM.ValidateTo,103) td5
+										,isnull(cast(BD.BudgetAmount as decimal(15,2)),0) td6
+										,isnull(cast(BD.UtilizedAmount as decimal(15,2)),0) td7
+										,cast((isnull(BD.BudgetAmount,0)-isnull(BD.UtilizedAmount,0)) 
+										        as decimal(15,2))  td8
+										,L1.PrintingName td9
+										,L2.PrintingName td10
+									From Inventory.BudgetDeptDetail BD
+									Inner Join Inventory.BudgetMain BM ON BM.BudgetNo=BD.BudgetNo
+									Inner Join payroll.tblDeptMaster DM ON DM.DeptNo=BD.DeptNo
+									Inner Join masterdata.mFYear FY ON FY.YearNo=(Select YearNo 
+									                    from masterdata.mFYear
+									                    where @DocumentDate between StartDate and EndDate)
+									Inner Join Security.Login L1 ON L1.LoginNo=BM.CreatedBy
+									Inner Join Security.Login L2 ON L2.LoginNo=BM.AuthorizedBy
+									Inner Join payroll.tblDivisionMaster DV ON DM.DivisionNo=DV.DivisionNo
+									where BD.DeptNo=@DeptNo 
+									      And BM.CompanyNo=@CompanyNo
+									for xml path('tr')
+							                       ),'<td1>','<td style="text-align: center;">')
+							                        ,'<td2>','<td>')
+													,'<td3>','<td>')
+													,'<td4>','<td style="text-align: center;">')
+													,'<td5>','<td  style="text-align: center;">')
+													,'<td6>','<td style="text-align: Right;">')
+													,'<td7>','<td style="text-align: Right;">')
+													,'<td8>','<td style="text-align: Right;">')
+													,'<td9>','<td>')
+													,'<td10>','<td>')
+													)
+								
+								
+						
+				   
+	set @str=@str+'</table>'
+	
+	select @str
+END

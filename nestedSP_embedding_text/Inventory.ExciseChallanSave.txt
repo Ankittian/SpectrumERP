@@ -1,0 +1,99 @@
+Stored procedure Inventory.ExciseChallanSave: Excise Challan (Form 57 H & 57 F). Called from Inventory.IGRNSave.
+Writes: DiscreteRM.SINMain, DiscreteRM.StockTransferMain, Inventory.ExciseChallan, Inventory.GatePassInMain, Inventory.GatePassOutMain, Inventory.GRNMain, Inventory.InvStockTransferMain, Sales.DispatchChallan
+Parameters: @ExciseChallanNo int OUTPUT, @ChallanNo varchar(50), @ChallanDate smalldatetime, @FormCode char(4), @DocumentNo int, @CompanyNo tinyint, @VendorLocationNo int, @StatusNo tinyint, @Result bit OUTPUT, @ErrorMsg varchar(2000) = null OUTPUT
+Author: akhil, created 03 aug 2012
+Code:
+-- =============================================
+-- Author:		akhil
+-- Create date: 03 aug 2012
+-- Description: Excise Challan (Form 57 H & 57 F)
+-- =============================================
+CREATE PROCEDURE [Inventory].[ExciseChallanSave]
+(
+ @ExciseChallanNo int output, 
+ @ChallanNo varchar(50), 
+ @ChallanDate smalldatetime, 
+ @FormCode char(4),
+ @DocumentNo int,
+ @CompanyNo tinyint,
+ @VendorLocationNo int,
+ @StatusNo tinyint,
+ @Result bit output,
+ @ErrorMsg varchar(2000) = null output
+ 
+)
+AS
+
+BEGIN
+	SET NOCOUNT ON;
+	
+	BEGIN TRY
+	
+if @ChallanNo is not null 
+	 begin
+	IF ISNULL(@ExciseChallanNo ,0)=0
+	BEGIN
+		insert into Inventory.ExciseChallan(CompanyNo,VendorLocationNo,ChallanNo, ChallanDate, FormCode,DocumentNo, StatusNo)
+		values (@CompanyNo,@VendorLocationNo,@ChallanNo, @ChallanDate, @FormCode,@DocumentNo, @StatusNo)
+		set @ExciseChallanNo = IDENT_CURRENT ('Inventory.ExciseChallan')
+	END
+	else
+	begin
+	  Update Inventory.ExciseChallan set 
+		ChallanNo =@ChallanNo , 
+		ChallanDate =@ChallanDate ,
+		StatusNo = @StatusNo,
+		VendorLocationNo= @VendorLocationNo
+		where ExciseChallanNo=@ExciseChallanNo
+	end
+end 
+else
+ set @ExciseChallanNo = null	
+
+	 
+	
+	if @FormCode ='DRST'
+	begin
+		update [DiscreteRM].[StockTransferMain] set ExciseChallanNo = @ExciseChallanNo 
+				where StockTransferNo = @DocumentNo 
+	end
+	ELSE IF @FormCode ='DRSN'
+	begin
+		update  [DiscreteRM].[SINMain] set ExciseChallanNo = @ExciseChallanNo 
+				where SINNo = @DocumentNo 
+	end
+	ELSE IF @FormCode ='IGRN'
+	begin
+		update  [Inventory].[GRNMain] set ExciseChallanNo = @ExciseChallanNo 
+				where GRNNo  = @DocumentNo 
+	end
+	ELSE IF @FormCode ='SDDC'
+	begin
+		update  Sales.DispatchChallan  set ExciseChallanNo = @ExciseChallanNo 
+				where DispatchChallanNo  = @DocumentNo 
+	end
+	else if @FormCode ='MGPI'
+	begin
+		update Inventory.GatePassInMain   set ExciseChallanNo = @ExciseChallanNo 
+				where GatePassInNo   = @DocumentNo 
+	end
+	else if @FormCode ='MGPO'
+	begin
+		update Inventory.GatePassOutMain  Set ExciseChallanNo = @ExciseChallanNo 
+				where GatePassOutNo    = @DocumentNo 
+	end
+	else if @FormCode ='IMST'
+	begin
+		update Inventory.InvStockTransferMain  set ExciseChallanNo = @ExciseChallanNo 
+				where InvStockTransferNo     = @DocumentNo 
+	end
+
+	set @Result=1
+		 
+	END TRY
+	BEGIN CATCH
+		set @Result=0
+	  set @ExciseChallanNo=null
+		set @ErrorMsg= ERROR_MESSAGE ()
+	END CATCH
+END

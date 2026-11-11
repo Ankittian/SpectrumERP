@@ -1,0 +1,186 @@
+Stored procedure Sales.SDPKFinancePosting: PackSlip Online FInance Posting. Called from Finance.FinancePostingFillValuesDocumentDetails.
+Reads: Finance.ARDIntermediatePostingAccountRule, Finance.ARDItemRule, masterdata.mAccountMaster, masterdata.mItemMaster
+Parameters: @ItemDetail xml, @CompanyNo tinyint, @ItemNos varchar
+Author: Akhil, created 05 sep 2014
+Code:
+					
+-- =============================================
+-- Author:		Akhil
+-- Create date: 05 sep 2014
+-- Description:	PackSlip Online FInance Posting
+-- =============================================
+--- Inventory].[IMSTFinancePosting] '<DocumentElement />' 
+CREATE PROCEDURE [Sales].[SDPKFinancePosting]
+	@ItemDetail xml ,
+	@CompanyNo tinyint ,
+	@ItemNos varchar(max)
+	
+AS
+BEGIN
+
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+
+begin try
+ 
+ 
+ declare @SourceDocumentNo tinyint
+			
+			SELECT @SourceDocumentNo=v.value('SourceDocumentNo[1]','tinyint')
+			FROM @ItemDetail.nodes('/DocumentElement/Table') x(v)
+			 
+
+create table #Posting ([Add to Basic] bit,Particular varchar(500),[Debit Amount] decimal(15,2) , 
+		[Credit Amount] decimal(15,2),[Account Name] int, [Ref. Detail] varchar(50),[Cost Center] varchar(50),
+		[Amount] decimal(15,2), [Type] tinyint,SlNo tinyint ,MiscChargeNo int , TaxCodeMiscChargesDetailNo int,
+			ItemNos varchar(200))
+
+		declare @ItemTable table (ItemNo int,BasicAmount money,Id int,Qty decimal(12,3),Rate money)
+		insert into @ItemTable
+		select Col1, sum(convert(money,Col2)), Col3, sum(CONVERT(decimal(12,3),Col4)), sum(CONVERT(money,Col5))
+		from masterdata.Split_RowColumn(@ItemNos,'`','~')
+		group by Col1, Col3
+		 
+			   
+	if @SourceDocumentNo =2
+	Insert into #Posting
+				select cast(0 as bit) [Add to Basic] ,'COGS Picking Suspense A/c' Particular ,
+				convert(decimal(15,2), Null ) [Debit Amount]
+				,convert(decimal(15,2), sum(I.BasicAmount) ) [Credit Amount]
+				,IR.AccountNo [Account Name] 
+				,cast(null as varchar) [Ref. Detail] ,cast(null as varchar) [Cost Center] 
+				,sum(I.BasicAmount) Amount ,
+				 2 [Type] 
+				,ROW_NUMBER() over(order by  IR.AccountNo) +1 SlNo
+				,CAST(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo,CAST(null as varchar(5000))ItemNos
+				from @ItemTable I
+					inner join masterdata.mItemMaster IM on IM.ItemNo=I.ItemNo
+					left join (select ItemNo,max(IR.AccountNo) AccountNo
+								from Finance.ARDItemRule IR
+								inner join Finance.ARDIntermediatePostingAccountRule IPAR on IPAR.AccountNo=IR.AccountNo
+																						and IPAR.IntermediateAccountTypeNo=29
+								inner join masterdata.mAccountMaster AM on AM.AccountNo=IR.AccountNo
+																	and AM.AccountTypeNo=54
+								Group By ItemNo
+									) IR on IR.ItemNo=IM.ItemNo
+				group by IR.AccountNo 
+				
+				union all
+				select cast(0 as bit) [Add to Basic] ,'COGS Packing Suspense A/c' Particular ,
+				convert(decimal(15,2), sum(I.BasicAmount) ) [Debit Amount]
+				,convert(decimal(15,2), null ) [Credit Amount]
+				,IR.AccountNo [Account Name] 
+				,cast(null as varchar) [Ref. Detail] ,cast(null as varchar) [Cost Center] 
+				,sum(I.BasicAmount) Amount ,
+				 1 [Type] 
+				,ROW_NUMBER() over(order by  IR.AccountNo) +1 SlNo
+				,CAST(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo,CAST(null as varchar(5000))ItemNos
+				from @ItemTable I
+					inner join masterdata.mItemMaster IM on IM.ItemNo=I.ItemNo
+					left join (select ItemNo,max(IR.AccountNo) AccountNo
+								from Finance.ARDItemRule IR
+								inner join Finance.ARDIntermediatePostingAccountRule IPAR on IPAR.AccountNo=IR.AccountNo
+																						and IPAR.IntermediateAccountTypeNo=30
+								inner join masterdata.mAccountMaster AM on AM.AccountNo=IR.AccountNo
+																	and AM.AccountTypeNo=54
+								Group By ItemNo
+									) IR on IR.ItemNo=IM.ItemNo
+				group by  IR.AccountNo	
+				
+		
+		else
+			Insert into #Posting
+			 
+				select cast(0 as bit) [Add to Basic] ,'COGS Picking Suspense A/cR' Particular ,
+				convert(decimal(15,2),  sum(I.BasicAmount) ) [Debit Amount]
+				,convert(decimal(15,2),null ) [Credit Amount]
+				,IR.AccountNo [Account Name] 
+				,cast(null as varchar) [Ref. Detail] ,cast(null as varchar) [Cost Center] 
+				,sum(I.BasicAmount) Amount ,
+				 1 [Type] 
+				,ROW_NUMBER() over(order by  IR.AccountNo) +1 SlNo
+				,CAST(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo,CAST(null as varchar(5000))ItemNos
+				from @ItemTable I
+					inner join masterdata.mItemMaster IM on IM.ItemNo=I.ItemNo
+					left join (select ItemNo,max(IR.AccountNo) AccountNo
+								from Finance.ARDItemRule IR
+								inner join Finance.ARDIntermediatePostingAccountRule IPAR on IPAR.AccountNo=IR.AccountNo
+																						and IPAR.IntermediateAccountTypeNo=29
+								inner join masterdata.mAccountMaster AM on AM.AccountNo=IR.AccountNo
+																	and AM.AccountTypeNo=54
+								Group By ItemNo
+									) IR on IR.ItemNo=IM.ItemNo
+				group by IR.AccountNo 
+				
+				union all
+				select cast(0 as bit) [Add to Basic] ,'Stock Account' Particular ,
+				convert(decimal(15,2), null ) [Debit Amount]
+				,convert(decimal(15,2), sum(I.BasicAmount) ) [Credit Amount]
+				,IR.AccountNo [Account Name] 
+				,cast(null as varchar) [Ref. Detail] ,cast(null as varchar) [Cost Center] 
+				,sum(I.BasicAmount) Amount ,
+				 2 [Type] 
+				,ROW_NUMBER() over(order by  IR.AccountNo) +1 SlNo
+				,CAST(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo,CAST(null as varchar(5000))ItemNos
+				from @ItemTable I
+					inner join masterdata.mItemMaster IM on IM.ItemNo=I.ItemNo
+					left join (select ItemNo,max(IR.AccountNo) AccountNo
+								from Finance.ARDItemRule IR
+								inner join masterdata.mAccountMaster AM on AM.AccountNo=IR.AccountNo
+																	and AM.AccountTypeNo=14
+								Group By ItemNo
+								) IR on IR.ItemNo=IM.ItemNo
+				group by  IR.AccountNo
+				
+			 
+	 
+
+ if exists(select 1 from #Posting having abs(SUM([Credit Amount])- SUM([Debit Amount]))<=.5)
+ begin
+	update PD set [Debit Amount] = [Debit Amount] + ISNULL(diff,0)
+		from
+		#Posting PD
+		cross join (select SUM([Credit Amount])- SUM([Debit Amount]) Diff from #Posting) tt
+		where PD.SlNo  = 1
+	
+	update PD set [Credit Amount] = [Credit Amount] + ISNULL(diff,0)
+		from
+		#Posting PD
+		cross join (select SUM([Debit Amount])- SUM([Credit Amount]) Diff from #Posting) tt
+		where PD.SlNo  = 1
+			
+ end
+ 
+ 
+select * from #Posting
+ where isnull([Debit Amount],0) >0 or isnull([Credit Amount],0) >0
+   
+   
+   
+END TRY
+	
+	BEGIN CATCH
+		select ERROR_MESSAGE()
+		INSERT INTO [masterdata].[mErrorLog]
+			   ([ErrorDate]
+			   ,[ErrorNo]
+			   ,[ErrorSeverity]
+			   ,[ErrorState]
+			   ,[ErrorProcedure]
+			   ,[ErrorLine]
+			   ,[ErrorDescription]
+			   ,[UserName]
+			   ,[FormCode])
+		VALUES
+			   (getdate()
+			   ,ERROR_NUMBER()
+			   ,ERROR_SEVERITY()
+			   ,ERROR_STATE()
+			   ,ERROR_PROCEDURE()
+			   ,ERROR_LINE()
+			   ,ERROR_MESSAGE()
+			   ,SUSER_SNAME()
+			   ,'SDPK')
+	END CATCH
+END

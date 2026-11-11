@@ -1,0 +1,99 @@
+Stored procedure masterdata.DocumentNumberInitialization: Document Setting Initialization. Called from masterdata.DocumentNumberGeneration, masterdata.DocumentNumberFillValuesDependent.
+Reads: masterdata.DocumentDetail, masterdata.DocumentSetting, masterdata.mFYear
+Parameters: @DocumentDate smalldatetime, @DocumentSettingNo smallint, @DivisionNo Int = Null, @Status tinyint OUTPUT, @Remarks nvarchar(4000) OUTPUT, @StrMainResult nvarchar(4000) OUTPUT
+Author: Yusuf, created 29-Dec-11
+Code:
+ 
+-- =============================================
+-- Author:		Yusuf
+-- Create date: 29-Dec-11
+-- Description:	Document Setting Initialization
+-- =============================================
+-- exec [masterdata].[DocumentNumberInitialization] '28-Aug-12',691,null,null,null,null
+CREATE PROCEDURE [masterdata].[DocumentNumberInitialization]
+	-- Add the parameters for the stored procedure here
+	 @DocumentDate smalldatetime
+	,@DocumentSettingNo smallint
+	,@DivisionNo Int =Null
+	,@Status tinyint output
+	,@Remarks nvarchar(4000) output
+	,@StrMainResult nvarchar(4000) output
+AS
+BEGIN
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+
+    -- Insert statements for procedure here
+
+  BEGIN TRY
+
+	declare @YearNo tinyint
+
+	select @YearNo = YearNo
+	from masterdata.mFYear
+	where @DocumentDate between StartDate and EndDate
+	--Alt 2 9 is ↔
+	--Alt 1 8 is ↕ -- For Division
+	declare @str nvarchar(4000)
+	select @str = substring((select '+' +isnull(''''+convert(nvarchar(1),dd.SeparatedBy)+'''+','')
+										+case when dd.Particular=1 then ''''+replicate('_',len([Value]))+''''
+											when dd.Particular=2 then ''''+[Value]+''''
+											when dd.Particular=3 and ds.Frequency<>3 and [Value]='01' then 'Right(Replicate(''0'',2) + Convert(nVarchar,month(cast(convert(nvarchar(11),@DocumentDate) as smalldatetime))),2)'
+											when dd.Particular=3 and ds.Frequency=3 and [Value]='01' then N'N'+N'''↔↔'''
+											when dd.Particular=3 and ds.Frequency<>3 and [Value]='Jan' then 'convert(nvarchar(3),datename(mm,cast(convert(nvarchar(11),@DocumentDate) as smalldatetime)))'
+											when dd.Particular=3 and ds.Frequency=3 and [Value]='Jan' then N'N'+N'''↔↔↔'''
+											when dd.Particular=4 then 'isnull((select y.YearName from masterdata.mfyear y where y.yearNo=@YearNo),'''')'
+											when dd.Particular=5 then ''''+[Value] +''''
+											when dd.Particular=6 and ds.Frequency=1 then 'convert(nvarchar(10),cast(convert(nvarchar(11),@DocumentDate) as smalldatetime),'+replace([InternalValue],'DateFormat','')+')'
+											when dd.Particular=6 and ds.Frequency=2 then 'stuff(convert(nvarchar(10),cast(convert(nvarchar(11),@DocumentDate) as smalldatetime),'+replace([InternalValue],'DateFormat','')+'),'+convert(nvarchar(3),CHARINDEX('d',dd.Value,0))+','+convert(nvarchar(3),CHARINDEX(tt.Seperator,dd.Value,CHARINDEX(dd.Value,'d',0))-1)+',N'''+replicate(N'↔',CHARINDEX(tt.Seperator,dd.Value,CHARINDEX(dd.Value,'d',0))-1)+''')'
+											when dd.Particular=6 and ds.Frequency=3 then 'stuff(stuff(stuff(convert(nvarchar(10),cast(convert(nvarchar(11),@DocumentDate) as smalldatetime),'+replace([InternalValue],'DateFormat','')+'),'+convert(nvarchar(3),CHARINDEX('d',dd.Value,0))+','+convert(nvarchar(3),CHARINDEX(tt.Seperator,dd.Value,CHARINDEX(dd.Value,'d',0))-1)+',N'''+replicate(N'↔',CHARINDEX(tt.Seperator,dd.Value,CHARINDEX(dd.Value,'d',0))-1)+'''),'+convert(nvarchar(3),CHARINDEX('m',dd.Value,0))+','+convert(nvarchar(3),CHARINDEX(tt.Seperator,dd.Value,CHARINDEX(dd.Value,'m',0))-1)+',N'''+replicate(N'↔',CHARINDEX(tt.Seperator,dd.Value,CHARINDEX(dd.Value,'m',0))-1)+'''),'+convert(nvarchar(3),CHARINDEX('y',dd.Value,0))+','+convert(nvarchar(3),Len(dd.value)-len( Replace(dd.Value,'y','')))+',N'''+replicate(N'↔',Len(dd.value)-len( Replace(dd.Value,'y','')))+''')'
+											when dd.Particular=7 then ''''+[Value] +''''
+												when dd.Particular=8 then '''@Div'''
+											--when dd.Particular=8 then 'N'''+replicate(N'↔',IsNull((select Len(DV.DivisionCode) from Payroll.tblDivisionMaster DV where DV.DivisionNo=@DivisionNo),0)) + ''''
+										
+											--when dd.Particular=8 then  'isnull((select DV.DivisionCode from Payroll.tblDivisionMaster DV where DV.DivisionNo=MT.DivisionNo),'''')'
+										end 
+						from masterdata.documentdetail dd
+							inner join masterdata.DocumentSetting ds on ds.DocumentSettingNo=dd.DocumentSettingNo
+							outer apply (select case when CHARINDEX('.',dd.value,0)>0 then '.'
+														when CHARINDEX('/',dd.value,0)>0 then '/'
+														when CHARINDEX('-',dd.value,0)>0 then '-'
+														else '' end Seperator)tt
+						where dd.DocumentSettingNo=@DocumentSettingNo
+						order by DocumentDetailNo for xml path('')),2,4000)
+						
+	select @StrMainResult = substring((select '+' +isnull(''''+convert(nvarchar(1),SeparatedBy)+'''+','')
+										+case when Particular=1 then ''''+replicate('_',len([Value]))+''''
+											when Particular=2 then ''''+[Value]+''''
+											when Particular=3 and [Value]='01' then 'Right(Replicate(''0'',2) + Convert(nVarchar,month(cast(convert(nvarchar(11),@DocumentDate) as smalldatetime))),2)'
+											when Particular=3 and [Value]='Jan' then 'convert(nvarchar(3),datename(mm,cast(convert(nvarchar(11),@DocumentDate) as smalldatetime)))'
+											when Particular=4 then 'isnull((select y.YearName from masterdata.mfyear y where y.yearNo=@YearNo),'''')'
+											when Particular=5 then ''''+[Value] +''''
+											when Particular=6 then 'convert(nvarchar(10),cast(convert(nvarchar(11),@DocumentDate) as smalldatetime),'+replace([InternalValue],'DateFormat','')+')'
+											when Particular=7 then ''''+[Value] +''''
+											when Particular=8 then 'isnull((select DV.DivisionCode from Payroll.tblDivisionMaster DV where DV.DivisionNo=@DivisionNo),'''')'											
+										
+											--when Particular=8 then  'isnull((select DV.DivisionCode from Payroll.tblDivisionMaster DV where DV.DivisionNo=@DivisionNo),'''')'					
+										end
+						from masterdata.documentdetail 
+						where documentsettingno=@DocumentSettingNo
+						order by DocumentDetailNo for xml path('')),2,4000)
+						
+	set @Status=1
+	set @Remarks=@str
+	
+	set @str='Select '+@StrMainResult
+	set @str=replace(@str,'@DocumentDate',''''+convert(nvarchar(10),@DocumentDate,110)+'''')
+	set @str=replace(@str,'@YearNo',isnull(@YearNo,0))
+	set @str=replace(@str,'@DivisionNo',isnull(@DivisionNo,0))
+
+	exec(@str)
+
+  End Try
+
+  Begin Catch
+	select @Status=0,@Remarks=ERROR_MESSAGE()
+  End Catch
+
+END

@@ -1,0 +1,254 @@
+Stored procedure Information.PRBillDetail: Bill Detail Of Indent. Called from Inventory.MMPRGetDocumentInfo.
+Reads: Finance.accVoucherDetail, Finance.CashCounterMain, Finance.CashJournalMain, Finance.FreightInvoiceDocumentDetail, Finance.FreightInvoiceMain, Finance.PurchaseBillItemDetail, Finance.PurchaseBillMain, Finance.ReferenceMain, Finance.ServiceBillItemDetail, Finance.ServiceBillMain, GateEntry.InvGateEntryItemDetail, Inventory.GRNItemDetail, masterdata.mAccountMaster, masterdata.mExpenseHead, Purchase.POAmendmentMain, Purchase.POExpenseHead, Purchase.POIndentDetail, Purchase.POMain
+Parameters: @IndentNo int
+Author: Arvinder Kaur Vadrah, created 21/11/2013
+Code:
+-- =============================================
+-- Author:		Arvinder Kaur Vadrah
+-- Create date: 21/11/2013
+-- Description:	Bill Detail Of Indent
+-- =============================================
+CREATE PROCEDURE [Information].[PRBillDetail] 
+	-- Add the parameters for the stored procedure here
+	@IndentNo int
+	
+AS
+BEGIN
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+
+    -- Insert statements for procedure here
+	
+
+	declare @str varchar(max)
+    select @str=masterdata.JSForInformation('MMPR')
+    set @str=@str+masterdata.CSSForInformation('MMPR')
+	set @str=@str+'<table class="altrowstable" id="alternatecolorPRBillDetail">'
+	set @str=@str+'<Caption><Font color="Maroon"><h3 align="Left"><b>Bill Detail</b></h3></Font></Caption>'
+    set @str=@str+'<tr><th>Sl. No.</th><th>Bill Type</th><th>Particular</th><th>Doc No.</th><th>Doc. Date</th><th>Party Bill No.</th><th>Party Bill Date</th><th>Party Bill Amount</th><th>Ref. Amount</th><th>Paid Amount</th></tr>'
+	set @str=@str
+				 +( 
+					
+					replace(
+					replace( 
+					replace( 
+					replace(
+					replace(
+					replace( 
+					replace(
+					replace(
+					replace( 
+					replace(
+				
+							(
+								Select   ROW_NUMBER() over (order by tt.[Party Bill Date] desc) td1
+								        ,tt.[Bill Type] td2
+										,tt.Particular td3
+										,tt.[Doc. No.] td4
+										,tt.[Doc. Date] td5
+										,tt.[Party Bill No.] td6
+										,tt.[Party Bill Date] td7
+										,tt.[Party Bill Amount] td8
+										,tt.[Ref Amount] td9
+										,tt.[Paid Amount] td10
+								From (	-- Purchase Bill
+										Select	'Purchase Bill' [Bill Type]
+												 ,'Purchase' Particular
+												 ,PB.DocumentNoYearly [Doc. No.]
+												 ,Convert(varchar(20),PB.DocumentDate,103) as [Doc. Date]
+												 ,PB.VendorBillNo [Party Bill No.]
+												 ,ISNULL( Convert(varchar(20), PB.VendorBillDate,103),'') [Party Bill Date]
+												 ,Isnull( CONVERT(Decimal(15,2), PB.VendorBillAmount),0) [Party Bill Amount]
+												 ,CONVERT(Decimal(15,2),poAm.NetAmount) [Ref Amount]
+												 
+												 ,CONVERT(Decimal(15,2), Isnull(Isnull(FR1.PaidAmt,FR2.PaidAmt),0.00)) [Paid Amount]
+										From Finance.PurchaseBillMain PB
+										Inner Join Finance.PurchaseBillItemDetail PBI ON PBI.PurchaseBillNo=PB.PurchaseBillNo
+										Inner Join Purchase.POAmendmentMain POAM On PBI.POAmendmentNo = POAM.POAmendmentNo
+										Inner Join Purchase.POIndentDetail POIN ON POIN.PONo=POAM.PONo
+																		And POIN.ItemNo=PBI.ItemNo
+																		And Isnull(POIN.MakeNo,0)=Isnull(PBI.MakeNo,0)
+																		And Isnull(POIN.TechnicalGradeNo,0)=Isnull(PBI.TechnicalGradeNo,0)
+										Left Join (Select CC.DocumentNo
+												   ,SUM(JM.Amount) PaidAmt
+												   from Finance.CashCounterMain CC
+												   Left Join Finance.CashJournalMain JM on JM.CashCounterNo=CC.CashCounterNo
+												   Where CC.SourceDocumentFormNo=202---For Purchase Bill
+												   Group by CC.DocumentNo
+												   ) FR1 on FR1.DocumentNo=PB.PurchaseBillNo
+										Outer Apply (Select VD.VoucherNo
+													,RM.SpecificCrAmount+RM.SpecificDrAmount-abs(RM.BalanceAmount)  PaidAmt
+													From Finance.PurchaseBillMain FIM2
+													Cross Apply( Select MAX(VoucherDetailNo ) VoucherDetailNo
+																 From Finance.accVoucherDetail VD
+																 Inner Join masterdata.mAccountMaster AM on VD.AccountNo = AM.AccountNo
+																									And AccountTypeNo = 4
+																 Where VD.VoucherNo = FIM2.VoucherNo
+																) tt1												    
+													Inner Join  Finance.accVoucherDetail VD  On VD.VoucherNo = FIM2.VoucherNo
+																							And VD.VoucherDetailNo = tt1.VoucherDetailNo        			
+													Left Join Finance.ReferenceMain RM On RM.VoucherDetailNo = tt1.VoucherDetailNo
+																					And RM.AccountNo = vd.AccountNo
+												
+													Where FIM2.VoucherNo = PB.VoucherNo
+													And FIM2.PurchaseBillNo = PB.PurchaseBillNo
+												   ) FR2  
+										Where POIN.IndentNo=@IndentNo
+										Group By PB.DocumentNoYearly	-- Multiple Data due to Joining With Bill Item Detail
+											  ,PB.DocumentDate 
+											  ,PB.VendorBillNo 
+											  ,PB.VendorBillDate
+											  ,PB.VendorBillAmount
+											  , poAm.NetAmount
+											  , CONVERT(Decimal(15,2), isnull(Isnull(FR1.PaidAmt,FR2.PaidAmt),0.00)) 
+											  
+										Union All
+										-- Service Bill
+										Select  'Service Bill' [Bill Type]
+												,EXHM.ExpenseHeadName Particular
+												,SBM.DocumentNoYearly [Doc. No.]
+												,Convert(varchar(20),SBM.DocumentDate,103) as [Doc. Date]
+												,SBM.VendorBillNo [Party Bill No.]
+												,ISNULL( Convert(varchar(20),SBM.VendorBillDate,103),'') [Party Bill Date]
+												,ISNULL( Convert(Decimal(15,2),SBM.VendorBillAmount),0) [Party Bill Amount]
+												, Convert(Decimal(15,2),POM.NetAmount) [Ref Amount]
+												,Convert(Decimal(15,2),Isnull(Isnull(FR1.PaidAmt,FR2.PaidAmt),0.00))[Paid Amount]
+
+										From Finance.ServiceBillMain as SBM
+										Inner Join Finance.ServiceBillItemDetail SBI ON SBM.ServiceBillNo=SBI.ServiceBillNo
+										Inner Join Purchase.POAmendmentMain POAM On SBI.POAmendmentNo = POAM.POAmendmentNo
+										Inner Join Purchase.POMain POM On POAM.PONo = POM.PONo
+										Inner Join Purchase.POIndentDetail POIN ON POIN.PONo=POM.PONo
+																		And POIN.ItemNo=SBI.ItemNo
+										Inner Join ( Select EH.PONo						--Multiple Data Due To Route Case
+														, EH.ExpenseheadNo
+														From Purchase.POExpenseHead EH
+														Inner Join Purchase.POIndentDetail POIN ON POIN.PONo=EH.PONo
+																		And POIN.ItemNo=EH.ItemNo
+																		And Isnull(POIN.MakeNo,0)=Isnull(EH.MakeNo,0)
+																		And Isnull(POIN.TechnicalGradeNo,0)=Isnull(EH.TechnicalGradeNo,0)
+														  Where POIN.IndentNo=@IndentNo
+														 Group By EH.PONo
+																,EH.ExpenseheadNo
+													) EXPH On POM.PONo = EXPH.PONo
+										Inner Join  masterdata.mExpenseHead EXHM On EXPH.ExpenseheadNo = EXHM.ExpenseHeadNo
+										Left Join (Select CC.DocumentNo
+												   ,SUM(JM.Amount) PaidAmt
+												   from Finance.CashCounterMain CC
+												   Left Join Finance.CashJournalMain JM on JM.CashCounterNo=CC.CashCounterNo
+										          
+												   Where CC.SourceDocumentFormNo=457--------Service
+												   Group by CC.DocumentNo 
+												   ) FR1 on FR1.DocumentNo=SBM.ServiceBillNo
+										Outer Apply (Select VD.VoucherNo
+													,RM.SpecificCrAmount+RM.SpecificDrAmount-abs(RM.BalanceAmount)  PaidAmt
+													From Finance.ServiceBillMain FIM2
+													Cross Apply( Select MAX(VoucherDetailNo ) VoucherDetailNo
+																 From Finance.accVoucherDetail VD
+																 Inner Join masterdata.mAccountMaster AM on VD.AccountNo = AM.AccountNo
+																									And AccountTypeNo = 4
+																 Where VD.VoucherNo = FIM2.VoucherNo
+																) tt1												    
+													Inner Join  Finance.accVoucherDetail VD  On VD.VoucherNo = FIM2.VoucherNo
+																							And VD.VoucherDetailNo = tt1.VoucherDetailNo        			
+													Left Join Finance.ReferenceMain RM On RM.VoucherDetailNo = tt1.VoucherDetailNo
+																					And RM.AccountNo = vd.AccountNo
+												
+													Where FIM2.VoucherNo = SBM.VoucherNo
+													And FIM2.ServiceBillNo = SBM.ServiceBillNo
+												   ) FR2  
+										Where POIN.IndentNo=@IndentNo
+										Group By EXHM.ExpenseHeadName  -- Multiple Data due to Joining With Bill Item Detail
+												,SBM.DocumentNoYearly 
+											  ,SBM.DocumentDate
+											  ,SBM.VendorBillNo
+											  ,SBM.VendorBillDate
+											  ,SBM.VendorBillAmount
+											  ,POM.NetAmount
+											   ,Convert(Decimal(15,2),Isnull(Isnull(FR1.PaidAmt,FR2.PaidAmt),0.00) )
+										
+										Union All
+										-- Freight Bill
+										Select  'Freight Bill' [Bill Type]
+												,'Freight Charges' Particular
+												,FIM.DocumentNoYearly [Doc. No.]
+											    ,ISNULL( Convert(varchar(20),FIM.DocumentDate,103),'') as [Doc. Date]
+											    ,FIM.InvoiceNo [Party Bill No.]
+											    ,Convert(varchar(20),FIM.InvoiceDate,103) [Party Bill Date]
+											    ,0 [Party Bill Amount]
+											    ,Convert(Decimal(15,2),FIM.PayableAmount) [Ref Amount]
+											    ,Convert(Decimal(15,2),Isnull(Isnull(FR1.PaidAmt,FR2.PaidAmt),0.00) )[Paid Amount]
+											   
+										From Finance.FreightInvoiceMain FIM
+										Inner Join (Select FIM.FreightInvoiceNo
+															,POAM.PONo
+													From Finance.FreightInvoiceMain FIM 
+													Inner Join Finance.FreightInvoiceDocumentDetail FID On FID.FreightInvoiceNo = FIM.FreightInvoiceNo
+																										 
+													Left Join GateEntry.InvGateEntryItemDetail GEI ON FID.RefDocNo=GEI.GateEntryNo
+																										And FIM.FreightDocumentNo = 1
+													Left Join Inventory.GRNItemDetail GRNI On FID.RefDocNo=GRNI.GRNNo
+																										And FIM.FreightDocumentNo = 6
+													Left Join  Purchase.POAmendmentMain POAM On POAM.POAmendmentNo = GEI.POAmendmentNo
+																								Or POAM.POAmendmentNo = GRNI.POAmendmentNo
+													Left Join Purchase.POIndentDetail POIN ON POIN.PONo=POAM.PONo--------------------"Comment"
+													
+																		
+													Where POIN.IndentNo=@IndentNo
+													Group By POAM.PONo
+															,FIM.FreightInvoiceNo
+													) ttPo On FIM.FreightInvoiceNo = ttPo.FreightInvoiceNo
+										Inner Join Purchase.POMain POM On ttPo.PONo = POM.PONo	
+										Inner Join Purchase.POIndentDetail POIN ON POIN.PONo=POM.PONo----Included Item Also
+										Left Join (Select CC.DocumentNo
+												   ,SUM(JM.Amount) PaidAmt
+												   From Finance.CashCounterMain CC
+												   Left Join Finance.CashJournalMain JM on JM.CashCounterNo=CC.CashCounterNo
+										          
+												   Where CC.SourceDocumentFormNo=450
+												   Group By CC.DocumentNo) FR1 on FR1.DocumentNo=FIM.FreightInvoiceNo
+										Outer Apply (Select VD.VoucherNo
+													,RM.SpecificCrAmount+RM.SpecificDrAmount-abs(RM.BalanceAmount)  PaidAmt
+													From Finance.FreightInvoiceMain FIM2
+													Cross Apply( Select MAX(VoucherDetailNo ) VoucherDetailNo
+																 From Finance.accVoucherDetail VD
+																 Inner Join masterdata.mAccountMaster AM on VD.AccountNo = AM.AccountNo
+																									And AccountTypeNo = 4
+																 Where VD.VoucherNo = FIM2.VoucherNo
+																) tt1												    
+													Inner Join  Finance.accVoucherDetail VD  On VD.VoucherNo = FIM2.VoucherNo
+																							And VD.VoucherDetailNo = tt1.VoucherDetailNo        			
+													Left Join Finance.ReferenceMain RM On RM.VoucherDetailNo = tt1.VoucherDetailNo
+																					And RM.AccountNo = vd.AccountNo
+												
+													Where FIM2.VoucherNo = FIM.VoucherNo
+													And FIM2.FreightInvoiceNo = FIM.FreightInvoiceNo            
+												   ) FR2  
+											Where POIN.IndentNo=@IndentNo
+											Group By FIM.DocumentNoYearly 
+											    ,FIM.DocumentDate
+											    ,FIM.InvoiceNo 
+											    ,FIM.InvoiceDate
+											    ,FIM.PayableAmount
+											    ,FR1.PaidAmt,FR2.PaidAmt
+					) tt
+							
+							for xml path('tr')),'<td1>','<td style="text-align: Center;">')
+							                   ,'<td2>','<td>')
+		   									   ,'<td3>','<td>')				
+											   ,'<td4>','<td>')
+											   ,'<td5>','<td style="text-align: Center;">')
+		   									   ,'<td6>','<td>')			
+											   ,'<td7>','<td style="text-align: Center;">')
+											   ,'<td8>','<td style="text-align: Right;">')
+											   ,'<td9>','<td style="text-align: Right;">')
+											   ,'<td10>','<td style="text-align: Right;">')
+											   
+									    	)
+								
+				   
+	set @str=@str+'</table>'
+	
+	select @str
+END

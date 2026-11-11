@@ -1,0 +1,107 @@
+Stored procedure EAM.EAFCSave: Save Fuel Consumption. Called from Inventory.IMMISaveMaterialIssueItemDetail.
+Writes: EAM.FuelConsumptionMain, EAM.FuelConsumptionRefDetail
+Parameters: @CompanyNo tinyint, @YearNo tinyint, @FuelConsumptionNo int OUTPUT, @EntryDate smalldatetime, @EquipmentNo int, @FuelIssuedFromNo tinyint, @SourceDocumentNo tinyint, @LoginNo SmallInt, @OutputStatusNo tinyint = null OUTPUT, @OutputStatusRemarks varchar(4000) = null OUTPUT
+Author: TEERATH, created 11 Jun 2013
+Code:
+
+-- =============================================
+-- Author:		TEERATH
+-- Create date: 11 Jun 2013
+-- Description: Save Fuel Consumption.
+-- =============================================
+CREATE PROCEDURE [EAM].[EAFCSave]
+(
+@CompanyNo  tinyint
+,@YearNo  tinyint
+,@FuelConsumptionNo  int output
+,@EntryDate  smalldatetime
+,@EquipmentNo  int
+,@FuelIssuedFromNo  tinyint
+,@SourceDocumentNo  tinyint
+,@LoginNo   SmallInt
+,@OutputStatusNo tinyint = null output
+,@OutputStatusRemarks varchar(4000) = null output
+)
+AS
+
+BEGIN
+	SET NOCOUNT ON;
+	
+	BEGIN TRY
+
+		--IF EXISTS(
+		--			SELECT 1
+		--			FROM EAM.FuelConsumptionMain
+		--			WHERE [AuthorizedBy] Is NOT NULL
+		--			AND FuelConsumptionNo = @FuelConsumptionNo
+		--		 )
+		--BEGIN
+		--		RaisError('Authorized entry can''t be updated.',16,-1)
+		--END
+
+		--Declare @ReleasedBy  Smallint,@ReleasedDate SmallDateTime,@AuthorizedBy  Smallint,@AuthorizedDate SmallDateTime
+
+		--IF @DocumentStatusNo=20 -- Released
+		--BEGIN
+		--	Set @ReleasedBy=@LoginNo
+		--	Set @ReleasedDate=GETDATE() 
+		--END
+		--ELSE IF @DocumentStatusNo=30 -- Authorized
+		--BEGIN
+		--	Set @AuthorizedBy=@LoginNo
+		--	Set @AuthorizedDate=GETDATE()
+		--END
+
+		IF IsNull(@FuelConsumptionNo,0)=0
+			BEGIN
+			
+				INSERT INTO  [EAM].[FuelConsumptionMain]
+				   (
+				    CompanyNo
+				   ,YearNo
+				   ,EntryDate
+				   ,EquipmentNo
+				   ,FuelIssuedFromNo
+				   ,SourceDocumentNo
+				   ,CreatedBy
+				   ,CreatedDate
+				   )
+				VALUES
+				   (
+				    @CompanyNo
+				   ,@YearNo
+				   ,@EntryDate
+				   ,@EquipmentNo
+				   ,@FuelIssuedFromNo
+				   ,@SourceDocumentNo
+				   ,@LoginNo
+				   ,Getdate()
+				   )
+
+				   Select @FuelConsumptionNo=IDENT_CURRENT('[EAM].[FuelConsumptionMain]')
+
+			END
+		ELSE
+			BEGIN
+
+			    Delete From EAM.FuelConsumptionRefDetail Where FuelConsumptionNo=@FuelConsumptionNo
+
+				UPDATE  [EAM].[FuelConsumptionMain]
+				SET 
+				    EntryDate = @EntryDate
+				   ,EquipmentNo = @EquipmentNo
+				   ,FuelIssuedFromNo = @FuelIssuedFromNo
+				   ,SourceDocumentNo = @SourceDocumentNo
+				   ,ModifiedBy = @LoginNo
+				   ,ModifiedDate = Getdate()
+				 WHERE FuelConsumptionNo = @FuelConsumptionNo
+			END
+ 
+		Select 1,@FuelConsumptionNo 
+		select @OutputStatusNo = 1 
+	END TRY
+	BEGIN CATCH
+		Select 0,Error_Message()
+		select @OutputStatusNo = 0, @OutputStatusRemarks = ERROR_MESSAGE ()
+	END CATCH
+END

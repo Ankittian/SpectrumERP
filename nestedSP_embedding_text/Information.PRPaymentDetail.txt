@@ -1,0 +1,101 @@
+Stored procedure Information.PRPaymentDetail: Payment Detail. Called from Inventory.MMPRGetDocumentInfo.
+Reads: Finance.FreightInvoiceDocumentDetail, Finance.FreightInvoiceMain, Finance.PurchaseBillItemDetail, Finance.PurchaseBillMain, Finance.ServiceBillItemDetail, Finance.ServiceBillMain, Finance.vwdpChequePaymentAdvice, GateEntry.InvGateEntryItemDetail, Inventory.GRNItemDetail, Purchase.POAmendmentMain, Purchase.POIndentDetail, Purchase.POMain
+Parameters: @IndentNo int
+Author: Arvinder Kaur Vadrah, created 21/11/2013
+Code:
+
+-- =============================================
+-- Author:		Arvinder Kaur Vadrah
+-- Create date: 21/11/2013
+-- Description:	 Payment Detail
+-- =============================================
+CREATE PROCEDURE [Information].[PRPaymentDetail] 
+	-- Add the parameters for the stored procedure here
+	@IndentNo int
+	
+AS
+BEGIN
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+
+    -- Insert statements for procedure here
+	
+
+	declare @str varchar(max)
+    select @str=masterdata.JSForInformation('MMPR')
+    set @str=@str+masterdata.CSSForInformation('MMPR')
+	set @str=@str+'<table class="altrowstable" id="alternatecolorPRPaymentDetail">'
+	set @str=@str+'<Caption><Font color="Maroon"><h3 align="Left"><b>Payment Detail</b></h3></Font></Caption>'
+    set @str=@str+'<tr><th>Sl. No.</th><th>Ref. No.</th><th>Ref. Date</th><th>Ref. Amount</th><th>Paid Amount</th><th>Payment Mode</th><th>Payment Ref. No.</th><th>Payment Ref. Date</th></tr>'
+	set @str=@str
+				 +( 
+					replace(
+					replace(
+					replace( 
+					replace(
+					replace(
+					replace(
+					replace( 
+					replace( 
+							(
+								Select   ROW_NUMBER() over(order by POM.NetAmount desc) as td1
+								        ,ISNULL( vw.RefNo,'') td2
+										,ISNULL( CONVERT(varchar(20),vw.RefDate,103),'') td3
+										,CONVERT(Decimal(15,2),POM.NetAmount) td4
+										,CONVERT(Decimal(15,2),vw.PassAmt) td5
+										,ISNULL( vw.PaymentMode,'') td6
+										,ISNULL( vw.[Cheque/DDNo],'') td7
+										,ISNULL( CONVERT(varchar(20),vw.[Cheque/DD Date],103),'') td8
+								From [Finance].[vwdpChequePaymentAdvice] vw
+								Inner Join ( 	Select vw.VoucherNo
+														,POAM.PONo
+												From [Finance].[vwdpChequePaymentAdvice] vw
+												Left Join Finance.PurchaseBillMain  PBM On vw.VoucherNo = PBM.VoucherNo 
+												Left Join Finance.PurchaseBillItemDetail PBIM On PBIM.PurchaseBillNo = PBM.PurchaseBillNo
+												LEFT Join Finance.FreightInvoiceMain FIM On vw.VoucherNo = FIM.VoucherNo
+												Left Join Finance.FreightInvoiceDocumentDetail FID On FIM.FreightInvoiceNo = FID.FreightInvoiceNo
+												Left Join GateEntry.InvGateEntryItemDetail GEI ON FID.RefDocNo=GEI.GateEntryNo
+																										And FIM.FreightDocumentNo = 1
+												Left Join Inventory.GRNItemDetail GRNI On FID.RefDocNo=GRNI.GRNNo
+																										And FIM.FreightDocumentNo = 6
+												Left Join Finance.ServiceBillMain SBM On vw.VoucherNo = SBM.VoucherNo 
+												Left Join Finance.ServiceBillItemDetail SBIM On SBM.ServiceBillNo = SBIM.ServiceBillNo
+												Inner Join  Purchase.POAmendmentMain POAM On GEI.POAmendmentNo = POAM.POAmendmentNo
+																						Or GRNI.POAmendmentNo = POAM.POAmendmentNo
+																						Or PBIM.POAmendmentNo = POAM.POAmendmentNo
+																						Or SBIM.POAmendmentNo = POAM.POAmendmentNo
+												Inner Join Purchase.POIndentDetail POIN ON POIN.PONo=POAM.PONo
+																						And PBIM.ItemNo=POIN.ItemNo
+																						And Isnull(PBIM.TechnicalGradeNo,0)=Isnull(POIN.TechnicalGradeNo,0)
+																						And Isnull(PBIM.MakeNo,0)=Isnull(POIN.MakeNo,0)
+												Where POIN.IndentNo=@IndentNo
+												Group By vw.VoucherNo
+														,POAM.PONo
+														
+												) ttpo  On vw.VoucherNo =ttpo.VoucherNo
+								
+								Inner Join Purchase.POMain POM On ttpo.PONo = POM.PONo
+								Inner Join Purchase.POIndentDetail POIN ON POIN.PONo=POM.PONo
+																	
+								Where POIN.IndentNo=@IndentNo
+								Group by vw.RefNo
+										,vw.RefDate
+										,POM.NetAmount
+										,vw.PassAmt
+										,vw.PaymentMode
+										,vw.[Cheque/DDNo]
+										,vw.[Cheque/DD Date]
+								for xml path('tr')),'<td1>','<td style="text-align: Center;">')
+								                   ,'<td2>','<td>')
+		   										   ,'<td3>','<td>')				
+												   ,'<td4>','<td style="text-align: Right;">')
+												   ,'<td5>','<td style="text-align: Right;">')				
+		   										   ,'<td6>','<td>')
+												   ,'<td7>','<td>')
+											       ,'<td8>','<td>')										   
+									    	)
+	set @str=@str+'</table>'
+	
+	select @str
+END

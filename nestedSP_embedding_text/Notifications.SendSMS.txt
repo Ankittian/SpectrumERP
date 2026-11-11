@@ -1,0 +1,78 @@
+Stored procedure Notifications.SendSMS. Called from Purchase.SCSOSendAuthorizationMail, Inventory.MMPRSendAuthorizationMail, Purchase.PMPOSendAuthorizationMail, Inventory.IGRNSendAuthorizationMail.
+Reads: Utility.SMSHttpAPISettingMain
+Parameters: @MobileNo varchar(max), @smstext varchar(300), @sResponse varchar(8000) OUTPUT
+Code:
+-- exec [Notifications].[SendSMS] '9826730507','hi',null
+CREATE procedure [Notifications].[SendSMS] 
+    @MobileNo varchar(max), 
+    @smstext as varchar(300), 
+    @sResponse varchar(8000) OUT 
+as 
+BEGIN 
+   Declare @iReq int,@hr int 
+   Declare @sUrl as varchar(500) 
+   DECLARE @errorSource VARCHAR(8000)
+   DECLARE @errorDescription VARCHAR(8000) 
+
+   -- Create Object for XMLHTTP 
+   EXEC @hr = sp_OACreate 'Microsoft.XMLHTTP', @iReq OUT 
+	
+   --EXEC @hr = sp_OACreate 'MSXML2.ServerXMLHTTP', @iReq OUT 	
+   print '*'
+   print 'hr : ' + cast(@hr as varchar)
+
+   if @hr <> 0 
+	Raiserror('sp_OACreate Microsoft.XMLHTTP FAILED!', 16, 1)
+	
+	--set @sUrl='http://www.merasandesh.com/api/sendsms?username=hiragroup&password=hiragroup&senderid=HFALHA&message=#Msg#&numbers=#MobNo#'
+	Select @sUrl = (Select Top 1 [URL] from [Utility].[SMSHttpAPISettingMain])	
+	
+	If @sUrl is not Null
+	BEGIN
+			--set @sUrl=REPLACE(@sUrl,'#MobNo#',@MobileNo) 
+			set @sUrl=REPLACE(@sUrl,'MyRecipient',@MobileNo)
+			--set @sUrl=REPLACE(@sUrl,'#Msg#',@smstext) 
+			set @sUrl=REPLACE(@sUrl,'MyMsg',@smstext)
+			print @sUrl 
+			
+
+		   -- sms code start 
+		   EXEC @hr = sp_OAMethod @iReq, 'Open', NULL, 'GET', @sUrl, true 
+		   print '**'
+		   print @hr 
+
+		   if @hr <> 0 
+			  Raiserror('sp_OAMethod Open FAILED!', 16, 1) 
+
+		   EXEC @hr = sp_OAMethod @iReq, 'Send' 
+		   select @iReq
+		   print '***'
+		   print 'hr : ' + cast(@hr as varchar)
+
+		   if @hr <> 0 
+		   Begin 
+			   EXEC sp_OAGetErrorInfo @iReq, @errorSource OUTPUT, @errorDescription OUTPUT
+
+			   SELECT [Error Source] = @errorSource, [Description] = @errorDescription
+
+			   Raiserror('sp_OAMethod Send FAILED!', 16, 1) 
+		   end 
+			else 
+			Begin
+				EXEC @hr = sp_OAGetProperty @iReq,'responseText', @sResponse OUT 
+				
+				print @hr
+				print '****'
+				print @sresponse
+				
+				
+			end
+			
+			EXEC @hr=sp_OADestroy @iReq
+			print @hr 
+	End			
+	
+	--DBCC FREEPROCCACHE
+	--DBCC DROPCLEANBUFFERS
+ 
+end

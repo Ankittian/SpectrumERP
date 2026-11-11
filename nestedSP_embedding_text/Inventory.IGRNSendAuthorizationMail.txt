@@ -1,0 +1,246 @@
+Stored procedure Inventory.IGRNSendAuthorizationMail: Send IGRN Approval and Rejection Mail. Called from Notifications.TANRSaveUserApproval, Notifications.MultiAuthorizationMail.
+Reads: Inventory.GRNItemDetail, Inventory.GRNMain, masterdata.mCompanyMaster, masterdata.mFormMaster, masterdata.mItemMaster, Notifications.AuthorizationPageSetting, Notifications.TATAuthorizationDetail, Notifications.TATMain, Security.Login
+Parameters: @GRNNo int, @LoginNo int, @LevelNo smallint, @AuthDetailNo int, @IsRejected bit = 0
+Calls procedures: Notifications.SendSMS, Utility.SendEmailThroughProfile
+Author: HimanshuVn, created 1 Mar 2023
+Code:
+-- =============================================
+-- Author:		HimanshuVn
+-- Create date: 1 Mar 2023
+-- Description:	Send IGRN Approval and Rejection Mail  
+-- =============================================
+CREATE PROCEDURE [Inventory].[IGRNSendAuthorizationMail] 
+	@GRNNo int,
+	@LoginNo int,
+	@LevelNo smallint,
+	@AuthDetailNo int ,
+	@IsRejected bit = 0 
+AS
+BEGIN
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+
+	  		
+	Declare @Email Varchar(100),			
+			@Body Varchar(Max),
+			@Subject VArchar(Max),
+			@CompanyName varchar(100),
+			@PortalURL varchar(500),
+			@InventoryOrderNo int ,
+			@LocalURL varchar(500),
+			@StaticURL varchar(500),
+			@DocumentDate smalldatetime,
+			@DocumentNoYearly varchar(30),
+			@MailProfile Varchar(50),	
+			@LoginName Varchar(100)=''
+			,@PhoneNo varchar(50)
+			,@sResponse varchar(800)
+			,@SmsSubject varchar(Max) = ''   -- Subject For Sms 
+			,@FormName varchar(100) = '' --Form Name for Subject and Message of Notification 
+			,@FormTag varchar(4) = '' --FormTag for creating JSON
+			,@CreatorMail  varchar(100)
+			,@CreatorPhoneNo  varchar(50)
+			,@CreatorName  Varchar(100)=''
+			,@IsDisableMailToCreator bit= 0 
+	Declare @SMSTable as table(col varchar(100))
+			
+	Select @CompanyName = CM.PrintingName		   
+	From Inventory.GRNMain  SA
+	Inner Join masterdata.mCompanyMaster CM on CM.CompanyNo=SA.CompanyNo
+	Where GRNNo = @GRNNo 
+	
+	Select @LocalURL = LocalHost,
+		   @MailProfile=MailProfile,
+		   @StaticURL =StaticHost
+	From Notifications.AuthorizationPageSetting
+			
+	Select @Email = Email,@LoginName = PrintingName , @PhoneNo = Mobile
+	From Security.Login 
+	Where LoginNo = @LoginNo
+
+	Select @FormName = FM.FormCaption,@FormTag = FM.FormCode  
+	from masterdata.mFormMaster FM
+	inner join Inventory.GRNMain SOAM on SOAM.GRNNo = @GRNNo and  FM.FormCode ='IGRN'
+
+
+	Declare @URLPara Varchar(Max)='',@ForwardURL varchar(max) ='url:../MultiAuthDetail?Param=#IGRNJSON', @LoginDetail varchar(200)
+
+	Select @AuthDetailNo = TAD.AuthDetailNo
+		 
+	from Notifications.TATAuthorizationDetail TAD
+	Where TAD.LevelNo = @LevelNo and 
+			TAD.LoginNo = @LoginNo and
+			TAD.InternalNo = @GRNNo and
+			TAD.FormCode = 'IGRN'
+	
+	Select  @IsDisableMailToCreator = TAT.IsDisableMailToCreator
+	from Notifications.TATAuthorizationDetail TAD
+	Inner join Notifications.TATMain TAT on TAT.TATNo = TAD.TATNo
+	Where TAD.InternalNo = @GRNNo and TAT.FormNo = 65 and TAD.FormCode = 'IGRN'
+	
+	If @Email is not null and @IsRejected = 0
+	 Begin
+			Select @InventoryOrderNo  = GRNNo ,			   
+			@DocumentDate = DocumentDate	,
+			@DocumentNoYearly  = DocumentNoYearly
+			From Inventory.GRNMain  POM Where GRNNo = @GRNNo 
+			
+					
+			Select @URLPara='#HostName/Authentication?q=',
+				   @ForwardURL = REPLACE(@ForwardURL,'#IGRNJSON',masterdata.EncodeToBase64( 
+																						   '{"FormCode":"' + @FormTag + '","Id":' + CONVERT(varchar,@GRNNo) + '}'			
+																						   )),
+				   @LoginDetail = 'LoginNo:'+Convert(varchar,@LoginNo)
+			
+			
+			Select @URLPara = @URLPara+masterdata.EncodeToBase64(@LoginDetail+','+@ForwardURL)
+					
+			Set @Subject = 'Authorization Request for ' + @FormName +  '-' + @DocumentNoYearly 
+			Set @Body = '<p>Dear '+ @LoginName + ',</p>
+
+				<p><b>Greetings from '+ISNULL(@CompanyName,'')+' </b></p>
+
+				<p> ' + @FormName + ' No. <strong>'+ISNULL(@DocumentNoYearly,'')+'</strong>, Dated - <strong>'+CONVERT(varchar,@DocumentDate,103)+'</strong> has been created. It is pending for your approval ' + IsNull('of Level ' + CONVERT(Varchar,@LevelNo),'') +  '.</p>
+
+				<p>For more detail login at:</p>'
+				
+			If @LocalURL is not null	
+			Set @Body= @Body+'
+			         
+			        <p>If you are <strong> connected to local network </strong> then use below link </p>
+					
+					<p><a href="'+REPLACE(@URLPara,'#HostName',@LocalURL)+'" target="_blank">'+ REPLACE(@URLPara,'#HostName',@LocalURL)+ '</a></p>'
+					
+			
+			If @StaticURL is not null
+			Begin		
+				Set @Body= @Body+'
+						
+						<p>If you are <strong>Not connected to local network </strong> then use below link </p>
+					    
+						<p><a href="'+REPLACE(@URLPara,'#HostName',@StaticURL)+'" target="_blank">'+ REPLACE(@URLPara,'#HostName',@StaticURL)+ '</a></p>'
+				
+			    Set @SmsSubject = @Subject + ','+ CHAR(10) + ' Please refer this link for more details : '+ REPLACE(@URLPara,'#HostName',@StaticURL)
+			End
+			Else						
+			 Begin
+			    Set @SmsSubject = @Subject 
+		     End
+			  
+				   
+		   
+		  IF @MailProfile IS NOT NULL
+			exec [Utility].[SendEmailThroughProfile] @Email,@Body,@Subject,@MailProfile
+		
+		  if isnull(@PhoneNo,'') <>''
+		   insert into @SMSTable
+			exec  [Notifications].[SendSMS] @PhoneNo,@SmsSubject,@sResponse output	
+				
+		 End	
+	
+	else If @Email is not null and @IsRejected = 1
+	 Begin
+			Select @InventoryOrderNo  = GRNNo ,			   
+			@DocumentDate = DocumentDate	,
+			@DocumentNoYearly  = DocumentNoYearly
+			From Inventory.GRNMain  POM Where GRNNo = @GRNNo 
+
+                Select @ForwardURL = @ForwardURL + '&IsRejection=#Rejection'
+			    Select @ForwardURL = Replace(@ForwardURL,'#Rejection',masterdata.EncodeToBase64( CONVERT(varchar,1)))   
+			      
+				Select @URLPara='#HostName/Authentication?q=',
+				   @ForwardURL = REPLACE(@ForwardURL,'#IGRNJSON',masterdata.EncodeToBase64(
+																						   '{"FormCode":"' + @FormTag + '","Id":' + CONVERT(varchar,@GRNNo) + '}'			
+				                                                                           )),
+				   @LoginDetail = 'LoginNo:'+Convert(varchar,@LoginNo)
+			
+			
+			Select @URLPara = @URLPara+masterdata.EncodeToBase64(@LoginDetail+','+@ForwardURL)
+			
+			
+			select @Subject = @FormName + '-' + @DocumentNoYearly  + ' is rejected for Reason: ' + isnulL(LastComment ,'')
+				from Notifications.TATAuthorizationDetail where FormCode ='IGRN' and InternalNo = @GRNNo  
+				and  AuthDetailNo >= @AuthDetailNo and LastComment is not null
+				
+				 
+			select @Body = '<p>Dear '+ @LoginName + ',</p>
+
+				<p><b>Greetings from '+ISNULL(@CompanyName,'')+' </b></p>
+
+				<p>We would like to inform you that ' + @FormName + ' No. ' + @DocumentNoYearly + ' has been rejected, due to Reason :"' + isnulL(LastComment,'') + '".
+					Following are the Items involved in this order : <b>' + stuff((select ',' + ItemDescription  
+																					From Inventory.GRNItemDetail sid
+																					left join masterdata.mItemMaster im on im.ItemNo = sid.ItemNo 																		
+																					where sid.GRNNo = @GRNNo for xml path(''))
+																		,1,1,'') + '</b>'
+				 from Notifications.TATAuthorizationDetail where 
+				  AuthDetailNo >= @AuthDetailNo and LastComment is not null
+				  and FormCode ='IGRN' and InternalNo = @GRNNo 
+		
+		  	Select @Body = @Body + '<p>For more detail login at:</p>'
+				
+			If @LocalURL is not null	
+			Set @Body= @Body+'
+			         
+			        <p>If you are <strong> connected to local network </strong> then use below link </p>
+					
+					<p><a href="'+REPLACE(@URLPara,'#HostName',@LocalURL)+'" target="_blank">'+ REPLACE(@URLPara,'#HostName',@LocalURL)+ '</a></p>'
+			
+			If @StaticURL is not null
+			Begin		
+				Set @Body= @Body+'
+						
+						<p>If you are <strong>Not connected to local network </strong> then use below link </p>
+					    
+						<p><a href="'+REPLACE(@URLPara,'#HostName',@StaticURL)+'" target="_blank">'+ REPLACE(@URLPara,'#HostName',@StaticURL)+ '</a></p>'
+				
+				Set @SmsSubject = @Subject + ',' + CHAR(10) + ' Please refer this link for more details : ' + REPLACE(@URLPara,'#HostName',@StaticURL)
+			End
+			Else		
+			 Begin
+			  Set @SmsSubject = @Subject 
+		     End
+		
+			IF @MailProfile IS NOT NULL
+				exec [Utility].[SendEmailThroughProfile] @Email,@Body,@Subject,@MailProfile
+			 
+			if isnull(@PhoneNo,'') <>''
+			 insert into @SMSTable
+			  exec [Notifications].[SendSMS] @PhoneNo,@SmsSubject,@sResponse output		
+		 End
+		
+	if @LoginNo = 0 And @LevelNo = 0 and @GRNNo is not null and @IsDisableMailToCreator = 0
+    Begin
+			Select  			   
+			@DocumentDate = DocumentDate ,
+			@DocumentNoYearly  = DocumentNoYearly,
+			@CreatorMail = SL.Email,
+			@CreatorPhoneNo = SL.PhoneNo,
+			@CreatorName = SL.PrintingName 
+			From Inventory.GRNMain GRN
+			Inner Join Security.Login SL on SL.LoginNo = GRN.CreatedBy
+			Where GRNNo = @GRNNo 
+									
+			Set @Subject = 'GRN -' + @DocumentNoYearly + ' has been completed all Authorizations.'
+			
+			Set @Body = '<p>Dear '+ @CreatorName + ',</p>
+
+				<p><b>Greetings from '+ISNULL(@CompanyName,'')+' </b></p>
+
+				<p> GRN No. <strong>'+ISNULL(@DocumentNoYearly,'')+'</strong>, Dated - <strong>'+CONVERT(varchar,@DocumentDate,103)+'</strong> has been successfully authorized in all levels.'+'.</p>'
+
+			 
+		  Set @SmsSubject = @Subject 
+		     
+			  
+		  IF @MailProfile IS NOT NULL and @CreatorMail is not null
+			exec [Utility].[SendEmailThroughProfile] @CreatorMail,@Body,@Subject,@MailProfile
+		
+		  if isnull(@PhoneNo,'') <>''
+		   insert into @SMSTable
+			exec  [Notifications].[SendSMS] @CreatorPhoneNo,@SmsSubject,@sResponse output	
+				
+		 End	 		 
+   
+END

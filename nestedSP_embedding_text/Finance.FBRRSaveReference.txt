@@ -1,0 +1,163 @@
+Stored procedure Finance.FBRRSaveReference: Save Reference Reconciliation. Called from Finance.VoucherSaveChildDetail.
+Writes: Finance.accVoucherReferenceDetail
+Reads: Finance.accVoucherDetail, Finance.accVoucherMain, Finance.accVoucherReferenceDetail, Finance.ReferenceDetail, Finance.ReferenceMain
+Parameters: @ReferenceDetailNo int, @ReferenceNos varchar(max), @AccountNatureNo tinyint, @OutputStatusNo tinyint = null OUTPUT, @OutputStatusRemarks varchar(4000) = null OUTPUT
+Calls procedures: Finance.VoucherSaveReferenceDetail
+Author: Yusuf Ahmed, created 7-Sep-12
+Code:
+-- =============================================
+-- Author:		Yusuf Ahmed
+-- Create date: 7-Sep-12
+-- Description:	Save Reference Reconciliation
+-- =============================================
+CREATE PROCEDURE [Finance].[FBRRSaveReference]
+	@ReferenceDetailNo int
+	,@ReferenceNos varchar(max)
+	,@AccountNatureNo tinyint
+	,@OutputStatusNo tinyint = null output
+	,@OutputStatusRemarks varchar(4000) = null output
+AS
+BEGIN
+BEGIN TRY
+	DECLARE @VoucherDetailNo int
+			
+	select @VoucherDetailNo=VoucherDetailNo
+	from Finance.accVoucherReferenceDetail
+	where ReferenceDetailNo=@ReferenceDetailNo
+			
+	DECLARE @ReferenceNo int
+	DECLARE @ReferenceNoYearly varchar(30)
+	DECLARE @ReferenceDate smalldatetime
+	DECLARE @CreditDays tinyint
+	DECLARE @DueDate smalldatetime
+	DECLARE @ReferenceTypeNo tinyint
+	DECLARE @SpecificDrAmount money
+	DECLARE @SpecificCrAmount money
+	DECLARE @BaseDrAmount decimal(25,6)
+	DECLARE @BaseCrAmount decimal(25,6)
+	DECLARE @TransactionFormCode varchar(10)
+	DECLARE @SourceDocumentNo int
+	DECLARE @SourceDocumentDate smalldatetime
+	DECLARE @SourceDocumentNoYearly varchar(30)
+	DECLARE @Remarks varchar(1000)
+	DECLARE @SpecificReferenceAmount money
+	DECLARE @BaseReferenceAmount decimal(25,6)
+	DECLARE @SourceDocumentFormCode varchar(10)
+	DECLARE @AccountNo int
+	DECLARE @CompanyNo tinyint
+	DECLARE @ByToNo tinyint
+	DECLARE @CurrencyConversionNo smallint
+	DECLARE @DivisibilityRate decimal(9,6)
+	DECLARE @MultiplicativeRate decimal(9,6)
+	DECLARE @FBNo smallint
+	DECLARE @VoucherSaveRefOutputStatusNo tinyint
+	DECLARE @VoucherSaveRefOutputStatusRemarks varchar(4000)
+
+	declare @Reference table(ReferenceNo int,AdjustingAmount money,SNo int identity(1,1) PRIMARY KEY)
+	
+	insert into @Reference
+	select Col1,Col2 from masterdata.Split_RowColumn(@ReferenceNos,'`','~')
+	
+	declare @MaxCount int
+	set @MaxCount = @@RowCount
+
+	declare @Count int
+	set @Count=1
+
+	while @Count<=@MaxCount
+	begin
+		select @ReferenceNo=r.ReferenceNo
+			  ,@ReferenceNoYearly=rm.VendorDocumentNo
+			  ,@ReferenceDate=rm.VendorDocumentDate
+			  ,@CreditDays=rm.CreditDays
+			  ,@DueDate=rm.DueDate
+			  ,@ReferenceTypeNo=2
+			  ,@SpecificDrAmount=case when @AccountNatureNo=1 or @AccountNatureNo=4 then 0 else r.AdjustingAmount end
+			  ,@SpecificCrAmount=case when @AccountNatureNo=1 or @AccountNatureNo=4 then r.AdjustingAmount else 0 end
+			  ,@BaseDrAmount=case when @AccountNatureNo=1 or @AccountNatureNo=4 then 0 else r.AdjustingAmount end
+			  ,@BaseCrAmount=case when @AccountNatureNo=1 or @AccountNatureNo=4 then r.AdjustingAmount else 0 end
+			  ,@TransactionFormCode='FBRR'
+			  ,@SourceDocumentNo=null
+			  ,@SourceDocumentDate=null
+			  ,@SourceDocumentNoYearly=null
+			  ,@Remarks=null
+			  ,@SpecificReferenceAmount=rm.SpecificReferenceAmount
+			  ,@BaseReferenceAmount=rm.BaseReferenceAmount
+			  ,@SourceDocumentFormCode=null
+			  ,@AccountNo=rm.AccountNo
+			  ,@CompanyNo=rm.CompanyNo
+			  ,@ByToNo=case when @AccountNatureNo=1 or @AccountNatureNo=4 then 2 else 1 end
+			  ,@CurrencyConversionNo=rd.CurrencyConversionNo
+			  ,@DivisibilityRate=rd.DivisibilityRate
+			  ,@MultiplicativeRate=rd.MultiplicativeRate
+			  ,@FBNo=rm.FBNo
+		FROM         @Reference r 
+			inner join Finance.ReferenceMain rm on rm.ReferenceNo=r.ReferenceNo
+			inner join Finance.ReferenceDetail rd on rd.ReferenceNo=rm.ReferenceNo
+												and rd.ReferenceTypeNo=rm.ReferenceTypeNo
+		where r.SNo=@Count
+
+		EXECUTE [Finance].[VoucherSaveReferenceDetail] 
+			   @VoucherDetailNo = @VoucherDetailNo                    
+			  ,@ReferenceNo = @ReferenceNo 
+			  ,@ReferenceNoYearly = @ReferenceNoYearly 
+			  ,@ReferenceDate = @ReferenceDate 
+			  ,@CreditDays = @CreditDays 
+			  ,@DueDate = @DueDate 
+			  ,@ReferenceTypeNo = @ReferenceTypeNo 
+			  ,@SpecificDrAmount = @SpecificDrAmount 
+			  ,@SpecificCrAmount = @SpecificCrAmount 
+			  ,@BaseDrAmount = @BaseDrAmount 
+			  ,@BaseCrAmount = @BaseCrAmount 
+			  ,@TransactionFormCode = @TransactionFormCode 
+			  ,@SourceDocumentNo = @SourceDocumentNo 
+			  ,@SourceDocumentDate = @SourceDocumentDate 
+			  ,@SourceDocumentNoYearly = @SourceDocumentNoYearly 
+			  ,@Remarks = @Remarks 
+			  ,@SpecificReferenceAmount = @SpecificReferenceAmount 
+			  ,@BaseReferenceAmount = @BaseReferenceAmount 
+			  ,@SourceDocumentFormCode = @SourceDocumentFormCode 
+			  ,@AccountNo = @AccountNo 
+			  ,@CompanyNo = @CompanyNo 
+			  ,@ByToNo = @ByToNo 
+			  ,@CurrencyConversionNo = @CurrencyConversionNo 
+			  ,@DivisibilityRate = @DivisibilityRate 
+			  ,@MultiplicativeRate = @MultiplicativeRate 
+			  ,@FBNo = @FBNo 
+			  ,@OutputStatusNo = @VoucherSaveRefOutputStatusNo Output
+			  ,@OutputStatusRemarks = @VoucherSaveRefOutputStatusRemarks Output
+
+			  If IsNULL(@VoucherSaveRefOutputStatusNo,0) = 0 
+			  Begin
+				 Raiserror(@VoucherSaveRefOutputStatusRemarks ,16,-1)
+			  End
+
+		select @Count=@Count+1
+	end 
+		
+	declare @referenceamount money
+	select @referenceamount=SUM(AdjustingAmount)
+	from @Reference
+	
+	update vrd
+		set SpecificDrAmount=vrd.SpecificDrAmount-case when @AccountNatureNo=1 or @AccountNatureNo=4 then 0 else IsNULL(@referenceamount,0) end
+			,SpecificCrAmount=vrd.SpecificCrAmount-case when @AccountNatureNo=1 or @AccountNatureNo=4 then IsNULL(@referenceamount,0) else 0 end
+			,BaseDrAmount=vrd.BaseDrAmount-case when @AccountNatureNo=1 or @AccountNatureNo=4 then 0 else IsNULL(@referenceamount,0) end
+			,BaseCrAmount=vrd.BaseCrAmount-case when @AccountNatureNo=1 or @AccountNatureNo=4 then IsNULL(@referenceamount,0) else 0 end
+	from Finance.accVoucherReferenceDetail vrd
+		inner join Finance.accVoucherDetail vd on vd.VoucherDetailNo=vrd.VoucherDetailNo
+		inner join Finance.accVoucherMain vm on vm.VoucherNo=vd.VoucherNo
+	where ReferenceDetailNo=@ReferenceDetailNo
+	
+	delete from Finance.accVoucherReferenceDetail
+	where ReferenceDetailNo=@ReferenceDetailNo
+		and SpecificDrAmount+SpecificCrAmount=0
+	
+	select @OutputStatusRemarks = 'Success'
+	Select 1,@OutputStatusRemarks 
+END TRY
+BEGIN CATCH
+		select @OutputStatusNo=0,@OutputStatusRemarks=Error_Message()
+		Select 0,@OutputStatusRemarks
+END CATCH
+END

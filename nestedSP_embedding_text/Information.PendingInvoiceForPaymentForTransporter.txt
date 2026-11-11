@@ -1,0 +1,106 @@
+Stored procedure Information.PendingInvoiceForPaymentForTransporter. Called from GateEntry.IMGEGetTransporterInfo.
+Reads: Finance.accVoucherDetail, Finance.ARDVendorLocationRule, Finance.CashCounterMain, Finance.CashJournalMain, Finance.FreightInvoiceItemDetail, Finance.FreightInvoiceMain, Finance.ReferenceMain, GateEntry.InvGateEntryMain, masterdata.mAccountMaster, masterdata.mVendorLocationDetail, payroll.tblDivisionMaster, Security.Login
+Parameters: @CompanyNo tinyint, @DocumentDate smalldatetime, @TransporterNo int, @ModuleNo tinyint
+Code:
+
+-- =============================================
+-- Author:		<Arvinder Kaur>
+-- Create date: <2013/06/26>
+-- Description:	<Pending Invoice For Payment For Transporter>
+-- =============================================
+----[Information].[PendingInvoiceForPaymentForVendor]  4,'2013/09/05',38
+CREATE PROCEDURE [Information].[PendingInvoiceForPaymentForTransporter]  
+	-- Add the parameters for the stored procedure here
+	@CompanyNo tinyint,
+	@DocumentDate smalldatetime,
+	@TransporterNo int,
+	@ModuleNo tinyint
+AS
+BEGIN
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+
+    -- Insert statements for procedure here
+	declare @str varchar(max)
+    select @str=masterdata.JSForInformation('IMGE')-------For Gate Entry
+    set @str=@str+masterdata.CSSForInformation('IMGE')
+	set @str=@str+'<table class="altrowstable" id="alternatecolorPendingInvoiceForPaymentForTransporter">'
+	set @str=@str+'<Caption><Font color="Maroon"><h3 align="Left"><b>Pending Invoice For Payment</b></h3></Font></Caption>'
+    set @str=@str+'<tr><th>Sl. No.</th><th>Division</th><th>Document No.</th><th>Document Date</th><th>Invoice Amount</th><th>Balance Amount</th><th>Due Date</th><th>Created By</th><th>Authorised By</th></tr>'
+	set @str=@str
+				 +( replace(
+					replace(
+					replace(
+					replace(
+					replace(
+					replace(
+					replace(
+					replace(
+					replace((
+		       				 Select  ROW_NUMBER() over ( Order by FBM.DocumentDate desc) as td1
+									,Isnull(DM.DivisionName,'')td2
+									,FBM.Documentnoyearly td3
+									,convert(varchar(20),FBM.DocumentDate,103) td4
+									,cast(FBM.BasicAmount as Decimal(15,2)) td5
+									,Cast(tt.BalanceAmount as Decimal(15,2)) td6
+									,convert(varchar(20),tt.DueDate,103) td7
+									,L1.PrintingName td8
+									,Isnull(L2.PrintingName,'') td9
+								From Finance.FreightInvoiceMain as FBM
+								Inner Join Finance.FreightInvoiceItemDetail FBI ON FBI.FreightInvoiceNo=FBM.FreightInvoiceNo----Group by clause for this
+								Inner Join GateEntry.InvGateEntryMain GE ON GE.GateEntryNo=FBI.RefDocNo
+																		 And FBM.FreightDocumentNo=1---Gate Entry
+																		 And GE.ModuleNo=@ModuleNo
+								LEFT Join payroll.tblDivisionMaster DM ON DM.DivisionNo=GE.DivisionNo
+								Inner Join Security.Login L1 On L1.LoginNo=FBM.CreatedBy
+								Left Join Security.Login L2 On L2.LoginNo=FBM.AuthorizedBy
+								Inner Join
+										(Select AVD.VoucherNo,Abs(RM.BalanceAmount) BalanceAmount,VL.VendorNo,RM.DueDate 
+										From Finance.accVoucherDetail AVD
+										Inner Join Finance.ARDVendorLocationRule ALD ON ALD.AccountNo=AVD.AccountNo 
+										Inner Join  masterdata.mVendorLocationDetail VL ON VL.VendorLocationNo=ALD.VendorLocationNo
+										Inner Join masterdata.mAccountMaster AM ON ALD.AccountNo=AM.AccountNo And AM.AccountTypeNo=4
+										Inner Join Finance.ReferenceMain RM ON RM.VoucherDetailNo=AVD.VoucherDetailNo 
+																		And RM.AccountNo=ALD.AccountNo
+										 Union all
+									                              
+										 Select SB.VoucherNo -----Payment mode Cash
+											    ,Abs((CM.NetAmount-SUM(CJ.Amount))) BalanceAmount
+												,VL.VendorNo,CM.DueDate
+										 From Finance.CashCounterMain CM 
+										 Inner Join Finance.FreightInvoiceMain SB ON SB.FreightInvoiceNo=CM.DocumentNo and SB.PaymentModeNo=1
+										 Inner Join Finance.CashJournalMain CJ ON CM.CashCounterNo=isnull(CJ.CashCounterNo,0)
+																				   and CM.SourceDocumentFormNo=450 
+										Inner Join masterdata.mVendorLocationDetail VL On VL.VendorLocationNo=CM.PayeeLocationNo                                                                  
+										Group by SB.VoucherNo,VL.VendorNo ,CM.DueDate,CM.NetAmount
+										)tt ON tt.VoucherNo=FBM.VoucherNo 
+											  And tt.VendorNo=FBM.TransporterNo
+								 Where tt.BalanceAmount<>0 -----pending for payment
+										And GE.TransporterNo=@TransporterNo
+										And FBM.DocumentDate<=@DocumentDate
+										And FBM.CompanyNo=@CompanyNo                               
+								Group by  DM.DivisionName
+										 ,FBM.Documentnoyearly 
+										 ,FBM.DocumentDate 
+										 ,FBM.BasicAmount 
+										 ,tt.BalanceAmount
+										 ,tt.DueDate
+										 ,L1.PrintingName
+										 ,L2.PrintingName 		                                    
+								for xml path('tr')),'<td1>','<td style="text-align: center;">')
+								              ,'<td2>','<td>')
+											  ,'<td3>','<td>')
+											  ,'<td4>','<td style="text-align: center;">')
+											  ,'<td5>','<td style="text-align: Right;">')
+											  ,'<td6>','<td style="text-align: Right;">')
+											  ,'<td7>','<td style="text-align: center;">')
+											  ,'<td8>','<td>')
+											  ,'<td9>','<td>')
+											  )
+				   
+	set @str=@str+'</table>'
+	
+	select @str
+	
+END

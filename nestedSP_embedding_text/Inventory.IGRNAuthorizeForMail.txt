@@ -1,0 +1,156 @@
+Stored procedure Inventory.IGRNAuthorizeForMail: sent mail to next user for rejection or approval. Called from Notifications.TANRSaveUserApproval.
+Writes: Notifications.TATAuthorizationDetail
+Reads: Inventory.GRNMain, Notifications.MultiAuthorizationSetting, Notifications.TATAuthorizationDetail, Security.LoginRoleDetail, Security.LoginTempRoleDetail, Security.mRoleMasterFormDetail
+Parameters: @GRNNo int, @IsCallingForMultiLevelAuthorization tinyint = 0, @OutputStatusNo tinyint = null OUTPUT, @OutputStatusRemarks varchar(4000) = null OUTPUT
+Calls procedures: Inventory.IGRNSendAuthorizationMail
+Author: HimanshuVn, created 03 Mar 2023
+Code:
+-- =============================================
+-- Author:		HimanshuVn
+-- Create date: 03 Mar 2023
+-- Description:	sent mail to next user for rejection or approval 
+-- =============================================
+CREATE PROCEDURE [Inventory].[IGRNAuthorizeForMail]
+	@GRNNo int,
+	@IsCallingForMultiLevelAuthorization tinyint = 0,
+	@OutputStatusNo tinyint = null output,
+	@OutputStatusRemarks varchar(4000)  = null output
+	
+AS
+BEGIN
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+
+	Begin TRY
+	
+	   if @IsCallingForMultiLevelAuthorization = 1   ---------- When 1 then  Notification for Multi Level Authorization will call
+	   Begin
+		 declare @MAPValuationNo smallint,@AuthBy int,@DivNo int ,@DocumentStatusNo tinyint
+				,@AuthDetailNo int ,@CreatedBy smallint,@CompanyNo int 
+	
+ 		 select  @CompanyNo =CompanyNo  ,@DivNo = DivisionNo ,@DocumentStatusNo = DocumentStatusNo
+				,@CreatedBy = sam.CreatedBy  
+		 from Inventory.GRNMain sam where GRNNo = @GRNNo 
+
+		Declare  @UserCount int 
+		Declare @NextUsers table(SNo smallint,AuthDetailNo int,LevelNo int,LoginNo int) 
+		Declare @UserNO int,@LevelNo smallint,@UserCounter int =1
+	   
+	   If Exists (Select 1  From Notifications.MultiAuthorizationSetting where CompanyNo =@CompanyNo and ISNULL(DivisionNo,0) = ISNULL(@DivNo,0)
+ 					and FormCode ='IGRN') and @DocumentStatusNo = 20
+ 		BEGIN
+ 			 IF Exists (Select 1 From Notifications.TATAuthorizationDetail where FormCode ='IGRN' and InternalNo = @GRNNo  
+ 							and IsReady = 1 and IsEmailSent=0)
+				BEGIN
+						-- Send Email
+					Insert into @NextUsers
+					select ROW_NUMBER () over (order by LoginNo) SlNo,AuthDetailNo, LevelNo, LoginNo  from (
+					Select LevelNo,LoginNo,AuthDetailNo
+					 From Notifications.TATAuthorizationDetail where FormCode ='IGRN' and InternalNo = @GRNNo  
+						and IsReady = 1 and IsEmailSent =0	and LoginNo is not null
+					union 
+					Select LevelNo,lrd.LoginNo,AuthDetailNo
+					 From Notifications.TATAuthorizationDetail tad
+					 inner join Security.mRoleMasterFormDetail rfd on rfd.RoleMasterNo = tad.RoleNo and rfd.FormNo in( 151,167,464)
+					 inner join Security.LoginRoleDetail lrd on rfd.RoleMasterNo = lrd.RoleMasterNo 
+					 where FormCode ='IGRN' and InternalNo = @GRNNo 
+						and IsReady = 1 and IsEmailSent =0	and tad.RoleNo  is not null	
+					union 
+					Select LevelNo,lrd.LoginNo,AuthDetailNo
+					 From Notifications.TATAuthorizationDetail tad
+					 inner join Security.mRoleMasterFormDetail rfd on rfd.RoleMasterNo = tad.RoleNo and rfd.FormNo in( 151,167,464)
+					 inner join Security.LoginTempRoleDetail lrd on rfd.RoleMasterNo = lrd.RoleMasterNo 
+					 where FormCode ='IGRN' and InternalNo = @GRNNo and CONVERT(smalldatetime,convert(varchar(15), GETDATE(),106))
+						 between lrd.FromDate and ISNULL( lrd.ToDate,CONVERT(smalldatetime,convert(varchar(15), GETDATE(),106)))
+						and IsReady = 1 and IsEmailSent =0	and tad.RoleNo  is not null	) tt
+						group by LevelNo, LoginNo 	,AuthDetailNo							
+					
+					Set @UserCount = @@ROWCOUNT	
+					
+					While @UserCounter <= @UserCount
+					 Begin
+						 Select @UserNO=LoginNo , @LevelNo = LevelNo,@AuthDetailNo=AuthDetailNo From @NextUsers Where SNo = @UserCounter
+								
+						 Exec [Inventory].[IGRNSendAuthorizationMail] @GRNNo,@UserNo,@LevelNo ,@AuthDetailNo
+						 
+						Update Notifications.TATAuthorizationDetail  set IsEmailSent =1 where FormCode = 'IGRN' and InternalNo = @GRNNo 
+								and LevelNo = @LevelNo and IsReady =1
+						 Set @UserCounter=@UserCounter+1 
+					 End
+				END							   	 					  	
+ 		 END
+ 	   else If Exists (Select 1  From Notifications.MultiAuthorizationSetting where CompanyNo =@CompanyNo and ISNULL(DivisionNo,0) = ISNULL(@DivNo,0)
+ 					and FormCode ='IGRN') and Exists (Select 1 From Notifications.TATAuthorizationDetail where FormCode ='IGRN' 
+ 						and InternalNo = @GRNNo and IsRejectedMailSend =1) -- rejection mail
+ 		BEGIN
+ 			 
+ 			 if Exists (Select 1 From Notifications.TATAuthorizationDetail where FormCode ='IGRN' and InternalNo = @GRNNo 
+ 							and IsRejectedMailSend =1)
+				BEGIN
+						-- Send Email
+					Insert into @NextUsers
+					select ROW_NUMBER () over (order by LoginNo) SlNo,AuthDetailNo, LevelNo, LoginNo  from (
+					Select LevelNo,LoginNo,AuthDetailNo
+					 From Notifications.TATAuthorizationDetail where FormCode ='IGRN' and InternalNo = @GRNNo 
+						and IsRejectedMailSend =1 and LoginNo is not null
+					union 
+					Select LevelNo,lrd.LoginNo,AuthDetailNo
+					 From Notifications.TATAuthorizationDetail tad
+					 inner join Security.mRoleMasterFormDetail rfd on rfd.RoleMasterNo = tad.RoleNo and rfd.FormNo in(151,167,464)
+					 inner join Security.LoginRoleDetail lrd on rfd.RoleMasterNo = lrd.RoleMasterNo 
+					 where FormCode ='IGRN' and InternalNo = @GRNNo 
+						and IsRejectedMailSend =1 and tad.RoleNo  is not null	
+					union 
+					Select LevelNo,lrd.LoginNo,AuthDetailNo
+					 From Notifications.TATAuthorizationDetail tad
+					 inner join Security.mRoleMasterFormDetail rfd on rfd.RoleMasterNo = tad.RoleNo and rfd.FormNo in(151,167,464)
+					 inner join Security.LoginTempRoleDetail lrd on rfd.RoleMasterNo = lrd.RoleMasterNo 
+					 where FormCode ='IGRN' and InternalNo = @GRNNo and CONVERT(smalldatetime,convert(varchar(15), GETDATE(),106))
+						 between lrd.FromDate and ISNULL( lrd.ToDate,CONVERT(smalldatetime,convert(varchar(15), GETDATE(),106)))
+						and IsRejectedMailSend =1 and tad.RoleNo  is not null	) tt
+						group by LevelNo, LoginNo ,AuthDetailNo							
+					
+					
+					Set @UserCount = @@ROWCOUNT	
+					
+					While @UserCounter <= @UserCount
+					 Begin
+					
+						 Select @UserNO=LoginNo , @LevelNo = LevelNo,@AuthDetailNo=AuthDetailNo From @NextUsers Where SNo = @UserCounter
+								
+						 Exec [Inventory].[IGRNSendAuthorizationMail] @GRNNo,@UserNo,@LevelNo ,@AuthDetailNo ,1
+						 
+						Update Notifications.TATAuthorizationDetail  set IsRejectedMailSend =0 where FormCode = 'IGRN' and InternalNo = @GRNNo 
+								and LevelNo = @LevelNo and IsRejectedMailSend =1
+						 Set @UserCounter=@UserCounter+1 
+					 End
+			
+				END							   	 					  	
+ 		 END 	 
+		End 
+		
+		-- Sending mail if last level got approved
+ 		  If exists (	 Select 1 
+ 						 From Notifications.TATAuthorizationDetail TAT
+ 						 Inner join Inventory.GRNMain GRN on GRN.GRNNo = TAT.InternalNo
+ 						 where InternalNo = @GRNNo and TAT.FormCode = 'IGRN' and GRN.DocumentStatusNo = 30 -- Authorized
+							   And 
+							   TAT.LevelNo = (
+								Select MAX(LevelNo)
+								From Notifications.TATAuthorizationDetail
+								Where InternalNo=@GRNNo	and FormCode= 'IGRN'
+							)  and TAT.StatusNo = 13 -- Approve
+					 )
+		  BEGIN 
+			Exec [Inventory].[IGRNSendAuthorizationMail]  @GRNNo = @GRNNo,@LoginNo = 0 ,@LevelNo = 0 ,@AuthDetailNo =0 ,@IsRejected=0
+		  END	
+	
+		Select @OutputStatusNo = 1,@OutputStatusRemarks = 'Success'				  	  	
+		select 1,'Success'
+	End  TRY
+	Begin Catch
+		Select 0,Error_Message()
+		Select @OutputStatusNo = 0,@OutputStatusRemarks = ERROR_MESSAGE()				  
+	END catch
+END

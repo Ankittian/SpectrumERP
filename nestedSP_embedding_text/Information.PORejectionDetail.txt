@@ -1,0 +1,98 @@
+Stored procedure Information.PORejectionDetail: PO GP Out/Dispatch Challan Detail. Called from Purchase.PMPOPODetail.
+Reads: Inventory.GatePassOutItemDetail, Inventory.GatePassOutMain, Inventory.GRNItemDetail, masterdata.mItemMaster, Purchase.POAmendmentMain, Purchase.POMain, Sales.DispatchChallan, Sales.DispatchChallanItemDetail
+Parameters: @CompanyNo tinyint, @DocumentDate smalldatetime, @PONo int
+Author: Teerath, created 18/11/2013
+Code:
+
+-- =============================================
+-- Author:		Teerath
+-- Create date: 18/11/2013
+-- Description:	PO GP Out/Dispatch Challan Detail
+-- =============================================
+CREATE PROCEDURE [Information].[PORejectionDetail] 
+	-- Add the parameters for the stored procedure here
+	@CompanyNo tinyint,
+	@DocumentDate smalldatetime,
+	@PONo int
+	
+AS
+BEGIN
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+
+    -- Insert statements for procedure here
+	
+
+	declare @str varchar(max)
+    select @str=masterdata.JSForInformation('PMPO')
+    set @str=@str+masterdata.CSSForInformation('PMPO')
+	set @str=@str+'<table class="altrowstable" id="alternatecolorPORejectionDetail">'
+	set @str=@str+'<Caption><Font color="Maroon"><h3 align="Left"><b>GP Out/Dispatch Challan</b></h3></Font></Caption>'
+    set @str=@str+'<tr><th>Sl. No.</th><th>Doc. No.</th><th>Doc. Date</th><th>Item Name</th><th>Out/Dispatch Qty</th></tr>'
+	set @str=@str
+				 +( 
+					
+					replace(
+					replace(
+					replace(
+					replace(
+					replace(
+							(
+								Select   Row_number() over (order by tt.DocumentDate desc) as td1
+								        ,tt.DocumentNoYearly td2
+										,Convert(varchar(20),  tt.DocumentDate,103) td3
+										,tt.ItemDescription td4
+										,tt.Quantity td5
+								From (	Select GM.DocumentNoYearly 
+												,GM.DocumentDate 
+												,IM.ItemDescription 
+												,GD.Quantity 
+										From Inventory.GatePassOutMain GM
+										INNER JOIN Inventory.GatePassOutItemDetail GD ON GD.GatePassOutNo=GM.GatePassOutNo 
+										Inner Join masterdata.mItemMaster IM On GD.ItemNo = IM.ItemNo
+										Inner Join Inventory.GRNItemDetail GRNI On GD.GRNNo = GRNI.GRNNo
+																					and GD.ItemNo =GRNI.ItemNo
+																					and ISNULL(GD.MakeNo ,0)=ISNULL(GRNI.MakeNo ,0)
+										Inner Join Purchase.POAmendmentMain POAM On GRNI.POAmendmentNo = POAM.POAmendmentNo
+										Inner Join Purchase.POMain POM On POM.PONo = POAM.POAmendmentNo
+										Where GM.GatePassTypeNo = 9
+												And POAM.PONo = @PONo
+												And POAM.DocumentDate = @DocumentDate
+												And POAM.CompanyNo = @CompanyNo
+										
+										Union All
+										Select DC.DocumentNoYearly 
+												,Convert(varchar(20),  DC.DocumentDate,103)
+												,IM.ItemDescription [Item Name]
+												,DCID.Qty 	
+												
+										From Sales.DispatchChallan DC
+										Inner Join Sales.DispatchChallanItemDetail DCID on DC.DispatchChallanNo = DCID.DispatchChallanNo
+										Inner Join masterdata.mItemMaster IM On DCID.ItemNo = IM.ItemNo
+										Inner Join Inventory.GRNItemDetail GRNI On DC.GRNNo = GRNI.GRNNo
+																					and DCID.ItemNo =GRNI.ItemNo
+																					and ISNULL(DCID.MakeNo ,0)=ISNULL(GRNI.MakeNo ,0)
+										Inner Join Purchase.POAmendmentMain POAM On GRNI.POAmendmentNo = POAM.POAmendmentNo
+										Inner Join Purchase.POMain POM On POM.PONo = POAM.POAmendmentNo                                          
+										Where DC.DispatchChallanTypeNo = 5
+												And DC.DispatchSourceNo = 7	
+												And POAM.PONo = @PONo
+												And POAM.DocumentDate = @DocumentDate
+												And POAM.CompanyNo = @CompanyNo
+								
+								  )tt
+							for xml path('tr')),'<td1>','<td style="text-align: Center;">')
+							                   ,'<td2>','<td>')
+		   									   ,'<td3>','<td>')				
+											   ,'<td4>','<td>')
+											   ,'<td5>','<td style="text-align: Right;">')
+		   									   								 			
+											   
+									    	)
+								
+				   
+	set @str=@str+'</table>'
+	
+	select @str
+END

@@ -1,0 +1,1271 @@
+Stored procedure Sales.ERCIFinancePosting. Called from Finance.FinancePostingFillValuesDocumentDetails.
+Reads: Customize.DivisionwiseSetting, Customize.ErosAMCMain, Customize.EROSJobCompletionMain, Customize.MDNErosMain, Finance.accVoucherDetail, Finance.ARDFinanceBookRule, Finance.ARDIntermediatePostingAccountRule, Finance.ARDItemRule, Finance.ARDVendorLocationRule, FixedAsset.AssetMain, FixedAsset.AssetTagMain, GlobalData.FormMaster, masterdata.FormTaxRoundingSetting, masterdata.mAccountGroup, masterdata.mAccountMaster, masterdata.mFBMain, masterdata.mItemMaster, masterdata.mMiscCharges, masterdata.mTaxCodeMiscChargesDetail, masterdata.mVendorCard, masterdata.mVendorLocationDetail, Sales.CommercialInvoiceItemDetails, Sales.CommercialInvoiceMain, Sales.DispatchChallan, Sales.DispatchChallanItemDetail (+3 more)
+Parameters: @OtherDataInXml xml, @VendorLocationNo int, @MiscChargeNos xml, @BasicAmount money, @ItemNos varchar(max), @VoucherDate smalldatetime, @NetAmount money, @CompanyNo tinyint
+Code:
+CREATE procedure [Sales].[ERCIFinancePosting]
+
+(@OtherDataInXml xml
+,@VendorLocationNo int
+,@MiscChargeNos xml
+,@BasicAmount money
+,@ItemNos varchar(max)
+,@VoucherDate smalldatetime
+,@NetAmount money
+,@CompanyNo tinyint
+) as
+
+Begin
+
+declare @SourceDocumentNo int
+declare @Return table ([Add to Basic] bit,Particular varchar(500),[Debit Amount] money,
+								[Credit Amount] money,[Account Name] Int,Amount money,[Type] tinyint,
+								MiscChargeNo smallint,TaxCodeMiscChargesDetailNo int,ItemNos varchar(5000),
+								SlNo smallint identity(1,1))
+declare @MiscFinancePosting table(Particular varchar(500)
+											,[Debit Amount] money,[Credit Amount] money,[Account Name] Int
+											,[Amount] money,[Type] tinyint,SlNo smallint identity(1,1)
+											,MiscChargeNo int,TaxCodeMiscChargesDetailNo int,ItemNos varchar(5000),IncludeInBasic tinyint)
+declare @MiscChargeTable table(MiscChargeNo [smallint],Amount [money],[CalculationNature] [tinyint]
+											,TaxCodeMiscChargesDetailNo int,IncludeInBasic tinyint)
+
+			declare @BillStateAmount money					
+		
+begin
+
+declare @FormNo smallint,@ItemAccountTypeNo tinyint ,@VendorAccountTypeNo tinyint
+		select @FormNo=FormNo from GlobalData.FormMaster where FormCode='SDCI'
+
+select @ItemAccountTypeNo=11,@VendorAccountTypeNo=7
+
+declare @ItemFinancePosting table([Account Name] Int
+											,[Amount] money,SlNo smallint identity(1,1))
+
+declare @ItemTable table (ItemNo int,BasicAmount money,Id int,Qty decimal(12,3),Rate money)
+		insert into @ItemTable
+		select Col1, sum(convert(money,Col2)), Col3, sum(CONVERT(decimal(12,3),Col4)), sum(CONVERT(money,Col5))
+		from masterdata.Split_RowColumn(@ItemNos,'`','~')
+		group by Col1, Col3
+
+insert into @ItemFinancePosting
+					([Account Name] 
+					,[Amount])
+			select 
+				 tt.AccountNo 
+				,isnull(tt.Amount,@BasicAmount)
+			from [Finance].[funcItemPosting](@ItemNos,@FormNo,@ItemAccountTypeNo,@VoucherDate) tt				
+;with cte as 
+			(
+				SELECT v.value('MiscChargeNo[1]','varchar(100)') AS MiscChargeNo
+					,v.value('Amount[1]','money') AS Amount
+					,v.value('CalculationNature[1]','tinyint') AS CalculationNature
+					,v.value('TDC_x0020_Account_x0020_Rule[1]','int') AS TaxCodeMiscChargesDetailNo
+					,v.value('IncludeInBasic[1]','bit') AS IncludeInBasic
+				FROM @MiscChargeNos.nodes('/DocumentElement/Table') x(v)
+				where v.value('Charge_x0020_Type[1]','tinyint')=2
+			)
+			insert into @MiscChargeTable(MiscChargeNo,Amount,[CalculationNature],TaxCodeMiscChargesDetailNo,IncludeInBasic)
+			select MiscChargeNo,Amount,CalculationNature,TaxCodeMiscChargesDetailNo,isnull(IncludeInBasic,0)
+			from cte
+			where ISNUMERIC(MiscChargeNo)=1
+			
+insert into @MiscFinancePosting
+					(Particular ,[Debit Amount] ,[Credit Amount] ,[Account Name] 
+					,[Amount] ,[Type]
+					,MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos,IncludeInBasic)
+			select 
+				 MC.MiscChargeName+isnull(' ('+AppendAccountName+')','')
+				,convert(decimal(15,2),case(s.CalculationNature) when 1 then isnull(tt.Amount,s.Amount)
+																else null end)
+				,convert(decimal(15,2),case(s.CalculationNature) when 1 then null
+																else isnull(tt.Amount,s.Amount) end)
+				,tt.AccountNo 
+				,isnull(tt.Amount,s.Amount)
+				,s.CalculationNature
+				,s.MiscChargeNo
+				,tcmcd.TaxCodeMiscChargesDetailNo
+				,tt.ItemNos
+				,s.IncludeInBasic
+			from 
+				@MiscChargeTable s
+				inner join masterdata.mMiscCharges MC on MC.MiscChargeNo=s.MiscChargeNo
+				left join masterdata.mTaxCodeMiscChargesDetail tcmcd on tcmcd.TaxCodeMiscChargesDetailNo=s.TaxCodeMiscChargesDetailNo
+				outer apply (select AccountNo,Amount,AppendAccountName,ItemNos
+							 from Finance.funcTaxesPosting(tcmcd.TaxCodeMiscChargesDetailNo, 
+															s.MiscChargeNo,
+															s.Amount,
+															0,
+															@BasicAmount,
+															@ItemNos,
+															@FormNo,
+															@VoucherDate))tt
+			where isnull(tt.Amount,s.Amount)>0	
+			
+			declare @AssetLotDetail table (AssetTagNo int,InvLotDetailNo int,Qty decimal(12,3),SourceDocumentNo tinyint)
+			declare @PaymentTerms table(Remarks varchar(100),SalesOrderNo int, PayCode tinyint,SourceDocumentNo tinyint)
+			declare @DisptchChallanDetail as table (DispatchChallanNo int)
+			declare @MDNDetail as table (MDNNo int,SourceDocumentNo tinyint)
+			declare @RefDocDetail as table (SourceDocumentNo tinyint,RefDocumentNo Int)
+			
+			insert into @AssetLotDetail
+			SELECT v.value('AssetTagNo[1]','int') AS AssetTagNo
+				,v.value('InvLotDetailNo[1]','int') AS InvLotDetailNo
+				,v.value('Qty.[1]','decimal') AS Qty
+				,v.value('SourceDocumentNo[1]','tinyint') AS SourceDocumentNo
+			FROM @OtherDataInXml.nodes('/DocumentElement/Table') x(v)
+			where v.value('DispatchChallanNo[1]','int') is   null
+			
+			insert into @MDNDetail
+			SELECT v.value('MDNNo[1]','int') AS MDNNo
+					,v.value('SourceDocumentNo[1]','tinyint') AS SourceDocumentNo
+			FROM @OtherDataInXml.nodes('/DocumentElement/Table') x(v)
+			where v.value('MDNNo[1]','int') is  not null
+			
+			insert into @DisptchChallanDetail
+			SELECT v.value('DispatchChallanNo[1]','int') AS DispatchChallanNo
+			FROM @OtherDataInXml.nodes('/DocumentElement/Table') x(v)
+			where v.value('DispatchChallanNo[1]','int') is  not null
+
+			declare @BillTillMaterialStage tinyint	= 5
+			insert into @PaymentTerms
+			SELECT v.value('PaymentRemark[1]','varchar(100)') AS PaymentTermsNo,
+			v.value('SalesOrderNo[1]','int') AS SalesOrderNo,
+			v.value('PayCode[1]','tinyint') AS PayCode,
+			v.value('SourceDocumentNo[1]','tinyint') AS SourceDocumentNo
+			FROM @OtherDataInXml.nodes('/DocumentElement/Table') x(v)
+			where v.value('PayCode[1]','tinyint') is  not null
+						
+			insert into @RefDocDetail
+			SELECT  v.value('SourceDocumentNo[1]','tinyint') AS SourceDocumentNo
+			,v.value('RefDocumentNo[1]','int') AS RefDocumentNo
+			FROM @OtherDataInXml.nodes('/DocumentElement/Table') x(v)
+			where v.value('RefDocumentNo[1]','int') is  not null			
+			
+			if exists(select 1 from @PaymentTerms where Remarks like '%Final%Stage%')
+					and exists (select 1 from @PaymentTerms)
+				set @BillTillMaterialStage = 4
+			else if not exists(select 1 from @PaymentTerms where  Remarks like '%Final%Stage%')
+					and exists (select 1 from @PaymentTerms where PayCode >  (select MAX(CONVERT(tinyint,b.PayCode)) 
+									from @PaymentTerms a, Sales.SalesOrderPaymentTermDetail b where a.SalesOrderNo = b.SalesOrderNo 
+									and b.Remarks like '%Material%Stage%')) -- Inbetween Material and Final Stage
+				set @BillTillMaterialStage = 3
+			else if exists(select 1 from @PaymentTerms where Remarks like '%Material%Stage%')
+					and exists (select 1 from @PaymentTerms)
+				set @BillTillMaterialStage = 2
+			else if not exists(select 1 from @PaymentTerms where  Remarks like '%Final%Stage%' or Remarks like '%Material%Stage%')
+					and exists (select 1 from @PaymentTerms) 
+				set @BillTillMaterialStage = 1
+				
+			 
+			
+			select @SourceDocumentNo = SourceDocumentNo from @AssetLotDetail 
+			
+			if exists (select 1 
+							from masterdata.mVendorLocationDetail LD 
+								inner join masterdata.mVendorCard VC on VC.VendorNo=LD.VendorNo
+							where LD.VendorLocationNo=@VendorLocationNo and VC.VendorOfCompanyNo is not null)
+			begin
+				insert into @Return([Add to Basic] ,Particular ,[Debit Amount] ,
+								[Credit Amount] ,[Account Name] ,Amount ,[Type] ,
+								MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos)
+				select cast(0 as bit) [Add to Basic] ,IM.ItemDescription+' Inter Unit Sales A/C' Particular 
+					,CAST(null as money) [Debit Amount]
+					,sum(I.BasicAmount)+case(SN.SNO) when 1 then isnull((select isnull(sum([Credit Amount]),0)-isnull(sum([Debit Amount]),0) from @MiscFinancePosting where IncludeInBasic=1),0) else 0 end [Credit Amount] 
+					,IR.AccountNo [Account Name] 
+					,sum(I.BasicAmount) Amount ,2 [Type] 
+					,CAST(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo,CAST(null as varchar(5000))ItemNos
+				from @ItemTable I
+				inner join masterdata.mItemMaster IM on IM.ItemNo=I.ItemNo
+				left join (select ItemNo,IR.AccountNo--,AM.AccountName
+							from Finance.ARDItemRule IR
+							--inner join masterdata.mAccountMaster AM on AM.AccountNo=IR.AccountNo
+							where IR.AccountTypeNo=45) IR on IR.ItemNo=I.ItemNo
+				cross apply (select ROW_NUMBER() over(order by isnull(IR.AccountNo,I.ItemNo)) SNO) SN
+				group by IM.ItemDescription+' Inter Unit Sales A/C',IR.AccountNo,isnull(IR.AccountNo,I.ItemNo),SN.SNO
+				union all
+				select cast(IncludeInBasic as bit) [Add to Basic] ,Particular 
+					,case(IncludeInBasic) when 1 then null else [Credit Amount] * (1-IncludeInBasic) end [Debit Amount] 
+					,case(IncludeInBasic) when 1 then null else [Debit Amount] * (1-IncludeInBasic) end [Credit Amount] ,[Account Name] 
+					,[Amount] ,case [Type] when 1 then 2 else 1 end [Type]
+					,MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos
+				from @MiscFinancePosting
+				union all
+				select top 1 
+					 cast(0 as bit) [Add to Basic],'Bill Amt Passed' Particular,convert(decimal(15,2),@NetAmount) [Debit Amount]
+					,convert(decimal(15,2),null) [Credit Amount]
+					,isnull(am.AccountNo,vad.AccountNo ) [Account Name]
+					,@NetAmount [Amount],1 [Type]
+					,cast(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo ,CAST(null as varchar(5000)) ItemNos
+				from (select @VendorLocationNo VendorLocationNo) VL
+					left join 
+					(select top 1 FBR.AccountNo,LD.VendorLocationNo
+						from masterdata.mVendorLocationDetail LD
+							inner join masterdata.mVendorCard VC on VC.VendorNo=LD.VendorNo
+							inner join masterdata.mFBMain FBM on FBM.CompanyNo=VC.VendorOfCompanyNo
+															and FBM.FBTypeNo=1
+															and FBM.IsDefault=1
+							inner join Finance.ARDFinanceBookRule FBR on FBR.FBNo=FBM.FBNo
+							--inner join masterdata.mAccountMaster AM on AM.AccountNo=FBR.AccountNo
+						where FBR.AccountTypeNo=1
+						and LD.VendorLocationNo= @VendorLocationNo 
+						and FBR.ArdNo in (select FBRI.ARDNo from masterdata.mFBMain FBMI 
+												inner join Finance.ARDFinanceBookRule FBRI on FBRI.FBNo=FBMI.FBNo
+											where FBMI.CompanyNo=@CompanyNo
+											and FBMI.FBTypeNo=1
+											and FBMI.IsDefault=1)) am on am.VendorLocationNo=VL.VendorLocationNo
+				outer apply (select max(am.AccountNo) AccountNo
+							from masterdata.mAccountMaster am
+							inner join Finance.ARDVendorLocationRule vlr on vlr.VendorLocationNo=@VendorLocationNo
+																			and vlr.AccountNo=am.AccountNo
+							where am.AccountTypeNo=7 
+							 having max(am.AccountNo)>0)  vad
+							
+			end
+			
+			else if exists (select 1 from @PaymentTerms where SourceDocumentNo = 18 )
+			begin
+				set @NetAmount =0
+				select @NetAmount = SUM(ISNULL([debit amount],0) - ISNULL([Credit amount],0))  
+							from @MiscFinancePosting where IncludeInBasic =0
+					insert into @Return([Add to Basic] ,Particular ,[Debit Amount] ,
+								[Credit Amount] ,[Account Name] ,Amount ,[Type] ,
+								MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos)
+					select cast(0 as bit) [Add to Basic],'AMC Billed Till' Particular,convert(decimal(15,2),null) [Debit Amount]
+					,convert(decimal(15,2),BasicAmount -ISNULL(@NetAmount,0)) [Credit Amount]
+					,am.AccountNo [Account Name]
+					,BasicAmount -ISNULL(@NetAmount,0) [Amount],2 [Type]
+					,cast(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo ,CAST(null as varchar(5000)) ItemNos
+						from 
+						(select SUM(BasicAmount) BasicAmount from  @ItemTable) I
+						outer apply (select  top 1 AccountNo from masterdata.mAccountMaster where AccountTypeNo = 65) am
+						 
+						
+					union all
+				 select cast(IncludeInBasic as bit) [Add to Basic] ,Particular 
+					,case(IncludeInBasic) when 1 then null else [Credit Amount] * (1-IncludeInBasic) end [Debit Amount] 
+					,case(IncludeInBasic) when 1 then null else [Debit Amount] * (1-IncludeInBasic) end [Credit Amount] ,[Account Name] 
+					,[Amount] ,case [Type] when 1 then 2 else 1 end [Type]
+					,MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos
+				from @MiscFinancePosting
+				 union All
+				 Select  cast(0 as bit) [Add to Basic],'Bill Amt Passed' Particular
+				 ,convert(decimal(15,2),Sum(I.BasicAmount)) [Debit Amount]
+					,convert(decimal(15,2),null) [Credit Amount]
+					,lm.ReceivableAccountNo [Account Name]
+					,Sum(I.BasicAmount) [Amount],1 [Type]
+					,cast(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo ,CAST(null as varchar(5000)) ItemNos
+				 From @ItemTable  I				 
+				 Cross Apply (
+							 Select RefDocumentNo EROSAMCNo
+							 From @RefDocDetail
+							 Where SourceDocumentNo=18
+							 GRoup By RefDocumentNo
+							)RD 
+				 inner join Customize.ErosAMCMain lm on lm.EROSAMCNo = RD.EROSAMCNo
+				 Group By lm.ReceivableAccountNo
+						 
+							 
+			end
+			
+			else if exists (select 1 from Sales.SalesOrderAmendmentMain sm , @ItemTable it , Customize.DivisionwiseSetting ds
+							 where ds.CompanyNo = sm.CompanyNo and ds.DivisionNo= sm.DivisionNo and ds.IsShowLiftInEnquiry = 1
+							 and  it.Id = sm.SalesOrderAmendmentNo ) -- for Spare Case 07 aug 2018
+			
+			begin
+			   if exists(select 1 from @PaymentTerms where Remarks like '%Final%Stage%')
+					and exists (select 1 from @PaymentTerms a, Customize.EROSJobCompletionMain b ,Sales.SalesOrderAmendmentMain c
+								where a.SalesOrderNo = c.SalesOrderNo and c.SalesOrderAmendmentNo = b.SalesOrderAmendmentNo 
+								and b.AuthorizedBy is not null)
+			   begin
+				
+				insert into @Return([Add to Basic] ,Particular ,[Debit Amount] ,
+						[Credit Amount] ,[Account Name] ,Amount ,[Type] ,
+						MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos)
+					  select 0, 'COGS' , SUM(vd.BaseDrAmount+ BaseCrAmount), null, IR.AccountNo ,SUM(vd.BaseDrAmount+ BaseCrAmount),
+								1 ,null, null, null
+					  from Sales.DispatchChallan dc
+					  inner join Finance.accVoucherDetail vd on vd.VoucherNo = dc.VoucherNo 
+					  Outer apply (select max(IR.AccountNo) AccountNo--,AM.AccountName
+											from Finance.ARDItemRule IR
+											inner join Sales.DispatchChallanItemDetail id on id.ItemNo = IR.ItemNo and id.DispatchChallanNo = dc.DispatchChallanNo 
+											inner join Finance.ARDIntermediatePostingAccountRule IPAR on IPAR.AccountNo=IR.AccountNo
+																									and IPAR.IntermediateAccountTypeNo=1
+											where IR.AccountTypeNo=54 ) IR
+					  where 
+						dc.CompanyNo = @CompanyNo and dc.DocumentDate <= @VoucherDate and 
+					   exists (select 1 from Sales.DispatchChallanItemDetail did ,Sales.SalesOrderAmendmentMain sam ,@PaymentTerms st
+										where did.SalesOrderAmendmentNo = sam.SalesOrderAmendmentNo and st.SalesOrderNo = sam.SalesOrderNo
+										and did.DispatchChallanNo = dc.DispatchChallanNo )
+						and  vd.AccountNo in(select AM.AccountNo from Finance.ARDIntermediatePostingAccountRule IPAR 
+												inner join masterdata.mAccountMaster AM on AM.AccountNo=IPAR.AccountNo
+												where IntermediateAccountTypeNo = 31 and AM.AccountTypeNo=54) -- COGS Dispatch Suspense A/c
+						Group By IR.AccountNo
+				union
+				  select 0, 'COGS Dispatch Suspense A/c' , null, SUM(vd.BaseDrAmount+ BaseCrAmount), vd.AccountNo ,SUM(vd.BaseDrAmount+ BaseCrAmount),
+							2 ,null, null, null
+				  from Sales.DispatchChallan dc
+				  inner join Finance.accVoucherDetail vd on vd.VoucherNo = dc.VoucherNo 
+				  where 
+					dc.CompanyNo = @CompanyNo and dc.DocumentDate <= @VoucherDate and 
+				   exists (select 1 from Sales.DispatchChallanItemDetail did ,Sales.SalesOrderAmendmentMain sam ,@PaymentTerms  st
+									where did.SalesOrderAmendmentNo = sam.SalesOrderAmendmentNo and st.SalesOrderNo = sam.SalesOrderNo
+									and did.DispatchChallanNo = dc.DispatchChallanNo )
+					and  vd.AccountNo in(select AM.AccountNo from Finance.ARDIntermediatePostingAccountRule IPAR 
+											inner join masterdata.mAccountMaster AM on AM.AccountNo=IPAR.AccountNo
+											where IntermediateAccountTypeNo = 31 and AM.AccountTypeNo=54) -- COGS Dispatch Suspense A/c
+					Group By vd.AccountNo
+				union
+				 select 0, 'Bill Till Final Stage (Revenue)' ,null, SUM(BaseCrAmount), IR.AccountNo ,SUM(BaseCrAmount),
+							2,null, null, null
+				 from Sales.CommercialInvoiceMain cim
+					inner join Finance.accVoucherDetail vd on vd.VoucherNo = cim.VoucherNo 
+					outer apply (select AccountNo from masterdata.mAccountMaster where AccountTypeNo = 62) IR
+					where vd.AccountNo  in(select AccountNo from masterdata.mAccountMaster where AccountTypeNo = 63)
+					and cim.DocumentDate <= @VoucherDate and cim.CompanyNo= @CompanyNo
+					and cim.DivisionNo in (select DivisionNo from Sales.SalesOrderAmendmentMain a, @PaymentTerms b
+											where a.SalesOrderNo = b.SalesOrderNo )
+					And CIm.CommercialInvoiceNo in (Select ECIM.CommercialInvoiceNo from Sales.commercialInvoiceMain ECIM 
+													Inner Join Sales.CommercialInvoiceItemDetails ECID on ECID.commercialInvoiceNo=ECIM.CommercialInvoiceNo
+													Inner Join Sales.SalesorderAmendmentMain SA on SA.SalesOrderAmendmentNo=ECID.SalesOrderAmendmentNo
+													Inner Join @PaymentTerms PT on PT.SalesorderNo=SA.SalesorderNo
+													Group by ECIM.CommercialInvoiceNo
+													)
+					group by IR.AccountNo
+				union
+				 select 0, 'Bill Till Final Stage (Liability)' ,SUM(BaseCrAmount),Null, VD.AccountNo ,SUM(BaseCrAmount),
+							1,null, null, null
+				 from Sales.CommercialInvoiceMain cim
+					inner join Finance.accVoucherDetail vd on vd.VoucherNo = cim.VoucherNo 					
+					where vd.AccountNo  in(select AccountNo from masterdata.mAccountMaster where AccountTypeNo = 63)
+					and cim.DocumentDate <= @VoucherDate and cim.CompanyNo= @CompanyNo
+					and cim.DivisionNo in (select DivisionNo from Sales.SalesOrderAmendmentMain a, @PaymentTerms b
+											where a.SalesOrderNo = b.SalesOrderNo )
+					And CIm.CommercialInvoiceNo in (Select ECIM.CommercialInvoiceNo from Sales.commercialInvoiceMain ECIM 
+													Inner Join Sales.CommercialInvoiceItemDetails ECID on ECID.commercialInvoiceNo=ECIM.CommercialInvoiceNo
+													Inner Join Sales.SalesorderAmendmentMain SA on SA.SalesOrderAmendmentNo=ECID.SalesOrderAmendmentNo
+													Inner Join @PaymentTerms PT on PT.SalesorderNo=SA.SalesorderNo
+													Group by ECIM.CommercialInvoiceNo
+													)											
+					Group BY VD.AccountNo
+				Union
+				select cast(0 as bit) [Add to Basic] ,'Bill Till Final Stage (Revenue)' Particular 
+					,CAST(null as money) [Debit Amount]
+					,case when FTRS.RoundingNo = 1 then ceiling(sum(I.BasicAmount))
+							when FTRS.RoundingNo = 2 then floor(sum(I.BasicAmount)) 
+							when FTRS.RoundingNo = 3 then round(sum(I.BasicAmount),0) 
+						else sum(I.BasicAmount)   end
+						+case(ROW_NUMBER() over(order by IR.AccountNo)) when 1 then isnull((select isnull(sum([Debit Amount]),0)-isnull(sum([Credit Amount]),0) from @MiscFinancePosting where IncludeInBasic=1),0) else 0 end [Credit Amount] 
+					,IR.AccountNo [Account Name] 
+					,case when FTRS.RoundingNo = 1 then ceiling(sum(I.BasicAmount))  
+							when FTRS.RoundingNo = 2 then floor(sum(I.BasicAmount))  
+							when FTRS.RoundingNo = 3 then round(sum(I.BasicAmount),0) 
+						else sum(I.BasicAmount)   end Amount ,2 [Type] 
+					,CAST(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo,CAST(null as varchar(5000))ItemNos
+				from @ItemTable I
+				inner join Sales.SalesOrderAmendmentMain sam on sam.SalesOrderAmendmentNo = I.Id 
+				inner join Sales.SalesOrderAmendmentMain som on som.SalesOrderNo = sam.SalesOrderNo 
+				inner join Customize.EROSJobCompletionMain jcm on jcm.SalesOrderAmendmentNo = som.SalesOrderAmendmentNo and jcm.AuthorizedBy is not null
+				outer apply (select top 1 FTRS.*
+							from masterdata.FormTaxRoundingSetting FTRS 
+							where FTRS.FormNo=@FormNo
+								and TaxGroupNo is null
+								and FTRS.EffectiveDate<=@VoucherDate
+							order by FTRS.EffectiveDate desc)FTRS
+				outer apply (  select MAX(AccountNo) AccountNo from masterdata.mAccountMaster where AccountTypeNo = 62 
+									
+							 ) IR
+				group by IR.AccountNo,FTRS.RoundingNo
+				union
+				
+				select cast(IncludeInBasic as bit) [Add to Basic] ,Particular 
+						,case(IncludeInBasic) when 1 then null else [Credit Amount] * (1-IncludeInBasic) end [Debit Amount] 
+						,case(IncludeInBasic) when 1 then null else [Debit Amount] * (1-IncludeInBasic) end [Credit Amount] ,[Account Name] 
+						,[Amount] ,case [Type] when 1 then 2 else 1 end [Type]
+						,MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos
+					from @MiscFinancePosting
+				Union	
+				select top 1 
+						 cast(0 as bit) [Add to Basic],'Bill Amt Passed' Particular,convert(decimal(15,2),@NetAmount) [Debit Amount]
+						,convert(decimal(15,2),null) [Credit Amount]
+						,am.AccountNo [Account Name]
+						,@NetAmount [Amount],1 [Type]
+						,cast(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo ,CAST(null as varchar(5000)) ItemNos
+					from (select @VendorLocationNo VendorLocationNo) VL
+						left join 
+						(select vlr.VendorLocationNo,vlr.AccountNo
+						from Finance.ARDVendorLocationRule vlr 
+						where vlr.AccountTypeNo=@VendorAccountTypeNo) am on am.VendorLocationNo=VL.VendorLocationNo		
+				
+			   end 
+			   -- ENd of %Final%Stage%
+			   else
+			   begin		
+				 	insert into @Return([Add to Basic] ,Particular ,[Debit Amount] ,
+								[Credit Amount] ,[Account Name] ,Amount ,[Type] ,
+								MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos)
+								
+					select cast(0 as bit) [Add to Basic],'Bill Amt Passed' Particular,convert(decimal(15,2),@NetAmount) [Debit Amount]
+						,convert(decimal(15,2),null) [Credit Amount]
+						,am.AccountNo [Account Name]
+						,@NetAmount [Amount],1 [Type]
+						,cast(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo ,CAST(null as varchar(5000)) ItemNos
+					from @ItemTable I
+					outer apply (select AAD.Id VendorLocationNo,AAD.AccountNo--,AM.AccountName
+								from Sales.SalesOrderAccountAssignmentDetail AAD
+								--inner join masterdata.mAccountMaster AM on AM.AccountNo=AAD.AccountNo
+								where AAD.Flag='CRA'
+								and AAD.SalesOrderNo=(select SalesOrderNo from Sales.SalesOrderAmendmentMain where SalesOrderAmendmentNo=I.Id)
+								and AAD.Id=@VendorLocationNo
+								 ) am
+					group by am.AccountNo								
+				 --	select top 1 
+					--	 cast(0 as bit) [Add to Basic],'Bill Amt Passed' Particular,convert(decimal(15,2),@NetAmount) [Debit Amount]
+					--	,convert(decimal(15,2),null) [Credit Amount]
+					--	,am.AccountNo [Account Name]
+					--	,@NetAmount [Amount],1 [Type]
+					--	,cast(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo ,CAST(null as varchar(5000)) ItemNos
+					--from (select @VendorLocationNo VendorLocationNo) VL
+					--	left join 
+					--	(select vlr.VendorLocationNo,vlr.AccountNo
+					--	from Finance.ARDVendorLocationRule vlr 
+					--	where vlr.AccountTypeNo=@VendorAccountTypeNo) am on am.VendorLocationNo=VL.VendorLocationNo
+					union All
+					select cast(IncludeInBasic as bit) [Add to Basic] ,Particular 
+						,case(IncludeInBasic) when 1 then null else [Credit Amount] * (1-IncludeInBasic) end [Debit Amount] 
+						,case(IncludeInBasic) when 1 then null else [Debit Amount] * (1-IncludeInBasic) end [Credit Amount] ,[Account Name] 
+						,[Amount] ,case [Type] when 1 then 2 else 1 end [Type]
+						,MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos
+					from @MiscFinancePosting	
+					 
+					insert into @Return([Add to Basic] ,Particular ,[Debit Amount] ,
+								[Credit Amount] ,[Account Name] ,Amount ,[Type] ,
+								MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos)
+					select cast(0 as bit) [Add to Basic] ,'Bill Till Final Stage (Revenue)' Particular 
+					,CAST(null as money) [Debit Amount]
+					,case when FTRS.RoundingNo = 1 then ceiling(sum(I.BasicAmount))
+							when FTRS.RoundingNo = 2 then floor(sum(I.BasicAmount)) 
+							when FTRS.RoundingNo = 3 then round(sum(I.BasicAmount),0) 
+						else sum(I.BasicAmount)   end
+						+case(ROW_NUMBER() over(order by IR.AccountNo)) when 1 then isnull((select isnull(sum([Debit Amount]),0)-isnull(sum([Credit Amount]),0) from @MiscFinancePosting where IncludeInBasic=1),0) else 0 end [Credit Amount] 
+					,IR.AccountNo [Account Name] 
+					,case when FTRS.RoundingNo = 1 then ceiling(sum(I.BasicAmount))  
+							when FTRS.RoundingNo = 2 then floor(sum(I.BasicAmount))  
+							when FTRS.RoundingNo = 3 then round(sum(I.BasicAmount),0) 
+						else sum(I.BasicAmount)   end Amount ,2 [Type] 
+					,CAST(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo,CAST(null as varchar(5000))ItemNos
+				from @ItemTable I
+				inner join Sales.SalesOrderAmendmentMain sam on sam.SalesOrderAmendmentNo = I.Id 
+				inner join Sales.SalesOrderAmendmentMain som on som.SalesOrderNo = sam.SalesOrderNo 
+				inner join Customize.EROSJobCompletionMain jcm on jcm.SalesOrderAmendmentNo = som.SalesOrderAmendmentNo and jcm.AuthorizedBy is not null
+				outer apply (select top 1 FTRS.*
+							from masterdata.FormTaxRoundingSetting FTRS 
+							where FTRS.FormNo=@FormNo
+								and TaxGroupNo is null
+								and FTRS.EffectiveDate<=@VoucherDate
+							order by FTRS.EffectiveDate desc)FTRS
+				outer apply (  select MAX(AccountNo) AccountNo from masterdata.mAccountMaster where AccountTypeNo = 62 
+									
+							 ) IR
+				group by IR.AccountNo,FTRS.RoundingNo
+				
+				-- Bill Till Final Stage Revenue
+				insert into @Return([Add to Basic] ,Particular ,[Debit Amount] ,
+								[Credit Amount] ,[Account Name] ,Amount ,[Type] ,
+								MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos)
+					select cast(0 as bit) [Add to Basic] ,'Bill Till Final Stage (Liability)' Particular 
+					,CAST(null as money) [Debit Amount]
+					,case when FTRS.RoundingNo = 1 then ceiling(sum(I.BasicAmount))  
+							when FTRS.RoundingNo = 2 then floor(sum(I.BasicAmount))  
+							when FTRS.RoundingNo = 3 then round(sum(I.BasicAmount),0)  
+						else sum(I.BasicAmount)  end
+						+case(ROW_NUMBER() over(order by IR.AccountNo)) when 1 then isnull((select isnull(sum([Debit Amount]),0)-isnull(sum([Credit Amount]),0) from @MiscFinancePosting where IncludeInBasic=1),0) else 0 end [Credit Amount] 
+					,IR.AccountNo [Account Name] 
+					,case when FTRS.RoundingNo = 1 then ceiling(sum(I.BasicAmount))  
+							when FTRS.RoundingNo = 2 then floor(sum(I.BasicAmount)) 
+							when FTRS.RoundingNo = 3 then round(sum(I.BasicAmount),0) 
+						else sum(I.BasicAmount)  end Amount ,2 [Type] 
+					,CAST(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo,CAST(null as varchar(5000))ItemNos
+				from @ItemTable I
+				inner join Sales.SalesOrderAmendmentMain sam on sam.SalesOrderAmendmentNo = I.Id 
+				outer apply (select top 1 FTRS.*
+							from masterdata.FormTaxRoundingSetting FTRS 
+							where FTRS.FormNo=@FormNo
+								and TaxGroupNo is null
+								and FTRS.EffectiveDate<=@VoucherDate
+							order by FTRS.EffectiveDate desc)FTRS
+				outer apply (  select MAX(AccountNo) AccountNo from masterdata.mAccountMaster where AccountTypeNo = 63 
+									
+							 ) IR
+				where not exists (select 1 from  Sales.SalesOrderAmendmentMain som 
+									inner join Customize.EROSJobCompletionMain jcm on jcm.SalesOrderAmendmentNo = som.SalesOrderAmendmentNo 
+									where som.SalesOrderNo = sam.SalesOrderNo and jcm.AuthorizedBy is not null)
+				
+				group by IR.AccountNo,FTRS.RoundingNo
+			 end 
+			end
+			-- End of  for Spare Case 07 aug 2018
+			else if ((exists (select 1 from @DisptchChallanDetail) or exists (select 1 from @ItemTable where Id is not null ) ) 
+					 and @BillTillMaterialStage =1	) -- Material Till Stage Posting -- 1st Voucher
+			begin
+			
+			 update tt set Id = em.SalesOrderAmendmentNo 
+			   from @ItemTable tt,@DisptchChallanDetail  dd, Sales.DispatchChallan dc,Customize .MDNErosMain em
+			   where dc.DispatchChallanNo = dd.DispatchChallanNo and dc.DispatchSourceNo = 17 and em.MDNNo = dc.RefDocumentNo 
+			   
+			   insert into @Return([Add to Basic] ,Particular ,[Debit Amount] ,
+								[Credit Amount] ,[Account Name] ,Amount ,[Type] ,
+								MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos)
+				select cast(0 as bit) [Add to Basic],'COGS Dispatch Suspense A/C' Particular,convert(decimal(15,2),null) [Debit Amount]
+					,convert(decimal(15,2),sum(vd.BaseDrAmount)) [Credit Amount]
+					,vd.AccountNo [Account Name]
+					,sum(vd.BaseDrAmount) [Amount],2 [Type]
+					,cast(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo ,CAST(null as varchar(5000)) ItemNos
+					from @DisptchChallanDetail dd
+					inner join Sales.DispatchChallan dc on dc.DispatchChallanNo = dd.DispatchChallanNo 
+					inner join Finance.accVoucherDetail vd on vd.VoucherNo  = dc.VoucherNo 
+					where vd.accountno  in  (select IPAR.AccountNo
+									from Finance.ARDIntermediatePostingAccountRule IPAR 
+									where  IPAR.IntermediateAccountTypeNo in(30,31)
+									 and IPAR.AccountNo = vd.AccountNo )
+					 group by vd.AccountNo				 
+					
+					insert into @Return([Add to Basic] ,Particular ,[Debit Amount] ,
+								[Credit Amount] ,[Account Name] ,Amount ,[Type] ,
+								MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos)
+					select cast(0 as bit) [Add to Basic],'COGS A/C' Particular,convert(decimal(15,2),sum(vd.BaseDrAmount)) [Debit Amount]
+					,convert(decimal(15,2),null) [Credit Amount]
+					,IR.AccountNo [Account Name]
+					,sum(vd.BaseDrAmount) [Amount],1 [Type]
+					,cast(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo ,CAST(null as varchar(5000)) ItemNos
+					from @DisptchChallanDetail dd
+					inner join Sales.DispatchChallan dc on dc.DispatchChallanNo = dd.DispatchChallanNo 
+					inner join Finance.accVoucherDetail vd on vd.VoucherNo  = dc.VoucherNo 
+					outer apply (select distinct (IR.AccountNo) AccountNo
+							from Finance.ARDItemRule IR
+							inner join Sales.DispatchChallanItemDetail I on I.ItemNo = IR.ItemNo 
+							inner join Finance.ARDIntermediatePostingAccountRule IPAR on IPAR.AccountNo=IR.AccountNo
+																					and IPAR.IntermediateAccountTypeNo=1
+							where IR.AccountTypeNo=54 and IR.ItemNo=I.ItemNo
+							and I.DispatchChallanNo = dd.DispatchChallanNo 
+							) IR
+					where vd.accountno in(select IPAR.AccountNo
+									from Finance.ARDIntermediatePostingAccountRule IPAR 
+									where  IPAR.IntermediateAccountTypeNo in(30,31)
+									 and IPAR.AccountNo = vd.AccountNo )
+					
+					group by IR.AccountNo	
+					
+				union All
+				select cast(0 as bit) [Add to Basic] ,'Bill Till Material Stage A/c' Particular 
+					,CAST(null as money) [Debit Amount]
+					,case when FTRS.RoundingNo = 1 then ceiling(sum(I.BasicAmount))
+							when FTRS.RoundingNo = 2 then floor(sum(I.BasicAmount))
+							when FTRS.RoundingNo = 3 then round(sum(I.BasicAmount),0)
+						else sum(I.BasicAmount) end
+						+case(ROW_NUMBER() over(order by IR.AccountNo)) when 1 then isnull((select isnull(sum([Debit Amount]),0)-isnull(sum([Credit Amount]),0) from @MiscFinancePosting where IncludeInBasic=1),0) else 0 end [Credit Amount] 
+					,IR.AccountNo [Account Name] 
+					,case when FTRS.RoundingNo = 1 then ceiling(sum(I.BasicAmount))
+							when FTRS.RoundingNo = 2 then floor(sum(I.BasicAmount))
+							when FTRS.RoundingNo = 3 then round(sum(I.BasicAmount),0)
+						else sum(I.BasicAmount) end Amount ,2 [Type] 
+					,CAST(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo,CAST(null as varchar(5000))ItemNos
+				from @ItemTable I
+				outer apply (select top 1 FTRS.*
+							from masterdata.FormTaxRoundingSetting FTRS 
+							where FTRS.FormNo=@FormNo
+								and TaxGroupNo is null
+								and FTRS.EffectiveDate<=@VoucherDate
+							order by FTRS.EffectiveDate desc)FTRS
+				outer apply (select top 1 am.AccountNo from masterdata.maccountmaster am 
+							where am.AccountTypeNo=60 
+							 ) IR
+				 group by IR.AccountNo,FTRS.RoundingNo
+				union all
+				 select cast(IncludeInBasic as bit) [Add to Basic] ,Particular 
+					,case(IncludeInBasic) when 1 then null else [Credit Amount] * (1-IncludeInBasic) end [Debit Amount] 
+					,case(IncludeInBasic) when 1 then null else [Debit Amount] * (1-IncludeInBasic) end [Credit Amount] ,[Account Name] 
+					,[Amount] ,case [Type] when 1 then 2 else 1 end [Type]
+					,MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos
+				from @MiscFinancePosting
+				Union All
+				select cast(0 as bit) [Add to Basic],'Bill Amt Passed' Particular,convert(decimal(15,2),@NetAmount) [Debit Amount]
+					,convert(decimal(15,2),null) [Credit Amount]
+					,am.AccountNo [Account Name]
+					,@NetAmount [Amount],1 [Type]
+					,cast(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo ,CAST(null as varchar(5000)) ItemNos
+				from @ItemTable I
+				outer apply (select AAD.Id VendorLocationNo,AAD.AccountNo--,AM.AccountName
+							from Sales.SalesOrderAccountAssignmentDetail AAD
+							--inner join masterdata.mAccountMaster AM on AM.AccountNo=AAD.AccountNo
+							where AAD.Flag='CRA'
+							and AAD.SalesOrderNo=(select SalesOrderNo from Sales.SalesOrderAmendmentMain where SalesOrderAmendmentNo=I.Id)
+							and AAD.Id=@VendorLocationNo
+							 ) am
+				group by am.AccountNo
+			--------------------------------------------------------------------------
+				 
+				
+				
+			end
+			else if ((exists (select 1 from @DisptchChallanDetail) or exists (select 1 from @ItemTable where Id is not null ) ) 
+					 and @BillTillMaterialStage =2	) -- Material Stage Voucher -- 2nd Posting
+			begin
+				
+				update tt set Id = em.SalesOrderAmendmentNo 
+			   from @ItemTable tt,@DisptchChallanDetail  dd, Sales.DispatchChallan dc,Customize .MDNErosMain em
+			   where dc.DispatchChallanNo = dd.DispatchChallanNo and dc.DispatchSourceNo = 17 and em.MDNNo = dc.RefDocumentNo 
+			   
+			   select @BillStateAmount = sum(BaseCrAmount + BaseDrAmount) from sales.CommercialInvoiceMain cm
+				inner join finance.accVoucherDetail vd on vd.voucherno = cm.voucherno
+				
+				where  exists (select 1 from @ItemTable a, sales.SalesOrderAmendmentMain sm 
+								, sales.CommercialInvoiceItemDetails cd ,Sales.SalesOrderAmendmentMain som where 
+									cd.CommercialInvoiceNo = cm.CommercialInvoiceNo and a.Id = sm.SalesOrderAmendmentNo
+									and cd.SalesOrderAmendmentno  = som.SalesOrderAmendmentno and som.SalesOrderNo = sm.SalesOrderNo 
+									 )
+					and BaseCrAmount>0 and  cm.DocumentDate < = @VoucherDate
+					and vd.AccountNo in(select accountno from masterdata.maccountmaster am where am.AccountNo= vd.AccountNo
+															 and am.AccountTypeNo =60)
+				
+			  insert into @Return([Add to Basic] ,Particular ,[Debit Amount] ,
+								[Credit Amount] ,[Account Name] ,Amount ,[Type] ,
+								MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos)
+				select cast(0 as bit) [Add to Basic],'COGS Dispatch Suspense A/C' Particular,convert(decimal(15,2),null) [Debit Amount]
+					,convert(decimal(15,2),sum(vd.BaseDrAmount)) [Credit Amount]
+					,vd.AccountNo [Account Name]
+					,sum(vd.BaseDrAmount) [Amount],2 [Type]
+					,cast(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo ,CAST(null as varchar(5000)) ItemNos
+					from @DisptchChallanDetail dd
+					inner join Sales.DispatchChallan dc on dc.DispatchChallanNo = dd.DispatchChallanNo 
+					inner join Finance.accVoucherDetail vd on vd.VoucherNo  = dc.VoucherNo 
+					where vd.accountno in (select (IPAR.AccountNo) 
+									from Finance.ARDIntermediatePostingAccountRule IPAR 
+									where  IPAR.IntermediateAccountTypeNo in(30,31)
+									 and IPAR.AccountNo = vd.AccountNo )
+					 group by vd.AccountNo				 
+					
+					insert into @Return([Add to Basic] ,Particular ,[Debit Amount] ,
+								[Credit Amount] ,[Account Name] ,Amount ,[Type] ,
+								MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos)
+					select cast(0 as bit) [Add to Basic],'COGS A/C' Particular,convert(decimal(15,2),sum(vd.BaseDrAmount)) [Debit Amount]
+					,convert(decimal(15,2),null) [Credit Amount]
+					,IR.AccountNo [Account Name]
+					,sum(vd.BaseDrAmount) [Amount],1 [Type]
+					,cast(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo ,CAST(null as varchar(5000)) ItemNos
+					from @DisptchChallanDetail dd
+					inner join Sales.DispatchChallan dc on dc.DispatchChallanNo = dd.DispatchChallanNo 
+					inner join Finance.accVoucherDetail vd on vd.VoucherNo  = dc.VoucherNo 
+					outer apply (select distinct (IR.AccountNo) AccountNo
+							from Finance.ARDItemRule IR
+							inner join Sales.DispatchChallanItemDetail I on I.ItemNo = IR.ItemNo 
+							inner join Finance.ARDIntermediatePostingAccountRule IPAR on IPAR.AccountNo=IR.AccountNo
+																					and IPAR.IntermediateAccountTypeNo=1
+							where IR.AccountTypeNo=54 and IR.ItemNo=I.ItemNo
+							and I.DispatchChallanNo = dd.DispatchChallanNo 
+							) IR
+					where vd.accountno in (select (IPAR.AccountNo) 
+									from Finance.ARDIntermediatePostingAccountRule IPAR 
+									where  IPAR.IntermediateAccountTypeNo in(30,31)
+									 and IPAR.AccountNo = vd.AccountNo )
+					
+					group by IR.AccountNo	
+				
+				insert into @Return([Add to Basic] ,Particular ,[Debit Amount] ,
+								[Credit Amount] ,[Account Name] ,Amount ,[Type] ,
+								MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos)
+				select cast(0 as bit) [Add to Basic] ,'Bill Till Material Stage Revenue A/c' Particular 
+					,CAST(null as money) [Debit Amount]
+					,case when FTRS.RoundingNo = 1 then ceiling(sum(I.BasicAmount)) 
+							when FTRS.RoundingNo = 2 then floor(sum(I.BasicAmount)) 
+							when FTRS.RoundingNo = 3 then round(sum(I.BasicAmount),0) 
+						else sum(I.BasicAmount) end
+						+case(ROW_NUMBER() over(order by IR.AccountNo)) when 1 then isnull((select isnull(sum([Debit Amount]),0)-isnull(sum([Credit Amount]),0) from @MiscFinancePosting where IncludeInBasic=1),0) else 0 end [Credit Amount] 
+					,IR.AccountNo [Account Name] 
+					,case when FTRS.RoundingNo = 1 then ceiling(sum(I.BasicAmount)) 
+							when FTRS.RoundingNo = 2 then floor(sum(I.BasicAmount)) 
+							when FTRS.RoundingNo = 3 then round(sum(I.BasicAmount),0) 
+						else sum(I.BasicAmount) + isnull(@BillStateAmount,0) end Amount ,2 [Type] 
+					,CAST(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo,CAST(null as varchar(5000))ItemNos
+				from @ItemTable I
+				outer apply (select top 1 FTRS.*
+							from masterdata.FormTaxRoundingSetting FTRS 
+							where FTRS.FormNo=@FormNo
+								and TaxGroupNo is null
+								and FTRS.EffectiveDate<=@VoucherDate
+							order by FTRS.EffectiveDate desc)FTRS
+				outer apply (select top 1 am.AccountNo from masterdata.maccountmaster am 
+							where am.AccountTypeNo=61
+							 ) IR
+				 group by IR.AccountNo,FTRS.RoundingNo
+				
+				
+				
+				insert into @Return([Add to Basic] ,Particular ,[Debit Amount] ,
+								[Credit Amount] ,[Account Name] ,Amount ,[Type] ,
+								MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos)
+				 select cast(IncludeInBasic as bit) [Add to Basic] ,Particular 
+					,case(IncludeInBasic) when 1 then null else [Credit Amount] * (1-IncludeInBasic) end [Debit Amount] 
+					,case(IncludeInBasic) when 1 then null else [Debit Amount] * (1-IncludeInBasic) end [Credit Amount] ,[Account Name] 
+					,[Amount] ,case [Type] when 1 then 2 else 1 end [Type]
+					,MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos
+				from @MiscFinancePosting
+				
+				insert into @Return([Add to Basic] ,Particular ,[Debit Amount] ,
+								[Credit Amount] ,[Account Name] ,Amount ,[Type] ,
+								MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos)
+				select cast(0 as bit) [Add to Basic],'Bill Amt Passed' Particular,convert(decimal(15,2),@NetAmount) [Debit Amount]
+					,convert(decimal(15,2),null) [Credit Amount]
+					,am.AccountNo [Account Name]
+					,@NetAmount [Amount],1 [Type]
+					,cast(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo ,CAST(null as varchar(5000)) ItemNos
+				from @ItemTable I
+				outer apply (select AAD.Id VendorLocationNo,AAD.AccountNo--,AM.AccountName
+							from Sales.SalesOrderAccountAssignmentDetail AAD
+							--inner join masterdata.mAccountMaster AM on AM.AccountNo=AAD.AccountNo
+							where AAD.Flag='CRA'
+							and AAD.SalesOrderNo=(select SalesOrderNo from Sales.SalesOrderAmendmentMain where SalesOrderAmendmentNo=I.Id)
+							and AAD.Id=@VendorLocationNo
+							 ) am
+				group by am.AccountNo
+				
+				 insert into @Return([Add to Basic] ,Particular ,[Debit Amount] ,
+								[Credit Amount] ,[Account Name] ,Amount ,[Type] ,
+								MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos)
+				 select cast(0 as bit) [Add to Basic] ,'Bill Till Material Stage A/c' Particular 
+					,CAST(@BillStateAmount as money) [Debit Amount]
+					,cast(null as money)  [Credit Amount] 
+					,IR.AccountNo [Account Name] 
+					,@BillStateAmount Amount ,1 [Type] 
+					,CAST(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo,CAST(null as varchar(5000))ItemNos
+				from (select 1 cnt) I
+			 	outer apply (select top 1 am.AccountNo from masterdata.maccountmaster am 
+							where am.AccountTypeNo=60  ) IR
+				where @BillStateAmount>0
+				group by IR.AccountNo 
+				
+				 insert into @Return([Add to Basic] ,Particular ,[Debit Amount] ,
+								[Credit Amount] ,[Account Name] ,Amount ,[Type] ,
+								MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos)
+				 select cast(0 as bit) [Add to Basic] ,'Bill Till Material Stage Revenue A/c' Particular 
+					,CAST(null as money) [Debit Amount]
+					,cast(@BillStateAmount as money)  [Credit Amount] 
+					,IR.AccountNo [Account Name] 
+					,@BillStateAmount Amount ,2 [Type] 
+					,CAST(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo,CAST(null as varchar(5000))ItemNos
+				from (select 1 cnt) I
+			 	outer apply (select top 1 am.AccountNo from masterdata.maccountmaster am 
+							where am.AccountTypeNo=61  ) IR
+				where @BillStateAmount>0
+				group by IR.AccountNo 
+			   
+			end	
+			
+			else if exists(select 1 from @MDNDetail where SourceDocumentNo =17)  -- Direct MDN
+			begin
+			
+			 update tt set Id = em.SalesOrderAmendmentNo 
+			   from @ItemTable tt, Customize .MDNErosMain em , @MDNDetail md
+			   where  md.MDNNo = em.MDNNo 
+			   
+			   insert into @Return([Add to Basic] ,Particular ,[Debit Amount] ,
+								[Credit Amount] ,[Account Name] ,Amount ,[Type] ,
+								MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos)
+				 
+				select cast(0 as bit) [Add to Basic] ,'Bill Till Final Stage Liability A/c' Particular 
+					,CAST(null as money) [Debit Amount]
+					,case when FTRS.RoundingNo = 1 then ceiling(sum(I.BasicAmount))
+							when FTRS.RoundingNo = 2 then floor(sum(I.BasicAmount))
+							when FTRS.RoundingNo = 3 then round(sum(I.BasicAmount),0)
+						else sum(I.BasicAmount) end
+						+case(ROW_NUMBER() over(order by IR.AccountNo)) when 1 then isnull((select isnull(sum([Debit Amount]),0)-isnull(sum([Credit Amount]),0) from @MiscFinancePosting where IncludeInBasic=1),0) else 0 end [Credit Amount] 
+					,IR.AccountNo [Account Name] 
+					,case when FTRS.RoundingNo = 1 then ceiling(sum(I.BasicAmount))
+							when FTRS.RoundingNo = 2 then floor(sum(I.BasicAmount))
+							when FTRS.RoundingNo = 3 then round(sum(I.BasicAmount),0)
+						else sum(I.BasicAmount) end Amount ,2 [Type] 
+					,CAST(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo,CAST(null as varchar(5000))ItemNos
+				from @ItemTable I
+				outer apply (select top 1 FTRS.*
+							from masterdata.FormTaxRoundingSetting FTRS 
+							where FTRS.FormNo=@FormNo
+								and TaxGroupNo is null
+								and FTRS.EffectiveDate<=@VoucherDate
+							order by FTRS.EffectiveDate desc)FTRS
+				outer apply (select top 1 am.AccountNo from masterdata.maccountmaster am 
+							where am.AccountTypeNo=63
+							 ) IR
+				 group by IR.AccountNo,FTRS.RoundingNo
+				union all
+				 select cast(IncludeInBasic as bit) [Add to Basic] ,Particular 
+					,case(IncludeInBasic) when 1 then null else [Credit Amount] * (1-IncludeInBasic) end [Debit Amount] 
+					,case(IncludeInBasic) when 1 then null else [Debit Amount] * (1-IncludeInBasic) end [Credit Amount] ,[Account Name] 
+					,[Amount] ,case [Type] when 1 then 2 else 1 end [Type]
+					,MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos
+				from @MiscFinancePosting
+				Union All
+				select cast(0 as bit) [Add to Basic],'Bill Amt Passed' Particular,convert(decimal(15,2),@NetAmount) [Debit Amount]
+					,convert(decimal(15,2),null) [Credit Amount]
+					,am.AccountNo [Account Name]
+					,@NetAmount [Amount],1 [Type]
+					,cast(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo ,CAST(null as varchar(5000)) ItemNos
+				from @ItemTable I
+				outer apply (select AAD.Id VendorLocationNo,AAD.AccountNo--,AM.AccountName
+							from Sales.SalesOrderAccountAssignmentDetail AAD
+							--inner join masterdata.mAccountMaster AM on AM.AccountNo=AAD.AccountNo
+							where AAD.Flag='CRA'
+							and AAD.SalesOrderNo=(select SalesOrderNo from Sales.SalesOrderAmendmentMain where SalesOrderAmendmentNo=I.Id)
+							and AAD.Id=@VendorLocationNo
+							 ) am
+				group by am.AccountNo
+			 
+			end
+			else if ((exists (select 1 from @DisptchChallanDetail) or exists (select 1 from @ItemTable where Id is not null ) ) 
+					 and @BillTillMaterialStage = 3	) -- After Material Stage But Before Final Stage Voucher -- 3rd Posting
+					
+			begin
+			
+			 update tt set Id = em.SalesOrderAmendmentNo 
+			   from @ItemTable tt,@DisptchChallanDetail  dd, Sales.DispatchChallan dc,Customize .MDNErosMain em
+			   where dc.DispatchChallanNo = dd.DispatchChallanNo and dc.DispatchSourceNo = 17 and em.MDNNo = dc.RefDocumentNo 
+			   
+			   insert into @Return([Add to Basic] ,Particular ,[Debit Amount] ,
+								[Credit Amount] ,[Account Name] ,Amount ,[Type] ,
+								MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos)
+				select cast(0 as bit) [Add to Basic],'COGS Dispatch Suspense A/C' Particular,convert(decimal(15,2),null) [Debit Amount]
+					,convert(decimal(15,2),sum(vd.BaseDrAmount)) [Credit Amount]
+					,vd.AccountNo [Account Name]
+					,sum(vd.BaseDrAmount) [Amount],2 [Type]
+					,cast(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo ,CAST(null as varchar(5000)) ItemNos
+					from @DisptchChallanDetail dd
+					inner join Sales.DispatchChallan dc on dc.DispatchChallanNo = dd.DispatchChallanNo 
+					inner join Finance.accVoucherDetail vd on vd.VoucherNo  = dc.VoucherNo 
+					where vd.accountno in (select (IPAR.AccountNo) 
+									from Finance.ARDIntermediatePostingAccountRule IPAR 
+									where  IPAR.IntermediateAccountTypeNo in(30,31)
+									 and IPAR.AccountNo = vd.AccountNo )
+					 group by vd.AccountNo				 
+					
+					insert into @Return([Add to Basic] ,Particular ,[Debit Amount] ,
+								[Credit Amount] ,[Account Name] ,Amount ,[Type] ,
+								MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos)
+					select cast(0 as bit) [Add to Basic],'COGS A/C' Particular,convert(decimal(15,2),sum(vd.BaseDrAmount)) [Debit Amount]
+					,convert(decimal(15,2),null) [Credit Amount]
+					,IR.AccountNo [Account Name]
+					,sum(vd.BaseDrAmount) [Amount],1 [Type]
+					,cast(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo ,CAST(null as varchar(5000)) ItemNos
+					from @DisptchChallanDetail dd
+					inner join Sales.DispatchChallan dc on dc.DispatchChallanNo = dd.DispatchChallanNo 
+					inner join Finance.accVoucherDetail vd on vd.VoucherNo  = dc.VoucherNo 
+					outer apply (select distinct (IR.AccountNo) AccountNo
+							from Finance.ARDItemRule IR
+							inner join Sales.DispatchChallanItemDetail I on I.ItemNo = IR.ItemNo 
+							inner join Finance.ARDIntermediatePostingAccountRule IPAR on IPAR.AccountNo=IR.AccountNo
+																					and IPAR.IntermediateAccountTypeNo=1
+							where IR.AccountTypeNo=54 and IR.ItemNo=I.ItemNo
+							and I.DispatchChallanNo = dd.DispatchChallanNo 
+							) IR
+					where vd.accountno in (select (IPAR.AccountNo) 
+									from Finance.ARDIntermediatePostingAccountRule IPAR 
+									where  IPAR.IntermediateAccountTypeNo in(30,31)
+									 and IPAR.AccountNo = vd.AccountNo )
+					
+					group by IR.AccountNo	
+					
+				union All
+				select cast(0 as bit) [Add to Basic] ,'Bill Till Final Stage Liability A/c' Particular 
+					,CAST(null as money) [Debit Amount]
+					,case when FTRS.RoundingNo = 1 then ceiling(sum(I.BasicAmount))
+							when FTRS.RoundingNo = 2 then floor(sum(I.BasicAmount))
+							when FTRS.RoundingNo = 3 then round(sum(I.BasicAmount),0)
+						else sum(I.BasicAmount) end
+						+case(ROW_NUMBER() over(order by IR.AccountNo)) when 1 then isnull((select isnull(sum([Debit Amount]),0)-isnull(sum([Credit Amount]),0) from @MiscFinancePosting where IncludeInBasic=1),0) else 0 end [Credit Amount] 
+					,IR.AccountNo [Account Name] 
+					,case when FTRS.RoundingNo = 1 then ceiling(sum(I.BasicAmount))
+							when FTRS.RoundingNo = 2 then floor(sum(I.BasicAmount))
+							when FTRS.RoundingNo = 3 then round(sum(I.BasicAmount),0)
+						else sum(I.BasicAmount) end Amount ,2 [Type] 
+					,CAST(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo,CAST(null as varchar(5000))ItemNos
+				from @ItemTable I
+				outer apply (select top 1 FTRS.*
+							from masterdata.FormTaxRoundingSetting FTRS 
+							where FTRS.FormNo=@FormNo
+								and TaxGroupNo is null
+								and FTRS.EffectiveDate<=@VoucherDate
+							order by FTRS.EffectiveDate desc)FTRS
+				outer apply (select top 1 am.AccountNo from masterdata.maccountmaster am 
+							where am.AccountTypeNo=63
+							 ) IR
+				 group by IR.AccountNo,FTRS.RoundingNo
+				union all
+				 select cast(IncludeInBasic as bit) [Add to Basic] ,Particular 
+					,case(IncludeInBasic) when 1 then null else [Credit Amount] * (1-IncludeInBasic) end [Debit Amount] 
+					,case(IncludeInBasic) when 1 then null else [Debit Amount] * (1-IncludeInBasic) end [Credit Amount] ,[Account Name] 
+					,[Amount] ,case [Type] when 1 then 2 else 1 end [Type]
+					,MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos
+				from @MiscFinancePosting
+				Union All
+				select cast(0 as bit) [Add to Basic],'Bill Amt Passed' Particular,convert(decimal(15,2),@NetAmount) [Debit Amount]
+					,convert(decimal(15,2),null) [Credit Amount]
+					,am.AccountNo [Account Name]
+					,@NetAmount [Amount],1 [Type]
+					,cast(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo ,CAST(null as varchar(5000)) ItemNos
+				from @ItemTable I
+				outer apply (select AAD.Id VendorLocationNo,AAD.AccountNo--,AM.AccountName
+							from Sales.SalesOrderAccountAssignmentDetail AAD
+							--inner join masterdata.mAccountMaster AM on AM.AccountNo=AAD.AccountNo
+							where AAD.Flag='CRA'
+							and AAD.SalesOrderNo=(select SalesOrderNo from Sales.SalesOrderAmendmentMain where SalesOrderAmendmentNo=I.Id)
+							and AAD.Id=@VendorLocationNo
+							 ) am
+				group by am.AccountNo
+			 
+			end
+			else if ((exists (select 1 from @DisptchChallanDetail) or exists (select 1 from @ItemTable where Id is not null ) ) 
+					 and @BillTillMaterialStage =4	)
+			begin
+			
+			update tt set Id = em.SalesOrderAmendmentNo 
+			   from @ItemTable tt,@DisptchChallanDetail  dd, Sales.DispatchChallan dc,Customize .MDNErosMain em
+			   where dc.DispatchChallanNo = dd.DispatchChallanNo and dc.DispatchSourceNo = 17 and em.MDNNo = dc.RefDocumentNo 
+			   
+			   select @BillStateAmount = sum(BaseCrAmount + BaseDrAmount) from sales.CommercialInvoiceMain cm
+				inner join finance.accVoucherDetail vd on vd.voucherno = cm.voucherno
+				
+				where  exists (select 1 from @ItemTable a, sales.SalesOrderAmendmentMain sm 
+								, sales.CommercialInvoiceItemDetails cd ,Sales.SalesOrderAmendmentMain som where 
+									cd.CommercialInvoiceNo = cm.CommercialInvoiceNo and a.Id = sm.SalesOrderAmendmentNo
+									and cd.SalesOrderAmendmentno  = som.SalesOrderAmendmentno and som.SalesOrderNo = sm.SalesOrderNo 
+									 )
+					and BaseCrAmount>0 and  cm.DocumentDate < = @VoucherDate
+					and vd.AccountNo in(select accountno from masterdata.maccountmaster am where am.AccountNo= vd.AccountNo
+															 and am.AccountTypeNo =63)
+															 
+			   insert into @Return([Add to Basic] ,Particular ,[Debit Amount] ,
+								[Credit Amount] ,[Account Name] ,Amount ,[Type] ,
+								MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos)
+				select cast(0 as bit) [Add to Basic],'COGS Dispatch Suspense A/C' Particular,convert(decimal(15,2),null) [Debit Amount]
+					,convert(decimal(15,2),sum(vd.BaseDrAmount)) [Credit Amount]
+					,vd.AccountNo [Account Name]
+					,sum(vd.BaseDrAmount) [Amount],2 [Type]
+					,cast(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo ,CAST(null as varchar(5000)) ItemNos
+					from @DisptchChallanDetail dd
+					inner join Sales.DispatchChallan dc on dc.DispatchChallanNo = dd.DispatchChallanNo 
+					inner join Finance.accVoucherDetail vd on vd.VoucherNo  = dc.VoucherNo 
+					where vd.accountno in (select (IPAR.AccountNo) 
+									from Finance.ARDIntermediatePostingAccountRule IPAR 
+									where  IPAR.IntermediateAccountTypeNo in(30,31)
+									 and IPAR.AccountNo = vd.AccountNo )
+					 group by vd.AccountNo				 
+					
+					insert into @Return([Add to Basic] ,Particular ,[Debit Amount] ,
+								[Credit Amount] ,[Account Name] ,Amount ,[Type] ,
+								MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos)
+					select cast(0 as bit) [Add to Basic],'COGS A/C' Particular,convert(decimal(15,2),sum(vd.BaseDrAmount)) [Debit Amount]
+					,convert(decimal(15,2),null) [Credit Amount]
+					,IR.AccountNo [Account Name]
+					,sum(vd.BaseDrAmount) [Amount],1 [Type]
+					,cast(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo ,CAST(null as varchar(5000)) ItemNos
+					from @DisptchChallanDetail dd
+					inner join Sales.DispatchChallan dc on dc.DispatchChallanNo = dd.DispatchChallanNo 
+					inner join Finance.accVoucherDetail vd on vd.VoucherNo  = dc.VoucherNo 
+					outer apply (select distinct (IR.AccountNo) AccountNo
+							from Finance.ARDItemRule IR
+							inner join Sales.DispatchChallanItemDetail I on I.ItemNo = IR.ItemNo 
+							inner join Finance.ARDIntermediatePostingAccountRule IPAR on IPAR.AccountNo=IR.AccountNo
+																					and IPAR.IntermediateAccountTypeNo=1
+							where IR.AccountTypeNo=54 and IR.ItemNo=I.ItemNo
+							and I.DispatchChallanNo = dd.DispatchChallanNo 
+							) IR
+					where vd.accountno in (select (IPAR.AccountNo) 
+									from Finance.ARDIntermediatePostingAccountRule IPAR 
+									where  IPAR.IntermediateAccountTypeNo in(30,31)
+									 and IPAR.AccountNo = vd.AccountNo )
+					
+					group by IR.AccountNo	
+					
+				 insert into @Return([Add to Basic] ,Particular ,[Debit Amount] ,
+								[Credit Amount] ,[Account Name] ,Amount ,[Type] ,
+								MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos)
+				select cast(0 as bit) [Add to Basic] ,'Bill Till Final Stage Revenue' Particular 
+					,CAST(null as money) [Debit Amount]
+					,case when FTRS.RoundingNo = 1 then ceiling(sum(I.BasicAmount))
+							when FTRS.RoundingNo = 2 then floor(sum(I.BasicAmount)) 
+							when FTRS.RoundingNo = 3 then round(sum(I.BasicAmount),0) 
+						else sum(I.BasicAmount) end
+						+case(ROW_NUMBER() over(order by IR.AccountNo)) when 1 then isnull((select isnull(sum([Debit Amount]),0)-isnull(sum([Credit Amount]),0) from @MiscFinancePosting where IncludeInBasic=1),0) else 0 end [Credit Amount] 
+					,IR.AccountNo [Account Name] 
+					,case when FTRS.RoundingNo = 1 then ceiling(sum(I.BasicAmount))  
+							when FTRS.RoundingNo = 2 then floor(sum(I.BasicAmount))  
+							when FTRS.RoundingNo = 3 then round(sum(I.BasicAmount),0) 
+						else sum(I.BasicAmount) end Amount ,2 [Type] 
+					,CAST(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo,CAST(null as varchar(5000))ItemNos
+				from @ItemTable I
+				outer apply (select top 1 FTRS.*
+							from masterdata.FormTaxRoundingSetting FTRS 
+							where FTRS.FormNo=@FormNo
+								and TaxGroupNo is null
+								and FTRS.EffectiveDate<=@VoucherDate
+							order by FTRS.EffectiveDate desc)FTRS
+				outer apply (select top 1 am.AccountNo from masterdata.maccountmaster am 
+							where am.AccountTypeNo=62
+							 ) IR
+				group by IR.AccountNo,FTRS.RoundingNo
+				
+				 insert into @Return([Add to Basic] ,Particular ,[Debit Amount] ,
+								[Credit Amount] ,[Account Name] ,Amount ,[Type] ,
+								MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos)
+				 select cast(IncludeInBasic as bit) [Add to Basic] ,Particular 
+					,case(IncludeInBasic) when 1 then null else [Credit Amount] * (1-IncludeInBasic) end [Debit Amount] 
+					,case(IncludeInBasic) when 1 then null else [Debit Amount] * (1-IncludeInBasic) end [Credit Amount] ,[Account Name] 
+					,[Amount] ,case [Type] when 1 then 2 else 1 end [Type]
+					,MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos
+				from @MiscFinancePosting
+				
+				 insert into @Return([Add to Basic] ,Particular ,[Debit Amount] ,
+								[Credit Amount] ,[Account Name] ,Amount ,[Type] ,
+								MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos)
+				select cast(0 as bit) [Add to Basic],'Bill Amt Passed' Particular,convert(decimal(15,2),@NetAmount) [Debit Amount]
+					,convert(decimal(15,2),null) [Credit Amount]
+					,am.AccountNo [Account Name]
+					,@NetAmount [Amount],1 [Type]
+					,cast(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo ,CAST(null as varchar(5000)) ItemNos
+				from @ItemTable I
+				outer apply (select AAD.Id VendorLocationNo,AAD.AccountNo--,AM.AccountName
+							from Sales.SalesOrderAccountAssignmentDetail AAD
+							--inner join masterdata.mAccountMaster AM on AM.AccountNo=AAD.AccountNo
+							where AAD.Flag='CRA'
+							and AAD.SalesOrderNo=(select SalesOrderNo from Sales.SalesOrderAmendmentMain where SalesOrderAmendmentNo=I.Id)
+							and AAD.Id=@VendorLocationNo
+							 ) am
+				group by am.AccountNo
+				
+				
+				 insert into @Return([Add to Basic] ,Particular ,[Debit Amount] ,
+								[Credit Amount] ,[Account Name] ,Amount ,[Type] ,
+								MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos)
+				 select cast(0 as bit) [Add to Basic] ,'Bill Till Final Stage Liability A/c' Particular 
+					,CAST(@BillStateAmount as money) [Debit Amount]
+					,cast(null as money)  [Credit Amount] 
+					,IR.AccountNo [Account Name] 
+					,@BillStateAmount Amount ,1 [Type] 
+					,CAST(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo,CAST(null as varchar(5000))ItemNos
+				from (select 1 cnt) I
+			 	outer apply (select top 1 am.AccountNo from masterdata.maccountmaster am 
+							where am.AccountTypeNo=63  ) IR
+				where @BillStateAmount>0
+				group by IR.AccountNo 
+				
+				 insert into @Return([Add to Basic] ,Particular ,[Debit Amount] ,
+								[Credit Amount] ,[Account Name] ,Amount ,[Type] ,
+								MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos)
+				 select cast(0 as bit) [Add to Basic] ,'Bill Till Final Stage Revenue A/c' Particular 
+					,CAST(null as money) [Debit Amount]
+					,cast(@BillStateAmount as money)  [Credit Amount] 
+					,IR.AccountNo [Account Name] 
+					,@BillStateAmount Amount ,2 [Type] 
+					,CAST(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo,CAST(null as varchar(5000))ItemNos
+				from (select 1 cnt) I
+			 	outer apply (select top 1 am.AccountNo from masterdata.maccountmaster am 
+							where am.AccountTypeNo=62  ) IR
+				where @BillStateAmount>0
+				group by IR.AccountNo 
+				
+			   
+			end     				
+			else if (exists (select 1 from @DisptchChallanDetail) or exists (select 1 from @ItemTable where Id is not null ) )  
+			begin
+			   update tt set Id = em.SalesOrderAmendmentNo 
+			   from @ItemTable tt,@DisptchChallanDetail  dd, Sales.DispatchChallan dc,Customize .MDNErosMain em
+			   where dc.DispatchChallanNo = dd.DispatchChallanNo and dc.DispatchSourceNo = 17 and em.MDNNo = dc.RefDocumentNo 
+				
+			        insert into @Return([Add to Basic] ,Particular ,[Debit Amount] ,
+								[Credit Amount] ,[Account Name] ,Amount ,[Type] ,
+								MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos)
+					select cast(0 as bit) [Add to Basic],'COGS Dispatch Suspense A/C' Particular,convert(decimal(15,2),null) [Debit Amount]
+					,convert(decimal(15,2),sum(vd.BaseDrAmount)) [Credit Amount]
+					,vd.AccountNo [Account Name]
+					,sum(vd.BaseDrAmount) [Amount],2 [Type]
+					,cast(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo ,CAST(null as varchar(5000)) ItemNos
+					from @DisptchChallanDetail dd
+					inner join Sales.DispatchChallan dc on dc.DispatchChallanNo = dd.DispatchChallanNo 
+					inner join Finance.accVoucherDetail vd on vd.VoucherNo  = dc.VoucherNo 
+					where vd.accountno in (select (IPAR.AccountNo) 
+									from Finance.ARDIntermediatePostingAccountRule IPAR 
+									where  IPAR.IntermediateAccountTypeNo in(30,31)
+									 and IPAR.AccountNo = vd.AccountNo )
+					 group by vd.AccountNo				 
+					
+					insert into @Return([Add to Basic] ,Particular ,[Debit Amount] ,
+								[Credit Amount] ,[Account Name] ,Amount ,[Type] ,
+								MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos)
+					select cast(0 as bit) [Add to Basic],'COGS A/C' Particular,convert(decimal(15,2),sum(vd.BaseDrAmount)) [Debit Amount]
+					,convert(decimal(15,2),null) [Credit Amount]
+					,IR.AccountNo [Account Name]
+					,sum(vd.BaseDrAmount) [Amount],1 [Type]
+					,cast(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo ,CAST(null as varchar(5000)) ItemNos
+					from @DisptchChallanDetail dd
+					inner join Sales.DispatchChallan dc on dc.DispatchChallanNo = dd.DispatchChallanNo 
+					inner join Finance.accVoucherDetail vd on vd.VoucherNo  = dc.VoucherNo 
+					outer apply (select distinct (IR.AccountNo) AccountNo
+							from Finance.ARDItemRule IR
+							inner join Sales.DispatchChallanItemDetail I on I.ItemNo = IR.ItemNo 
+							inner join Finance.ARDIntermediatePostingAccountRule IPAR on IPAR.AccountNo=IR.AccountNo
+																					and IPAR.IntermediateAccountTypeNo=1
+							where IR.AccountTypeNo=54 and IR.ItemNo=I.ItemNo
+							and I.DispatchChallanNo = dd.DispatchChallanNo 
+							) IR
+					where vd.accountno in (select (IPAR.AccountNo) 
+									from Finance.ARDIntermediatePostingAccountRule IPAR 
+									where  IPAR.IntermediateAccountTypeNo in(30,31)
+									 and IPAR.AccountNo = vd.AccountNo )
+					
+					group by IR.AccountNo	
+				 	
+				insert into @Return([Add to Basic] ,Particular ,[Debit Amount] ,
+								[Credit Amount] ,[Account Name] ,Amount ,[Type] ,
+								MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos)
+				select cast(0 as bit) [Add to Basic] ,'Sales Revenue A/c' Particular 
+					,CAST(null as money) [Debit Amount]
+					,case when FTRS.RoundingNo = 1 then ceiling(sum(I.BasicAmount)) + isnull(@BillStateAmount,0)
+							when FTRS.RoundingNo = 2 then floor(sum(I.BasicAmount)) + isnull(@BillStateAmount,0)
+							when FTRS.RoundingNo = 3 then round(sum(I.BasicAmount),0) + isnull(@BillStateAmount,0)
+						else sum(I.BasicAmount) + isnull(@BillStateAmount,0) end
+						+case(ROW_NUMBER() over(order by IR.AccountNo)) when 1 then isnull((select isnull(sum([Debit Amount]),0)-isnull(sum([Credit Amount]),0) from @MiscFinancePosting where IncludeInBasic=1),0) else 0 end [Credit Amount] 
+					,IR.AccountNo [Account Name] 
+					,case when FTRS.RoundingNo = 1 then ceiling(sum(I.BasicAmount)) + isnull(@BillStateAmount,0)
+							when FTRS.RoundingNo = 2 then floor(sum(I.BasicAmount)) + isnull(@BillStateAmount,0)
+							when FTRS.RoundingNo = 3 then round(sum(I.BasicAmount),0) + isnull(@BillStateAmount,0)
+						else sum(I.BasicAmount) + isnull(@BillStateAmount,0) end Amount ,2 [Type] 
+					,CAST(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo,CAST(null as varchar(5000))ItemNos
+				from @ItemTable I
+				outer apply (select top 1 FTRS.*
+							from masterdata.FormTaxRoundingSetting FTRS 
+							where FTRS.FormNo=@FormNo
+								and TaxGroupNo is null
+								and FTRS.EffectiveDate<=@VoucherDate
+							order by FTRS.EffectiveDate desc)FTRS
+				outer apply (select AAD.Id ItemNo,AAD.AccountNo--,AM.AccountName
+							from Sales.SalesOrderAccountAssignmentDetail AAD
+							--inner join masterdata.mAccountMaster AM on AM.AccountNo=AAD.AccountNo
+							where AAD.Flag='IM'
+							and AAD.AccountTypeNo=11
+							and AAD.SalesOrderNo=(select SalesOrderNo from Sales.SalesOrderAmendmentMain where SalesOrderAmendmentNo=I.Id)
+							and AAD.Id=I.ItemNo
+							 ) IR
+				group by IR.AccountNo,FTRS.RoundingNo
+				union all
+				select cast(IncludeInBasic as bit) [Add to Basic] ,Particular 
+					,case(IncludeInBasic) when 1 then null else [Credit Amount] * (1-IncludeInBasic) end [Debit Amount] 
+					,case(IncludeInBasic) when 1 then null else [Debit Amount] * (1-IncludeInBasic) end [Credit Amount] ,[Account Name] 
+					,[Amount] ,case [Type] when 1 then 2 else 1 end [Type]
+					,MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos
+				from @MiscFinancePosting
+				union all
+				select cast(0 as bit) [Add to Basic],'Bill Amt Passed' Particular,convert(decimal(15,2),@NetAmount) [Debit Amount]
+					,convert(decimal(15,2),null) [Credit Amount]
+					,am.AccountNo [Account Name]
+					,@NetAmount [Amount],1 [Type]
+					,cast(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo ,CAST(null as varchar(5000)) ItemNos
+				from @ItemTable I
+				outer apply (select AAD.Id VendorLocationNo,AAD.AccountNo--,AM.AccountName
+							from Sales.SalesOrderAccountAssignmentDetail AAD
+							--inner join masterdata.mAccountMaster AM on AM.AccountNo=AAD.AccountNo
+							where AAD.Flag='CRA'
+							and AAD.SalesOrderNo=(select SalesOrderNo from Sales.SalesOrderAmendmentMain where SalesOrderAmendmentNo=I.Id)
+							and AAD.Id=@VendorLocationNo
+							 ) am
+				group by am.AccountNo
+			end
+			else
+			begin
+				 insert into @Return([Add to Basic] ,Particular ,[Debit Amount] ,
+								[Credit Amount] ,[Account Name] ,Amount ,[Type] ,
+								MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos)
+					select cast(0 as bit) [Add to Basic] ,'Basic Amount' Particular 
+						,convert(decimal(15,2),null) [Debit Amount]
+						,case when FTRS.RoundingNo = 1 then ceiling(([Amount]))
+							when FTRS.RoundingNo = 2 then floor(([Amount]))
+							when FTRS.RoundingNo = 3 then round(([Amount]),0)
+						else ([Amount]) end
+						+case(ROW_NUMBER() over(order by [Account Name])) when 1 then isnull((select isnull(sum([Debit Amount]),0)-isnull(sum([Credit Amount]),0) from @MiscFinancePosting where IncludeInBasic=1),0) else 0 end [Credit Amount] 
+						
+						--,[Amount]+isnull((select isnull(sum([Debit Amount]),0)-isnull(sum([Credit Amount]),0) from @MiscFinancePosting where IncludeInBasic=1),0) [Credit Amount]
+						,[Account Name] 
+						,case when FTRS.RoundingNo = 1 then ceiling(([Amount]))
+							when FTRS.RoundingNo = 2 then floor(([Amount]))
+							when FTRS.RoundingNo = 3 then round(([Amount]),0)
+						else ([Amount]) end
+						--,[Amount] 
+						,2 [Type] 
+						,CAST(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo,CAST(null as varchar(5000))ItemNos
+					from @ItemFinancePosting
+						outer apply (select top 1 FTRS.*
+									from masterdata.FormTaxRoundingSetting FTRS 
+									where FTRS.FormNo=@FormNo
+										and TaxGroupNo is null
+										and FTRS.EffectiveDate<=@VoucherDate
+									order by FTRS.EffectiveDate desc)FTRS
+					where Amount>0 and not exists (select 1 from @AssetLotDetail)
+					
+					union all
+					select cast(0 as bit) [Add to Basic] ,'Basic Amount' Particular 
+						,convert(decimal(15,2),null) [Debit Amount]
+						,sum(Amount+DA.DiffAmt)+isnull((select isnull(sum([Debit Amount]),0)-isnull(sum([Credit Amount]),0) from @MiscFinancePosting where IncludeInBasic=1),0) [Credit Amount]
+						,tt.AccountNo [Account Name] 
+						,sum(Amount+DA.DiffAmt) [Amount] ,2 [Type] 
+						,CAST(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo,CAST(null as varchar(5000))ItemNos
+					from (
+							select sum(ALD.Qty*IT.BasicAmount/IT.Qty) Amount
+								,AM.AccountNo
+								,IT.ItemNo
+							from @AssetLotDetail ALD
+								inner join FixedAsset.AssetTagMain ATM on ATM.AssetTagNo=ALD.AssetTagNo
+								inner join FixedAsset.AssetMain AM on AM.AssetNo=ATM.AssetNo
+								inner join @ItemTable IT on IT.ItemNo=ATM.ItemNo
+							group by AM.AccountNo,IT.ItemNo
+						) tt
+						inner join @ItemTable IT on IT.ItemNo=tt.ItemNo
+						cross apply (select IT.BasicAmount-tt.Amount DiffAmt) DA
+					group by tt.AccountNo
+					
+					union all
+					select cast(IncludeInBasic as bit) [Add to Basic] ,Particular 
+						,case(IncludeInBasic) when 1 then null else [Credit Amount] * (1-IncludeInBasic) end [Debit Amount] 
+						,case(IncludeInBasic) when 1 then null else [Debit Amount] * (1-IncludeInBasic) end [Credit Amount] ,[Account Name] 
+						,[Amount] ,case [Type] when 1 then 2 else 1 end [Type]
+						,MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos
+					from @MiscFinancePosting
+					
+					union all
+					select top 1 
+						 cast(0 as bit) [Add to Basic],'Bill Amt Passed' Particular,convert(decimal(15,2),@NetAmount) [Debit Amount]
+						,convert(decimal(15,2),null) [Credit Amount]
+						,am.AccountNo [Account Name]
+						,@NetAmount [Amount],1 [Type]
+						,cast(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo ,CAST(null as varchar(5000)) ItemNos
+					from (select @VendorLocationNo VendorLocationNo) VL
+						left join 
+						(select vlr.VendorLocationNo,vlr.AccountNo
+						from Finance.ARDVendorLocationRule vlr 
+						where vlr.AccountTypeNo=@VendorAccountTypeNo) am on am.VendorLocationNo=VL.VendorLocationNo
+			end
+			
+		end
+
+
+select [Add to Basic] ,Particular 
+					,[Debit Amount] ,[Credit Amount] 
+					,[Account Name] 
+					,cast(null as varchar) [Ref. Detail] ,cast(null as varchar) [Cost Center] 
+					,Amount ,[Type] 
+					,SlNo
+					,MiscChargeNo,TaxCodeMiscChargesDetailNo,ItemNos,ag.GroupNo , ag.GroupTypeNo , ag.NatureNo , am.AccountTypeNo  
+			from @Return  rt
+			left join masterdata.mAccountMaster am on am.AccountNo = rt.[Account Name] 
+			left join masterdata.mAccountGroup ag on ag.GroupNo = am.DefaultGroupNo 
+			
+			where (isnull([Debit Amount],0)+isnull([Credit Amount],0)>0
+				or [Add to Basic]=1)
+				Order by [Type],SLNo
+
+
+end

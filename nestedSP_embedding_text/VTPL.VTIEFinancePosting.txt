@@ -1,0 +1,134 @@
+Stored procedure VTPL.VTIEFinancePosting: Online FInance Posting. Called from Finance.FinancePostingFillValuesDocumentDetails.
+Reads: Finance.ARDItemRule, masterdata.mAccountMaster
+Parameters: @CompanyNo tinyint, @ItemNos varchar
+Author: Akhli, created 05.06.2019
+Code:
+-- =============================================
+-- Author:		Akhli
+-- Create date: 05.06.2019
+-- Description:	 Online FInance Posting
+-- =============================================
+---
+CREATE PROCEDURE [VTPL].[VTIEFinancePosting] 
+	@CompanyNo tinyint ,
+	@ItemNos varchar(max)
+	
+AS
+BEGIN
+
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+
+begin try
+declare @IsManagingExpenseAccount bit
+ 
+
+create table #Posting ([Add to Basic] bit,Particular varchar(500),[Debit Amount] decimal(15,2) , 
+		[Credit Amount] decimal(15,2),[Account Name] int, [Ref. Detail] varchar(50),[Cost Center] varchar(50),
+		[Amount] decimal(15,2), [Type] tinyint,SlNo tinyint ,MiscChargeNo int , TaxCodeMiscChargesDetailNo int,
+			ItemNos varchar(200))
+
+		declare @ItemTable table (ItemNo int,BasicAmount money,Id int,Qty decimal(12,3),Rate money)
+		insert into @ItemTable
+		select Col1, sum(convert(money,Col2)), Col3, sum(CONVERT(decimal(12,3),Col4)), sum(CONVERT(money,Col5))
+		from masterdata.Split_RowColumn(@ItemNos,'`','~')
+		group by Col1, Col3
+		 
+			     
+			     Insert into #Posting  select cast(0 as bit) [Add to Basic],'Stock Account' as Particular
+				,convert(decimal(15,2),sum(Amount)) [Debit Amount]
+				,convert(decimal(15,2),null) [Credit Amount]
+				, ItemAC.AccountNo  [Account Name]
+				,cast(null as varchar) [Ref. Detail]
+				,cast(null as varchar) [Cost Center]
+				,SUM(Amount) [Amount]
+				,1 [Type]
+				,ROW_NUMBER()over(order by ItemAC .AccountNo ) SlNo
+				,null MiscChargeNo
+				,null TaxCodeMiscChargesDetailNo
+				,'' ItemNos
+			from (select  SUM(BasicAmount) Amount ,ItemNo
+							from @ItemTable   
+							group by ItemNo )I
+				inner join (select ItemNo,max(IR.AccountNo)AccountNo
+							from Finance.ARDItemRule IR
+							inner join masterdata.mAccountMaster AM on AM.AccountNo=IR.AccountNo
+							where AM.AccountTypeNo=14 group by ItemNo ) ItemAC on ItemAC.ItemNo=I.ItemNo
+
+			group by ItemAC.AccountNo 
+							
+				Insert into #Posting 
+		select cast(0 as bit) [Add to Basic]
+				,'WIP' as Particular
+				,convert(decimal(15,2), null) [Debit Amount]
+				,convert(decimal(15,2),sum(Amount)) [Credit Amount]
+				,IR.AccountNo [Account Name]
+				,cast(null as varchar) [Ref. Detail]
+				,cast(null as varchar) [Cost Center]
+				,SUM(Amount) [Amount]
+				,2 [Type]
+				,ROW_NUMBER()over(order by IR.AccountNo ) + (select isnull(max(SlNo),0) from #Posting) SlNo
+				,null MiscChargeNo
+				,null TaxCodeMiscChargesDetailNo
+				,'' ItemNos
+			from (select  SUM(BasicAmount) Amount ,ItemNo
+							from @ItemTable   
+							group by ItemNo)I
+				left join (select ItemNo,max(IR.AccountNo)AccountNo
+							from 
+							Finance.ARDItemRule IR
+							where IR.AccountTypeNo=15
+							group by ir.ItemNo ) IR on IR.ItemNo=I.ItemNo
+			group  by IR.AccountNo 
+			
+		 
+
+ if exists(select 1 from #Posting having abs(SUM([Credit Amount])- SUM([Debit Amount]))<=.5)
+ begin
+	update PD set [Debit Amount] = [Debit Amount] + ISNULL(diff,0)
+		from
+		#Posting PD
+		cross join (select SUM([Credit Amount])- SUM([Debit Amount]) Diff from #Posting) tt
+		where PD.SlNo  = 1
+	
+	update PD set [Credit Amount] = [Credit Amount] + ISNULL(diff,0)
+		from
+		#Posting PD
+		cross join (select SUM([Debit Amount])- SUM([Credit Amount]) Diff from #Posting) tt
+		where PD.SlNo  = 1
+			
+ end
+ 
+ 
+select * from #Posting
+ where isnull([Debit Amount],0) >0 or isnull([Credit Amount],0) >0
+   
+   
+   
+END TRY
+	
+	BEGIN CATCH
+		select ERROR_MESSAGE()
+		INSERT INTO [masterdata].[mErrorLog]
+			   ([ErrorDate]
+			   ,[ErrorNo]
+			   ,[ErrorSeverity]
+			   ,[ErrorState]
+			   ,[ErrorProcedure]
+			   ,[ErrorLine]
+			   ,[ErrorDescription]
+			   ,[UserName]
+			   ,[FormCode])
+		VALUES
+			   (getdate()
+			   ,ERROR_NUMBER()
+			   ,ERROR_SEVERITY()
+			   ,ERROR_STATE()
+			   ,ERROR_PROCEDURE()
+			   ,ERROR_LINE()
+			   ,ERROR_MESSAGE()
+			   ,SUSER_SNAME()
+			   ,'IGRN')
+	END CATCH
+END

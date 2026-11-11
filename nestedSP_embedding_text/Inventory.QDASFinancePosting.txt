@@ -1,0 +1,398 @@
+Stored procedure Inventory.QDASFinancePosting: stock qty adjustment Finance Posting. Called from Finance.FinancePostingFillValuesDocumentDetails.
+Reads: Finance.ARDIntermediatePostingAccountRule, Finance.ARDItemRule, Inventory.InvLotSummary, Inventory.Setting, masterdata.mAccountMaster, masterdata.mItemOtherInformation, masterdata.mWarehouse, Purchase.POAccountAssignmentDetail, Purchase.POAmendmentMain
+Parameters: @ItemDetail xml, @CompanyNo tinyint
+Author: Akhli, created 18 oct 2013
+Code:
+-- =============================================
+-- Author:		Akhli
+-- Create date:  18 oct 2013
+-- Description:	stock qty adjustment Finance Posting
+-- =============================================
+
+CREATE PROCEDURE [Inventory].[QDASFinancePosting] 
+	@ItemDetail xml ,
+	@CompanyNo tinyint
+	
+AS
+
+
+BEGIN
+
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+
+begin try
+
+Declare @ItemNos as varchar(max)
+Declare @IsLostInTransitCase Bit
+
+Create table #ItemDetailDrop (ReferenceNo int,ReferenceType varchar(4),ItemNo int,MakeNo smallint,
+		TechnicalGradeNo tinyint,RouteIdentity decimal(10,8) ,StockQty decimal(15,3), IssuedQty  decimal(15,3)
+		, DiffRate decimal(18,6),CompanyNo smallint ,WarehouseNo smallint,ClosingQty decimal(15,2),MAPRate decimal(18,6)
+			,MinMAPRate decimal(18,6),MaxMAPRate Decimal(18,6) ,NewMAPRate decimal(18,6) 
+			,TrasnferQty Decimal(15,3),ReceiptQty Decimal(15,3),TransferAmount Decimal(18,6)
+			)
+
+
+create table #PostingDrop ([Add to Basic] bit,Particular varchar(500),[Debit Amount] decimal(15,2) , 
+		[Credit Amount] decimal(15,2),[Account Name] int, [Ref. Detail] varchar(50),[Cost Center] varchar(50),
+		[Amount] decimal(15,2), [Type] tinyint,SlNo tinyint ,MiscChargeNo int , TaxCodeMiscChargesDetailNo int,
+			ItemNos varchar(200) )
+	
+	 
+	 ;with cte as 
+	(
+		SELECT v.value('ReferenceNo[1]','int') AS ReferenceNo,
+		v.value('ReferenceType[1]','varchar(4)') ReferenceType,
+		v.value('ItemNo[1]','int') ItemNo,
+		v.value('MakeNo[1]','smallint') MakeNo,
+		v.value('TechnicalGradeNo[1]','tinyint') TechnicalGradeNo,
+		v.value('RouteIdentity[1]','decimal(10,8)') RouteIdentity,
+		v.value('StockQty[1]','decimal(15,3)') StockQty,
+		v.value('IssuedQty[1]','decimal(15,3)') IssuedQty,
+		v.value('DiffRate[1]','decimal(18,6)') DiffRate,
+		v.value('TransferQty[1]','decimal(15,3)') TrasnferQty,
+		v.value('ReceiptQty[1]','decimal(15,3)') ReceiptQty,
+		v.value('TransferAmt[1]','decimal(18,6)') TransferAmount		
+		FROM @ItemDetail.nodes('/DocumentElement/Table') x(v)
+	)
+	Insert into #ItemDetailDrop (ReferenceNo ,ReferenceType ,ItemNo ,MakeNo ,TechnicalGradeNo ,StockQty ,IssuedQty ,DiffRate,TrasnferQty,ReceiptQty,TransferAmount)
+	select ReferenceNo ,ReferenceType ,ItemNo ,MakeNo ,TechnicalGradeNo , SUM(StockQty) ,sum(IssuedQty) ,
+			 sum(( StockQty + IssuedQty )* DiffRate) / sum( StockQty + IssuedQty ) DiffRate 
+			 ,Sum(TrasnferQty),Sum(ReceiptQty),Sum(TransferAmount)
+	from cte where ItemNo is not null
+	Group By ReferenceNo ,ReferenceType ,ItemNo ,MakeNo ,TechnicalGradeNo  
+	
+	-- Commented by Alok on 28 Apr 2020,Though it was for hira's QDA against IMST done but no GRN entry made
+	-- commented because they received 2500, out of which dc prepared for 2000  and for 500 imst done but they don't want to received. want to show it in lost in transit
+	--If Exists (Select 1 From #ItemDetailDrop Where StockQty=0 And IssuedQty=0 And ReferenceType='IMST' And TrasnferQty>0 and ReceiptQty=0)
+	If Exists (Select 1 From #ItemDetailDrop Where StockQty=0 And IssuedQty=0 And TrasnferQty>0 and ReceiptQty=0)
+	BEGIN
+		Select @IsLostInTransitCase=1
+	END
+		
+	update idd set ClosingQty = dt.ClosingQty , MAPRate = dt.MAPRate ,MinMAPRate = dt.MINMAPRate , MaxMAPRate = dt.MaxMAPRate 
+	,NewMAPRate = ((dt.ClosingQty * dt.MAPRate ) +  ((StockQty+ IssuedQty) * DiffRate))/ dt.ClosingQty 
+	from
+	#ItemDetailDrop idd
+	inner join Purchase.POAmendmentMain pam on pam.POAmendmentNo = idd.ReferenceNo 
+	inner join masterdata.mItemOtherInformation ioi on ioi.ItemNo = idd.ItemNo
+	 outer apply 
+		(select isnull(sum(BalanceQty),0)ClosingQty ,isnull(AVG(MAPRate),0) MAPRate
+		, isnull(AVG(MAPRate),0) + (isnull(AVG(MAPRate),0) * max(s.MAPPlus) * 0.01 ) MaxMAPRate 
+		, isnull(AVG(MAPRate),0) - (isnull(AVG(MAPRate),0) * max(s.MAPMinus)  * 0.01 ) MINMAPRate
+		from
+		Inventory.InvLotSummary  cls
+		inner join Inventory.Setting s on s.CompanyNo = cls.CompanyNo 
+		inner join masterdata.mWarehouse wh on wh.WareHouseNo = cls.WarehouseNo 
+		where cls.itemno = idd.ItemNo and wh.TypeNo =1 and wh.Ownership =1
+		and cls.companyno = pam.CompanyNo and isnull(cls.Divisionno,0) = isnull(pam.DivisionNo,0)
+		and isnull(cls.MakeNo,0)=ISNULL(idd.MakeNo,0)
+		and cls.isCapital=0 and BalanceQty>0  ) dt
+	where ioi.StockValueMethodNo =4 and ISNULL(pam.IndentTypeNo ,0) <>1	
+	
+ set @ItemNos = STUFF((select '`' + convert(varchar(7),ItemNo) +'~' + convert(varchar(25),SUM((StockQty + IssuedQty) * DiffRate))	from #ItemDetailDrop group by ItemNo for xml path ('')),1,1,'')
+ 
+ Insert into #PostingDrop 
+	select cast(0 as bit) [Add to Basic]
+				,'Stock Account' as Particular
+				, case when isnull(SUM([Debit Amount]),0) + isnull( SUM([Credit Amount]),0)>0 then		
+						 isnull(SUM([Debit Amount]),0) - isnull( SUM([Credit Amount]),0) else null end [Debit Amount]
+				, case when isnull(SUM([Debit Amount]),0) - isnull( SUM([Credit Amount]),0) >0 then null 
+						else isnull( SUM([Credit Amount]),0) - isnull(SUM([Debit Amount]),0)  end [Credit Amount] 
+				, [Account Name]
+				,cast(null as varchar) [Ref. Detail]
+				,cast(null as varchar) [Cost Center]
+				, isnull(SUM([Debit Amount]),0) + isnull( SUM([Credit Amount]),0) [Amount]
+				,case when isnull(SUM([Debit Amount]),0) - isnull( SUM([Credit Amount]),0)>0 then 1 else 2 end [Type]
+				,ROW_NUMBER()over(order by [Account Name] ) SlNo
+				,null MiscChargeNo
+				,null TaxCodeMiscChargesDetailNo
+				,'' ItemNos
+			from (	
+			select  case when SUM((StockQty+ IssuedQty) * DiffRate)>0 then case when NEWMAPRate >MaxMAPRate then (MaxMAPRate-MAPRate ) * I.ClosingQty else
+	        			 sum((StockQty+ IssuedQty) * DiffRate) end  else null end [Debit Amount]
+				, case when SUM((StockQty+ IssuedQty) * DiffRate)>0 then null else (MAPRate - MinMAPRate) * I.ClosingQty end [Credit Amount]
+				, ItemAC.AccountNo [Account Name]	
+			from  #ItemDetailDrop I
+			inner join masterdata.mItemOtherInformation ioi on ioi.ItemNo = I.ItemNo 
+			
+				outer apply (SELECT pad.AccountNo FROM Purchase.POAccountAssignmentDetail pad
+						inner join Purchase.POAmendmentMain pam on pam.PONo = pad.PONo
+						inner join #ItemDetailDrop PID on PID.ReferenceNo = pam.POAmendmentNo 
+						where PID.ReferenceType ='PMPO' and pad.Flag ='IM' and pad.Id = PID.ItemNo
+						and pad.AccountTypeNo in (14 ,16)
+						and PID.ItemNo = I.ItemNo 
+						group by pad.AccountNo 
+						union all
+						SELECT pad.AccountNo  FROM Purchase.POAccountAssignmentDetail pad
+						inner join Purchase.POAmendmentMain pam on pam.PONo = pad.PONo
+						inner join #ItemDetailDrop PID on PID.ReferenceNo = pam.POAmendmentNo 
+						where PID.ReferenceType ='PMPO' and pad.Flag ='IM3' and pad.Id = PID.ItemNo
+						and pad.AccountTypeNo in (54)
+						and PID.ItemNo = I.ItemNo 
+						group by pad.AccountNo  
+						union all
+						select top 1 (IR.AccountNo)AccountNo 
+							from Finance.ARDItemRule IR
+							inner join masterdata.mAccountMaster AM on AM.AccountNo=IR.AccountNo
+							inner join  #ItemDetailDrop ID on ID.ItemNo = IR.ItemNo 
+							where AM.AccountTypeNo=14 and ID.ReferenceType ='IMST'
+							and ir.ItemNo = I.ItemNo 
+							
+						) ItemAC 
+				where ioi.StockValueMethodNo = 4		
+			group by  ItemAC.AccountNo ,NewMAPRate ,MinMAPRate ,MaxMAPRate ,ClosingQty ,MAPRate 
+			) tt
+			group by [Account Name]
+			
+	insert into #PostingDrop 
+		select cast(0 as bit) [Add to Basic]
+				,'Price Variance' as Particular
+				,convert(decimal(15,2),case when sum(Amount)>0 then sum(Amount) else null end) [Debit Amount]
+				,convert(decimal(15,2),case when sum(Amount)>0 then null else ABS(sum(Amount)) end) [Credit Amount]
+				, AccountNo [Account Name]
+				,cast(null as varchar) [Ref. Detail]
+				,cast(null as varchar) [Cost Center]
+				,abs(sum(Amount)) [Amount]
+				,case when sum(Amount)>0 then 1 else 2 end [Type]
+				,ROW_NUMBER()over(order by AccountNo ) + (select isnull(max(SlNo),0) from #PostingDrop) SlNo
+				,null MiscChargeNo
+				,null TaxCodeMiscChargesDetailNo
+				,'' ItemNos from (
+		select case when NEWMAPRate > MaxMAPRate then
+				sum(idd.DiffRate * (StockQty+ IssuedQty) ) - (MaxMAPRate -MAPRate) * ClosingQty  
+				when NewMAPRate < MinMAPRate then
+				 abs(sum(idd.DiffRate * (StockQty+ IssuedQty)))- (MAPRate - MinMAPRate) * ClosingQty
+				ELSE
+				 SUM(idd.DiffRate * (StockQty+ IssuedQty)) 
+				END Amount,AccountNo 
+			from #ItemDetailDrop  idd
+			inner join masterdata.mItemOtherInformation ioi on ioi.ItemNo = idd.ItemNo			
+			left join (select ItemNo,max(IR.AccountNo)AccountNo
+							from Finance.ARDItemRule IR
+							inner join masterdata.mAccountMaster AM on AM.AccountNo=IR.AccountNo
+							where AM.AccountTypeNo=18 group by ItemNo) ItemAC on ItemAC.ItemNo = idd.ItemNo 
+			WHERE (NEWMAPRate not between MinMAPRate and MaxMAPRate or ClosingQty is null)
+			And ioi.StockValueMethodNo =4 
+			group by NewMAPRate ,MinMAPRate ,MaxMAPRate ,MAPRate,ClosingQty ,AccountNo 
+			) tt  group by tt.AccountNo 
+
+Insert into #PostingDrop 
+		select cast(0 as bit) [Add to Basic]
+				,'Stock Account' as Particular
+				,convert(decimal(15,2),case when sum(Amount)>0 then sum(Amount) else null end) [Debit Amount]
+				,convert(decimal(15,2),case when sum(Amount)>0 then null else ABS(sum(Amount)) end) [Credit Amount]
+				, ItemAC.AccountNo [Account Name]
+				,cast(null as varchar) [Ref. Detail]
+				,cast(null as varchar) [Cost Center]
+				,abs(sum(Amount)) [Amount]
+				,case when sum(Amount)>0 then 1 else 2 end [Type]
+				,ROW_NUMBER()over(order by ItemAC.AccountNo ) SlNo
+				,null MiscChargeNo
+				,null TaxCodeMiscChargesDetailNo
+				,'' ItemNos
+			from (select  SUM(StockQty * DiffRate) Amount ,idd.ItemNo ,MakeNo,TechnicalGradeNo  
+							from #ItemDetailDrop idd
+							left join Purchase.POAmendmentMain pam on pam.POAmendmentNo = idd.ReferenceNo 
+							inner join masterdata.mItemOtherInformation ioi on ioi.ItemNo = idd.ItemNo
+							where ioi.StockValueMethodNo <>4 or pam.IndentTypeNo =1
+							group by idd.ItemNo,MakeNo,TechnicalGradeNo)I
+				outer apply (SELECT pad.AccountNo FROM Purchase.POAccountAssignmentDetail pad
+						inner join Purchase.POAmendmentMain pam on pam.PONo = pad.PONo
+						inner join #ItemDetailDrop PID on PID.ReferenceNo = pam.POAmendmentNo 
+						where PID.ReferenceType ='PMPO' and pad.Flag ='IM' and pad.Id = PID.ItemNo
+						and pad.AccountTypeNo in (14 ,16)
+						and PID.ItemNo = I.ItemNo 
+						group by pad.AccountNo 
+						union all
+						SELECT pad.AccountNo  FROM Purchase.POAccountAssignmentDetail pad
+						inner join Purchase.POAmendmentMain pam on pam.PONo = pad.PONo
+						inner join #ItemDetailDrop PID on PID.ReferenceNo = pam.POAmendmentNo 
+						where PID.ReferenceType ='PMPO' and pad.Flag ='IM3' and pad.Id = PID.ItemNo
+						and pad.AccountTypeNo in (54)
+						and PID.ItemNo = I.ItemNo 
+						group by pad.AccountNo  
+						union all
+						select top 1 (IR.AccountNo)AccountNo 
+							from Finance.ARDItemRule IR
+							inner join masterdata.mAccountMaster AM on AM.AccountNo=IR.AccountNo
+							inner join  #ItemDetailDrop ID on ID.ItemNo = IR.ItemNo 
+							where AM.AccountTypeNo=14 and ID.ReferenceType ='IMST'
+							and ir.ItemNo = I.ItemNo 
+							
+						) ItemAC 
+			group by  ItemAC.AccountNo 
+
+Insert into #PostingDrop 
+		select cast(0 as bit) [Add to Basic]
+				,'Price Variance' as Particular
+				,convert(decimal(15,2),case when sum(Amount)>0 then sum(Amount) else null end) [Debit Amount]
+				,convert(decimal(15,2),case when sum(Amount)>0 then null else ABS(sum(Amount)) end) [Credit Amount]
+				, ItemAC.AccountNo [Account Name]
+				,cast(null as varchar) [Ref. Detail]
+				,cast(null as varchar) [Cost Center]
+				,abs(sum(Amount)) [Amount]
+				,case when sum(Amount)>0 then 1 else 2 end [Type]
+				,ROW_NUMBER()over(order by ItemAC.AccountNo ) + (select isnull(max(SlNo),0) from #PostingDrop) SlNo
+				,null MiscChargeNo
+				,null TaxCodeMiscChargesDetailNo
+				,'' ItemNos
+			from (select  SUM(IssuedQty * DiffRate) Amount ,idd.ItemNo ,MakeNo,TechnicalGradeNo  
+							from #ItemDetailDrop  idd
+							left join Purchase.POAmendmentMain pam on pam.POAmendmentNo = idd.ReferenceNo 
+							inner join masterdata.mItemOtherInformation ioi on ioi.ItemNo = idd.ItemNo
+							where ioi.StockValueMethodNo <>4 or pam.IndentTypeNo =1
+							group by idd.ItemNo,MakeNo,TechnicalGradeNo)I
+				left join (select ItemNo,max(IR.AccountNo)AccountNo
+							from Finance.ARDItemRule IR
+							inner join masterdata.mAccountMaster AM on AM.AccountNo=IR.AccountNo
+							where AM.AccountTypeNo=18 group by ItemNo) ItemAC on ItemAC.ItemNo = I.ItemNo 
+			group by  ItemAC.AccountNo 
+			
+insert into #PostingDrop  
+	 select cast(0 as bit) [Add to Basic]
+				,'Stock In Transit' as Particular
+				,convert(decimal(15,2), case when sum(Amount)>0 then null else abs(sum(Amount)) end) [Debit Amount]
+				,convert(decimal(15,2),case when sum(Amount)>0 then  sum(Amount) else null end) [Credit Amount]
+				, ItemAC.AccountNo [Account Name]
+				,cast(null as varchar) [Ref. Detail]
+				,cast(null as varchar) [Cost Center]
+				,ABS(sum(Amount)) [Amount]
+				,case when sum(Amount)>0 then 2 else 1 end [Type]
+				,ROW_NUMBER()over(order by  ItemAC.AccountNo ) 
+						+ (select isnull(max(SlNo),0) from #PostingDrop) SlNo
+				,null MiscChargeNo
+				,null TaxCodeMiscChargesDetailNo
+				,'' ItemNos
+			from (select sum((StockQty + IssuedQty) * DiffRate) Amount ,ItemNo ,MakeNo,TechnicalGradeNo  
+					from #ItemDetailDrop
+					 group by ItemNo,MakeNo,TechnicalGradeNo) I
+			 left join (select ItemNo,max(IR.AccountNo)AccountNo
+							from 
+							Finance.ARDIntermediatePostingAccountRule AR
+							inner join Finance.ARDItemRule IR on IR.ARDNo=AR.ARDNo and IR.AccountNo = AR.AccountNo
+							inner join masterdata.mAccountMaster AM on AM.AccountNo=IR.AccountNo
+							where AM.AccountTypeNo=54 and AR.IntermediateAccountTypeNo =18
+							group by ir.ItemNo ) ItemAC on ItemAC.ItemNo= I.ItemNo 
+			group by  ItemAC.AccountNo 
+			
+-- Lost In Transit
+BEGIN
+			insert into #PostingDrop  
+			 select cast(0 as bit) [Add to Basic]
+						,'Stock In Transit' as Particular
+						,convert(decimal(15,2), case when sum(Amount)>0 then null else abs(sum(Amount)) end) [Debit Amount]
+						,convert(decimal(15,2),case when sum(Amount)>0 then  sum(Amount) else null end) [Credit Amount]
+						, ItemAC.AccountNo [Account Name]
+						,cast(null as varchar) [Ref. Detail]
+						,cast(null as varchar) [Cost Center]
+						,ABS(sum(Amount)) [Amount]
+						,case when sum(Amount)>0 then 2 else 1 end [Type]
+						,ROW_NUMBER()over(order by  ItemAC.AccountNo ) 
+								+ (select isnull(max(SlNo),0) from #PostingDrop) SlNo
+						,null MiscChargeNo
+						,null TaxCodeMiscChargesDetailNo
+						,'' ItemNos
+					from (select sum(TransferAmount) Amount ,ItemNo ,MakeNo,TechnicalGradeNo  
+							from #ItemDetailDrop
+							 group by ItemNo,MakeNo,TechnicalGradeNo) I
+					 left join (select ItemNo,max(IR.AccountNo)AccountNo
+									from 
+									Finance.ARDIntermediatePostingAccountRule AR
+									inner join Finance.ARDItemRule IR on IR.ARDNo=AR.ARDNo and IR.AccountNo = AR.AccountNo
+									inner join masterdata.mAccountMaster AM on AM.AccountNo=IR.AccountNo
+									where AM.AccountTypeNo=54 and AR.IntermediateAccountTypeNo =18
+									group by ir.ItemNo ) ItemAC on ItemAC.ItemNo= I.ItemNo 
+					Where @IsLostInTransitCase=1							
+					group by  ItemAC.AccountNo 			
+ 
+		insert into #PostingDrop  
+			 select cast(0 as bit) [Add to Basic]
+						,'Lost In Transit' as Particular
+						,convert(decimal(15,2), sum(Amount)) [Debit Amount]
+						,convert(decimal(15,2),0) [Credit Amount]
+						, ItemAC.AccountNo [Account Name]
+						,cast(null as varchar) [Ref. Detail]
+						,cast(null as varchar) [Cost Center]
+						,ABS(sum(Amount)) [Amount]
+						,1 [Type]
+						,ROW_NUMBER()over(order by  ItemAC.AccountNo ) 
+								+ (select isnull(max(SlNo),0) from #PostingDrop) SlNo
+						,null MiscChargeNo
+						,null TaxCodeMiscChargesDetailNo
+						,'' ItemNos
+					from (select sum(TransferAmount) Amount ,ItemNo ,MakeNo,TechnicalGradeNo  
+							from #ItemDetailDrop
+							 group by ItemNo,MakeNo,TechnicalGradeNo) I
+					 left join (select ItemNo,max(IR.AccountNo)AccountNo
+									from Finance.ARDItemRule IR
+									inner join masterdata.mAccountMaster AM on AM.AccountNo=IR.AccountNo
+									where AM.AccountTypeNo=17 group by ItemNo
+								) ItemAC on ItemAC.ItemNo= I.ItemNo 
+					Where @IsLostInTransitCase=1							
+					group by  ItemAC.AccountNo 	
+END
+ 		
+ if exists(select 1 from #PostingDrop having abs(SUM([Credit Amount])- SUM([Debit Amount]))<=.5)
+ begin
+	update PD set [Debit Amount] = [Debit Amount] + ISNULL(diff,0)
+		from
+		#PostingDrop PD
+		cross join (select SUM([Credit Amount])- SUM([Debit Amount]) Diff from #PostingDrop) tt
+		where PD.SlNo  = 1
+	
+	update PD set [Credit Amount] = [Credit Amount] + ISNULL(diff,0)
+		from
+		#PostingDrop PD
+		cross join (select SUM([Debit Amount])- SUM([Credit Amount]) Diff from #PostingDrop) tt
+		where PD.SlNo  = 1
+			
+ end
+ 
+ 
+select * from #PostingDrop
+ where isnull([Debit Amount],0) >0 or isnull([Credit Amount],0) >0
+  
+		 
+if OBJECT_ID('tempdb..#ItemDetailDrop') is not null
+	drop table #ItemDetailDrop
+
+if OBJECT_ID('tempdb..#IncludedTaxDrop') is not null
+	drop table #IncludedTaxDrop
+
+if OBJECT_ID('tempdb..#FreightDrop') is not null
+	drop table #FreightDrop
+
+if OBJECT_ID('tempdb..#ExpensesDrop') is not null
+	drop table #ExpensesDrop
+if OBJECT_ID('tempdb..#PostingDrop') is not null
+	drop table #PostingDrop
+	
+END TRY
+	
+	BEGIN CATCH
+		select ERROR_MESSAGE()
+		INSERT INTO [masterdata].[mErrorLog]
+			   ([ErrorDate]
+			   ,[ErrorNo]
+			   ,[ErrorSeverity]
+			   ,[ErrorState]
+			   ,[ErrorProcedure]
+			   ,[ErrorLine]
+			   ,[ErrorDescription]
+			   ,[UserName]
+			   ,[FormCode])
+		VALUES
+			   (getdate()
+			   ,ERROR_NUMBER()
+			   ,ERROR_SEVERITY()
+			   ,ERROR_STATE()
+			   ,ERROR_PROCEDURE()
+			   ,ERROR_LINE()
+			   ,ERROR_MESSAGE()
+			   ,SUSER_SNAME()
+			   ,'QDAS')
+	END CATCH
+END

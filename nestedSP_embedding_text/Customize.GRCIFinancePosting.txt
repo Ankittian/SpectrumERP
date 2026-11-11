@@ -1,0 +1,132 @@
+Stored procedure Customize.GRCIFinancePosting: stock tranfer Online FInance Posting. Called from Finance.FinancePostingFillValuesDocumentDetails.
+Parameters: @ItemDetails xml, @CompanyNo tinyint
+Author: Akhli, created 06 aug 2013
+Code:
+-- =============================================
+-- Author:		Akhli
+-- Create date: 06 aug 2013
+-- Description:	stock tranfer Online FInance Posting
+-- =============================================
+---  [Customize].[GRCIFinancePosting]  '<DocumentElement><Table><AccountNo>1880</AccountNo><New_x0020_Account_x0020_Name>1974</New_x0020_Account_x0020_Name><Amount>27296.00</Amount></Table></DocumentElement>',4
+CREATE PROCEDURE [Customize].[GRCIFinancePosting] 
+	@ItemDetails xml ,
+	@CompanyNo tinyint
+AS
+BEGIN
+
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+
+begin try
+ 
+create table #Posting ([Add to Basic] bit,Particular varchar(500),[Debit Amount] decimal(15,2) , 
+		[Credit Amount] decimal(15,2),[Account Name] int, [Ref. Detail] varchar(50),[Cost Center] varchar(50),
+		[Amount] decimal(15,2), [Type] tinyint,SlNo tinyint ,MiscChargeNo int , TaxCodeMiscChargesDetailNo int,
+			ItemNos varchar(200))
+ 
+ Create Table #VoucherDetail (AccountNo Int , NewAccountNo Int, Amount decimal(12,2))
+ 
+ declare @idoc int
+	EXEC sp_xml_preparedocument @idoc OUTPUT, @ItemDetails 
+	
+	Insert into #VoucherDetail
+	 Select AccountNo
+	 ,[New Account Name]
+	 ,[Amount]
+	 From		
+			(
+				Select AccountNo,[New Account Name],[Amount]
+				From OPENXML (@idoc, '/DocumentElement/Table',2)  
+				with (AccountNo Int ,[New Account Name] Int,[Amount] Decimal(15,3)
+				) cte
+			) tt
+	
+		
+	EXEC sp_xml_removedocument @idoc 	
+	
+ 
+			Insert into #Posting 
+				select cast(0 as bit) [Add to Basic]
+				,'Consumption A/c' as Particular
+				,convert(decimal(15,2), null) [Debit Amount]
+				,convert(decimal(15,2),sum(Amount)) [Credit Amount]
+				,AccountNo [Account Name]
+				,cast(null as varchar) [Ref. Detail]
+				,cast(null as varchar) [Cost Center]
+				,SUM(Amount) [Amount]
+				,2 [Type]
+				,ROW_NUMBER()over(order by AccountNo ) + (select isnull(max(SlNo),0) from #Posting) SlNo
+				,null MiscChargeNo
+				,null TaxCodeMiscChargesDetailNo
+				,'' ItemNos
+			from #VoucherDetail
+			group by AccountNo 
+			
+			
+			Insert into #Posting 
+				select cast(0 as bit) [Add to Basic]
+				,'Capital A/c' as Particular
+				,convert(decimal(15,2), sum(Amount)) [Debit Amount]
+				,convert(decimal(15,2),null) [Credit Amount]
+				,NewAccountNo [Account Name]
+				,cast(null as varchar) [Ref. Detail]
+				,cast(null as varchar) [Cost Center]
+				,SUM(Amount) [Amount]
+				,1 [Type]
+				,ROW_NUMBER()over(order by NewAccountNo ) + (select isnull(max(SlNo),0) from #Posting) SlNo
+				,null MiscChargeNo
+				,null TaxCodeMiscChargesDetailNo
+				,'' ItemNos
+			from #VoucherDetail
+			group by NewAccountNo 
+		 
+
+ if exists(select 1 from #Posting having abs(SUM([Credit Amount])- SUM([Debit Amount]))<=.5)
+ begin
+	update PD set [Debit Amount] = [Debit Amount] + ISNULL(diff,0)
+		from
+		#Posting PD
+		cross join (select SUM([Credit Amount])- SUM([Debit Amount]) Diff from #Posting) tt
+		where PD.SlNo  = 1
+	
+	update PD set [Credit Amount] = [Credit Amount] + ISNULL(diff,0)
+		from
+		#Posting PD
+		cross join (select SUM([Debit Amount])- SUM([Credit Amount]) Diff from #Posting) tt
+		where PD.SlNo  = 1
+			
+ end
+ 
+ 
+select * from #Posting
+ where isnull([Debit Amount],0) >0 or isnull([Credit Amount],0) >0
+   
+   
+   
+END TRY
+	
+	BEGIN CATCH
+		select ERROR_MESSAGE()
+		INSERT INTO [masterdata].[mErrorLog]
+			   ([ErrorDate]
+			   ,[ErrorNo]
+			   ,[ErrorSeverity]
+			   ,[ErrorState]
+			   ,[ErrorProcedure]
+			   ,[ErrorLine]
+			   ,[ErrorDescription]
+			   ,[UserName]
+			   ,[FormCode])
+		VALUES
+			   (getdate()
+			   ,ERROR_NUMBER()
+			   ,ERROR_SEVERITY()
+			   ,ERROR_STATE()
+			   ,ERROR_PROCEDURE()
+			   ,ERROR_LINE()
+			   ,ERROR_MESSAGE()
+			   ,SUSER_SNAME()
+			   ,'IGRN')
+	END CATCH
+END

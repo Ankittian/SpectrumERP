@@ -1,0 +1,111 @@
+Stored procedure Information.MRPendingPurchaseOrderForDept: Get Pending Purchase Order. Called from Inventory.IDMRGetDeptInfo.
+Reads: GlobalData.IndentType, Inventory.IndentItemDetail, Inventory.IndentMain, Inventory.IndentRequisitionMain, masterdata.mVendorLocationDetail, payroll.tblDivisionMaster, Purchase.POIndentDetail, Purchase.POMain, Security.Login
+Parameters: @CompanyNo tinyint, @DocumentDate smalldatetime, @DeptNo int
+Author: Monika Rajput, created 2013/09/24
+Code:
+
+-- =============================================
+-- Author:		Monika Rajput
+-- Create date: 2013/09/24
+-- Description:	Get Pending Purchase Order
+-- =============================================
+CREATE PROCEDURE [Information].[MRPendingPurchaseOrderForDept] 
+	-- Add the parameters for the stored procedure here
+	@CompanyNo tinyint,
+	@DocumentDate smalldatetime,
+	@DeptNo int
+AS
+BEGIN
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+
+    -- Insert statements for procedure here
+	
+    
+	declare @str varchar(max)
+    select @str=masterdata.JSForInformation('MMPR')
+    set @str=@str+masterdata.CSSForInformation('MMPR')
+	set @str=@str+'<table class="altrowstable" id="alternatecolorPPOInfo">'
+	set @str=@str+'<Caption><Font color="Maroon"><h3 align="Left"><b>Pending Purchase Order</b></h3></Font></Caption>'
+    set @str=@str+'<tr><th>Sl. No.</th><th>Division</th><th>Document No.</th><th>Document Date</th><th>Vendor Name</th><th>Purchase Request No.</th><th>Purchase Request Date</th><th>Material Request No.</th><th>Material Request Date</th><th>Request Type</th><th>Requested By</th><th>Created By</th><th>Authorized By</th></tr>'
+	set @str=@str
+				 +( REPLACE(
+				    REPLACE(
+				    REPLACE(
+				    REPLACE(
+				    REPLACE(
+				    REPLACE(
+				    REPLACE(
+				    REPLACE(
+				    replace(
+					replace(
+					replace(
+					replace(
+					replace(
+					   (    
+							Select Row_number() over (order by PO.DocumentDate desc) td1
+							      ,isnull(DM.DivisionName,'') td2
+							      ,PO.DocumentNoYearly td3
+								  ,convert(varchar(20),PO.DocumentDate,103)  td4
+								  ,VLD.VendorName td5
+								  ,PR.DocumentNoYearly td6
+								  ,convert(varchar(20),PR.DocumentDate,103) td7
+								  ,MR.DocumentNoYearly td8
+								  ,convert(varchar(20),MR.DocumentDate,103) td9
+								  ,IT.IndentType  td10
+								  ,MR.RequestedBy td11
+                                  ,L1.PrintingName td12
+                                  ,isnull(L2.PrintingName,'') td13
+							From Purchase.POMain PO 
+							Inner Join Purchase.POIndentDetail POI ON POI.PONo=PO.PONo
+							inner Join Inventory.IndentMain PR ON PR.IndentNo=POI.IndentNo 
+															   and PO.PORefDocumentTypeNo=3 and PODocumentTypeNo=2
+							Inner Join Inventory.IndentItemDetail ID ON ID.IndentNo=PR.IndentNo
+																	 And ID.ItemNo=POI.ItemNo
+																	 And isnull(ID.MakeNo,0)=isnull(POI.MakeNo,0)
+																	 And isnull(ID.TechnicalGradeNo,0)=isnull(POI.TechnicalGradeNo,0)                                   
+							Inner Join Inventory.IndentRequisitionMain MR ON MR.IndentRequisitionNo=PR.RefDocumentNo 
+							                                              and PR.IndentAgainstNo=3
+							Inner Join masterdata.mVendorLocationDetail VLD ON VLD.VendorLocationNo=PO.VendorLocationNo
+							Inner Join GlobalData.IndentType IT ON IT.IndentTypeNo=PO.IndentTypeNo 
+							Left Join payroll.tblDivisionMaster DM ON DM.DivisionNo=PO.DivisionNo
+							Inner Join Security.Login L1 ON L1.LoginNo=PO.CreatedBy
+							Left Join Security.Login L2 ON L2.LoginNo=PO.AuthorizedBy
+							where  PO.StatusNo in(1,8,5,6)  --- For Pending 
+							       And MR.DeptNo=@DeptNo 
+							       And PO.CompanyNo=@CompanyNo 
+							       And PO.DocumentDate<=@DocumentDate
+							Group by  PO.DocumentNoYearly
+							          ,PO.DocumentDate
+							          ,VLD.VendorName
+							          ,PR.DocumentNoYearly
+							          ,PR.DocumentDate
+							          ,MR.DocumentNoYearly      
+							          ,MR.DocumentDate
+								      ,IT.IndentType 
+								      ,MR.RequestedBy 
+								      ,L1.PrintingName
+								      ,L2.PrintingName
+								      ,DM.DivisionName                           
+
+						 for xml path('tr')
+						 ),'<td1>','<td style="text-align: center;">')
+						                     ,'<td2>','<td >')
+											 ,'<td3>','<td>')
+											 ,'<td4>','<td style="text-align: center;">')
+											 ,'<td5>','<td>')
+											 ,'<td6>','<td>')
+											 ,'<td7>','<td style="text-align: center;">')
+											 ,'<td8>','<td>')
+											 ,'<td9>','<td style="text-align: center;">')
+											 ,'<td10>','<td>')
+											 ,'<td11>','<td>')
+											 ,'<td12>','<td>')
+											 ,'<td13>','<td>'))
+								
+				   
+	set @str=@str+'</table>'
+	
+	select @str
+END

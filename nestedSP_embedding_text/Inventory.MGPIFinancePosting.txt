@@ -1,0 +1,157 @@
+Stored procedure Inventory.MGPIFinancePosting: Material Issue Posting. Called from Finance.FinancePostingFillValuesDocumentDetails.
+Reads: Finance.ARDItemRule, Finance.ARDVendorLocationRule, Inventory.GatePassOutItemDetail
+Parameters: @OtherDataInXml xml, @CompanyNo tinyint, @VendorLocationNo int, @ItemNos varchar
+Author: Akhil, created 04 03 2020
+Code:
+					-- =============================================
+-- Author:		Akhil
+-- Create date:  04 03 2020
+-- Description:	Material Issue Posting
+-- =============================================
+--- Inventory].[IMSTFinancePosting] '<DocumentElement />' 
+CREATE PROCEDURE [Inventory].[MGPIFinancePosting] 
+	@OtherDataInXml xml ,
+	@CompanyNo tinyint ,
+	@VendorLocationNo int,
+	@ItemNos varchar(max)
+as
+
+BEGIN
+begin try
+declare @IsManagingExpenseAccount bit
+ 
+
+create table #Posting ([Add to Basic] bit,Particular varchar(500),[Debit Amount] decimal(15,2) , 
+		[Credit Amount] decimal(15,2),[Account Name] int, [Ref. Detail] varchar(50),[Cost Center] varchar(50),
+		[Amount] decimal(15,2), [Type] tinyint,SlNo tinyint identity(1,1) ,MiscChargeNo int , TaxCodeMiscChargesDetailNo int,
+			ItemNos varchar(200),GroupNo smallint, GroupTypeNo tinyint, NatureNo  tinyint, AccountTypeNo tinyint)
+
+		declare @ItemTable table (GatePassOutNo int,ItemNo int,MakeNo int,Qty decimal(12,3),Rate money,BasicAmount money,GatePassOutRate Money)
+		insert into @ItemTable (GatePassOutNo,ItemNo,MakeNo,Qty,Rate,BasicAmount)
+		select Col1,Col2,Col3,sum(convert(money,Col4)), Col5, sum(CONVERT(decimal(12,3),Col6))
+		from masterdata.Split_RowColumn(@ItemNos,'`','~')
+		group by Col1, Col2,Col3,Col5
+ 
+		Update IT
+		Set IT.GatePassOutRate = GPOID.Rate 
+		from @ItemTable IT
+		inner join Inventory.GatePassOutItemDetail GPOID on GPOID.GatePassOutNo = IT.GatePassOutNo 
+														and GPOID.ItemNo = IT.ItemNo 
+														and IsNULL(GPOID.MakeNo,0) = ISNULL(IT.MakeNo,0)   
+		
+
+
+declare @MGPI_GatePassTypeNo tinyint
+
+			SELECT @MGPI_GatePassTypeNo=v.value('GatePassTypeNo[1]','TinyInt')
+			FROM @OtherDataInXml.nodes('/DocumentElement/Table') x(v)
+			
+			if ISNULL(@MGPI_GatePassTypeNo,0) = 6
+			Begin 
+				insert into #Posting ([Add to Basic] ,Particular ,[Debit Amount] ,
+								[Credit Amount] ,[Account Name] ,Amount ,[Type] ,
+								MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos)
+				select cast(0 as bit) [Add to Basic] ,'Stock A/C' Particular 
+					,sum(I.BasicAmount) [Debit Amount],CAST(null as money) [Credit Amount] 
+					,IR.AccountNo [Account Name] 
+					,sum(I.BasicAmount) Amount ,1 [Type] 
+					,CAST(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo,CAST(null as varchar(5000))ItemNos
+				from @ItemTable I
+					left join (select ItemNo,IR.AccountNo--,AM.AccountName
+								from Finance.ARDItemRule IR
+								--inner join masterdata.mAccountMaster AM on AM.AccountNo=IR.AccountNo
+								where IR.AccountTypeNo=14) IR on IR.ItemNo=I.ItemNo 
+				group by IR.AccountNo,isnull(IR.AccountNo,I.ItemNo)
+				Union
+				select cast(0 as bit) [Add to Basic] ,'Supplier Loan A/C' Particular 
+				,CAST(null as money)[Debit Amount],sum(I.BasicAmount) [Credit Amount] 
+				,IR.AccountNo [Account Name] 
+				,sum(I.BasicAmount) Amount ,2 [Type] 
+				,CAST(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo,CAST(null as varchar(5000))ItemNos
+				from @ItemTable I
+					Outer Apply (select IR.AccountNo
+								from Finance.ARDVendorLocationRule IR
+								where IR.AccountTypeNo=72 
+								and IR.VendorLocationNo = @VendorLocationNo/*Supplier Loan Account*/) IR
+				group by IR.AccountNo
+			End 
+			Else If ISNULL(@MGPI_GatePassTypeNo,0) = 7 
+			Begin 
+				insert into #Posting ([Add to Basic] ,Particular ,[Debit Amount] ,
+								[Credit Amount] ,[Account Name] ,Amount ,[Type] ,
+								MiscChargeNo ,TaxCodeMiscChargesDetailNo ,ItemNos)
+				select cast(0 as bit) [Add to Basic] ,'Stock A/C' Particular 
+					,sum(I.Qty*I.GatePassOutRate)[Debit Amount],CAST(null as money) [Credit Amount] 
+					,IR.AccountNo [Account Name] 
+					,sum(I.Qty*I.GatePassOutRate) Amount ,1 [Type] 
+					,CAST(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo,CAST(null as varchar(5000))ItemNos
+				from @ItemTable I
+					left join (select ItemNo,IR.AccountNo--,AM.AccountName
+								from Finance.ARDItemRule IR
+								--inner join masterdata.mAccountMaster AM on AM.AccountNo=IR.AccountNo
+								where IR.AccountTypeNo=14) IR on IR.ItemNo=I.ItemNo 
+				group by IR.AccountNo,isnull(IR.AccountNo,I.ItemNo)
+				Union
+				select cast(0 as bit) [Add to Basic] ,'Customer Loan A/C' Particular 
+				,CAST(null as money) [Debit Amount],sum(I.Qty*I.GatePassOutRate) [Credit Amount] 
+				,IR.AccountNo [Account Name] 
+				,sum(I.Qty*I.GatePassOutRate) Amount ,2 [Type] 
+				,CAST(null as smallint) MiscChargeNo,null TaxCodeMiscChargesDetailNo,CAST(null as varchar(5000))ItemNos
+				from @ItemTable I			
+					Outer Apply (select IR.AccountNo
+								from Finance.ARDVendorLocationRule IR
+								where IR.AccountTypeNo=71 
+								and IR.VendorLocationNo = @VendorLocationNo/*Supplier Loan Account*/) IR
+				Where IsNULL(I.GatePassOutRate,0) <> 0 
+				group by IR.AccountNo
+			End 
+
+ if exists(select 1 from #Posting having abs(SUM([Credit Amount])- SUM([Debit Amount]))<=.5)
+ begin
+	update PD set [Debit Amount] = [Debit Amount] + ISNULL(diff,0)
+		from
+		#Posting PD
+		cross join (select SUM([Credit Amount])- SUM([Debit Amount]) Diff from #Posting) tt
+		where PD.SlNo  = 1
+	
+	update PD set [Credit Amount] = [Credit Amount] + ISNULL(diff,0)
+		from
+		#Posting PD
+		cross join (select SUM([Debit Amount])- SUM([Credit Amount]) Diff from #Posting) tt
+		where PD.SlNo  = 1
+			
+ end
+ 
+ 
+select * from #Posting
+ where isnull([Debit Amount],0) >0 or isnull([Credit Amount],0) >0
+   
+  
+  drop table #Posting 
+   
+END TRY
+	
+	BEGIN CATCH
+		select ERROR_MESSAGE()
+		INSERT INTO [masterdata].[mErrorLog]
+			   ([ErrorDate]
+			   ,[ErrorNo]
+			   ,[ErrorSeverity]
+			   ,[ErrorState]
+			   ,[ErrorProcedure]
+			   ,[ErrorLine]
+			   ,[ErrorDescription]
+			   ,[UserName]
+			   ,[FormCode])
+		VALUES
+			   (getdate()
+			   ,ERROR_NUMBER()
+			   ,ERROR_SEVERITY()
+			   ,ERROR_STATE()
+			   ,ERROR_PROCEDURE()
+			   ,ERROR_LINE()
+			   ,ERROR_MESSAGE()
+			   ,SUSER_SNAME()
+			   ,'MGPI')
+	END CATCH
+END

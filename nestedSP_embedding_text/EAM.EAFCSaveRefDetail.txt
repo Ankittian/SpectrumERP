@@ -1,0 +1,71 @@
+Stored procedure EAM.EAFCSaveRefDetail: Save Fuel Consumption RefDetail. Called from Inventory.IMMISaveMaterialIssueItemDetail.
+Writes: EAM.FuelConsumptionRefDetail
+Parameters: @FuelConsumptionNo int, @IssueNo int, @FuelStationName varchar(100), @DriverNo smallint, @BillNo varchar(30), @BillDate smalldatetime, @OnDate smalldatetime, @Quantity decimal(12,3), @Rate money, @Amount money, @IsTankFull Bit = 0, @OutputStatusNo tinyint = null OUTPUT, @OutputStatusRemarks varchar(4000) = null OUTPUT
+Author: TEERATH, created 11 Jun 2013
+Code:
+
+-- =============================================
+-- Author:		TEERATH
+-- Create date: 11 Jun 2013
+-- Description: Save Fuel Consumption RefDetail.
+-- =============================================
+CREATE PROCEDURE [EAM].[EAFCSaveRefDetail]
+(
+@FuelConsumptionNo  int
+,@IssueNo  int
+,@FuelStationName  varchar(100)
+,@DriverNo  smallint
+,@BillNo  varchar(30)
+,@BillDate  smalldatetime
+,@OnDate  smalldatetime
+,@Quantity  decimal(12,3)
+,@Rate  money
+,@Amount  money
+,@IsTankFull Bit = 0
+,@OutputStatusNo tinyint = null output
+,@OutputStatusRemarks varchar(4000) = null output
+)
+AS
+
+BEGIN
+	SET NOCOUNT ON;
+	
+	BEGIN TRY
+
+				INSERT INTO  [EAM].[FuelConsumptionRefDetail]
+				   (
+				    FuelConsumptionNo
+				   ,IssueNo
+				   ,FuelStationName
+				   ,DriverNo
+				   ,BillNo
+				   ,BillDate
+				   ,OnDate
+				   ,Quantity
+				   ,Rate
+				   ,Amount
+				   ,IsTankFull
+				   )
+				VALUES
+				   (
+				    @FuelConsumptionNo
+				   ,@IssueNo
+				   ,@FuelStationName
+				   ,@DriverNo
+				   ,@BillNo
+				   ,@BillDate
+				   ,@OnDate
+				   ,@Quantity
+				   ,@Rate
+				   ,@Amount
+				   ,@IsTankFull
+				   )
+
+		Select 1,'Success'
+	select @OutputStatusNo = 1 
+	END TRY
+	BEGIN CATCH
+		Select 0,Error_Message()
+		select @OutputStatusNo = 0, @OutputStatusRemarks = ERROR_MESSAGE ()
+	END CATCH
+END
