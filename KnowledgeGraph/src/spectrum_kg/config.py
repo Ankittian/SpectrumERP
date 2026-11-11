@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,7 @@ class Settings:
     project_dir: Path
     source_root: Path
     source_roots: list[Path]
+    docs_dir: Path
     domain_dir: Path
     cache_dir: Path
     roslyn_extractor: Path
@@ -30,6 +32,17 @@ class Settings:
     def datalayer(self) -> dict[str, Any]: return self.raw.get("datalayer", {})
     @property
     def ui(self) -> dict[str, Any]: return self.raw.get("ui", {})
+    @property
+    def phases(self) -> dict[str, str]:
+        """source root -> phase name: the folder two levels up for `graphs-by-phase/phase-N/phase-N`, else the root's name."""
+        return {str(r): (r.parent.name if r.parent.name.lower().startswith("phase") else r.name) for r in self.source_roots}
+
+    def phase_of(self, bundle_root: Path) -> str:
+        for r in self.source_roots:
+            if r == bundle_root or r in bundle_root.parents:
+                return self.phases[str(r)]
+        return "unknown"
+
     @property
     def nested_sp_dirs(self) -> list[Path]:
         """Folders of nested SPs (no form bundle) stored as embedding-text .txt files with a `Code:` section."""
@@ -72,11 +85,19 @@ def load_settings(config_path: Path | None = None) -> Settings:
     load_dotenv(config_path.parent / ".env")
     raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
     base = config_path.parent
-    roots = [(base / r).resolve() for r in (raw.get("source_roots") or [raw.get("source_root", "..")])]
+    roots = [(base / r).resolve() for r in (raw.get("source_roots") or [])]
+    # `phase_globs`: every match is a source root, so a new graphs-by-phase/phase-N/phase-N folder is picked up with no
+    # config change. Matches are ordered by the number in the folder name (phase-2 before phase-10).
+    for pattern in raw.get("phase_globs") or []:
+        found = [p.resolve() for p in sorted(base.glob(pattern), key=_natural) if p.is_dir()]
+        roots += [p for p in found if p not in roots]
+    if not roots:
+        roots = [(base / raw.get("source_root", "..")).resolve()]
     return Settings(
         project_dir=base,
         source_root=Path(os.path.commonpath([str(r) for r in roots])),
         source_roots=roots,
+        docs_dir=(base / raw.get("embedding_docs_dir", "embedding_docs")).resolve(),
         domain_dir=(base / raw.get("domain_dir", "domain")).resolve(),
         cache_dir=(base / raw.get("cache_dir", ".cache")).resolve(),
         roslyn_extractor=(base / raw["roslyn_extractor"]).resolve(),
@@ -85,3 +106,7 @@ def load_settings(config_path: Path | None = None) -> Settings:
         exclude=raw.get("exclude", []),
         raw=raw,
     )
+
+
+def _natural(p: Path) -> list:
+    return [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", p.as_posix())]

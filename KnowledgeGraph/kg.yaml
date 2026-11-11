@@ -1,17 +1,22 @@
 # Build configuration for the SpectrumERP knowledge graph.
 # Paths are relative to this file.
 
-# Folders that hold the form bundles (phase-0 + phase-1 combined). Bundle names must be unique across roots.
-source_roots:
-  - ../graphs-by-phase/phase-0/phase-0
-  - ../graphs-by-phase/phase-1/phase-1
+# Every folder matching these globs is a phase root holding form bundles (phase-0, phase-1, phase-2, ... combined).
+# To add a phase, drop graphs-by-phase/phase-N/phase-N/<FormBundle>/ in place and run `kg docs sync` / `kg build`.
+# Bundle names must be unique across roots. `source_roots:` (explicit list) is still accepted for one-off folders.
+phase_globs:
+  - ../graphs-by-phase/phase-*/phase-*
 bundles: auto                   # auto = every top-level folder containing CONTENTS.md, Form/ or StoredProcedures/
 exclude: [KnowledgeGraph, .venv, .git, .vs, .claude]
 
 # Nested SPs (called only from other SPs, so absent from the form bundles), one embedding-text .txt per SP.
 # Only the SQL after the `Code:` line is parsed; a bundle's copy of the same SP takes precedence.
 nested_sp_dirs:
-  - ../embedding_text
+  - ../nestedSP_embedding_text
+
+# One editable .txt per graph node holding the exact text that gets embedded. Edit a file and the next build embeds
+# your version (see `kg docs --help`).
+embedding_docs_dir: embedding_docs
 
 domain_dir: domain             # curated functional docs (modules, concepts, processes, rules, forms)
 cache_dir: .cache               # Roslyn facts + embedding cache (git-ignored)
