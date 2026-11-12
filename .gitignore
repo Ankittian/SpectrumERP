@@ -50,6 +50,7 @@ embedding_docs/
 Thumbs.db
 ehthumbs.db
 Desktop.ini
-/graphs-by-phase
-/phase_1_new
 /flashcards
+
+# Combined graph export (~275 MB, delivered separately; see KnowledgeGraph/graph/MANIFEST.md)
+KnowledgeGraph/graph/graph.json

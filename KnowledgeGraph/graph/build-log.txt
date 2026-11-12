@@ -1,0 +1,301 @@
+bundles: NestedSPs, Reports-13a, Reports-13b, Reports-13c, Reports-13d, Reports-13e, Reports-13g, SingleFieldConfigs, fAccountGroupMaster, fAccountLedgerReport, fAccountMaster, fAccountRuleDefinition, fActivityMaster, fAdvancePassing, fAdvanceRequest, fAssetCapitalization, fAssetClass, fAssetDisposal, fAssetGroup, fAssetLocation, fAssetNumberStructure, fAssetOpening, fAssetTagBifurcation, fAssetTagLotMapping, fAssetUtalizationWork, fAuthorizationGroup, fAutogenerateServiceCallEquipment, fBG, fBINCard, fBalanceSheet, fBankAccountCommission, fBankBranchDetail, fBankGuarantee, fBankGuaranteeMapping, fBankJournal, fBankLimit, fBankReconciliation, fBillEntryEROS, fBillOfExchange, fBudget, fBudgetAmendment, fCS, fCashFlow, fCashJournal, fCashReconcilation, fCenvatUtilization, fChangeEquipmentDriver, fChangeEquipmentLocation, fChangeEquipmentOwner, fChangeItemUnitWeight, fChangeMaintenanceRequestStatus, fChangeMaterialStockNature, fChangeServiceContractPeriod, fChangeStockAllocation, fChangeTyreStatus, fChangeVoucherStatus, fChapterHeading, fChartOfAccount, fChartOfDepreciation, fChequePrint, fChgInDepreciationProv, fCityMaster, fClassMapping, fClearancePermit, fCommercialInvoice, fCommissionBill, fCompanyUpdate, fConcessionFormEntry, fConsumptionDetail, fContraVoucher, fCostCenterMaster, fCostGroup, fCostHead, fCreditNote, fCurrencyConversion, fCurrencyMaster, fCustomerEnquiry, fCustomerFeedbackParameter, fCustomerServiceInvoice, fDDPosting, fDayBookReport, fDebitNote, fDepreciation, fDepreciationBook, fDepreciationRule, fDepreciationRuleClassMapping, fDiscreteRMOpening, fDiscreteRMSetting, fDiscreteSINLOTEntry, fDiscreteStockAdjustment, fDispatchAdvise, fDispatchChallan, fDispatchChallanVTPL, fDispatchCustomerDetailVTPL, fDispatchInvoiceReconcilation, fDispatchPlanning, fDispatchPlanningAmendment, fDispatchPlanningBulkAmendment, fDocCheckListGroup, fDocumentCancellation, fDocumentReceipt, fDrCrNote, fDriverInformation, fEAMDocumentType, fEAMResourceMaster, fEQUReplacement, fEnquiryRejection, fEnquiryType, fEquipmentCategory, fEquipmentDocumentEntry, fEquipmentDownPeriod, fEquipmentMaster, fEquipmentReplacementRequest, fEquipmentRunningHours, fEstimation, fExciseInvoice, fExciseItemGroup, fExpenseAdvance, fExpenseApproval, fExpenseCategory, fExpenseCategorySupplementaryField, fExpenseEntry, fExpenseHead, fExpensePolicy, fExportDocuments, fFBPeriodMapping, fFPeriod, fFSLayoutDesign, fFSLayoutDesignMapping, fFSLayoutMaster, fFSLayoutOpening, fFSMultiLayoutMapping, fFinanceBook, fFinancePosting, fFinishGoodsValuation, fFirstWeighment, fFormExchangeRateSetting, fFreightInvoice, fFreightOrder, fFreightOrderAmendment, fFreightOrderMapping, fFuelConsumption, fFunctionalLocation, fGRN, fGSTAdvanceAdjustment, fGSTAdvanceReceipt, fGSTReversal, fGSTTaxCreditUtilization, fGateEntry, fGateEntryDRM, fGatePassIn, fGatePassOut, fGeneralPIReceipt, fGenerateEWayBill, fGoAheadLive, fHSNCode, fHeadDefinition, fImportSheet, fIncidentEntry, fIncidentReview, fIncoTermMaster, fIndent, fIndentDefaultSetting, fIndentRequisition, fInputExcisePosting, fInspectionEntry, fInspectionIntimation, fInsuranceClaim, fInsuranceDeclaration, fInterUnitMaterialTransferSetting, fInterUnitSCOSetting, fInterUnitStockTransfer, fInterestCalculator, fInvOpeningBalance, fInvStockTransfer, fInvStockVerification, fInvoiceCancellation, fIssueTradeCertificate, fItemAttribute, fItemConsumptionPattern, fItemEOQ, fItemMaster, fItemOpening, fItemStandardAttributeValue, fItemSupplementalInformation, fItemSuppliesSource, fItemTechGradeMapping, fJobControlSheet, fJournalVoucher, fLC, fLCAmendment, fLCOrderMapping, fLUTMaster, fLayoutSchedule, fLionsConsumptionEntry, fMISReportOther, fMPGroup, fMaintenanceCategoryTask, fMaintenanceOrder, fMaintenanceOrderAmendment, fMaintenanceOrderClosing, fMaintenanceReporting, fMaintenanceReportingExtension, fMaintenanceRequest, fMaintenanceSchedule, fMaintenanceScheduleChangeStatus, fMaintenanceScheduleOccurrence, fMaintenanceServiceOrder, fMaintenanceServiceOrderAmendment, fMakeMaster, fMaterialAgreementValidityChange, fMaterialComparativeStatement, fMaterialGroup, fMaterialIssue, fMaterialIssueDRM, fMaterialIssueExciseItemGroupWise, fMaterialPlanningMethod, fMaterialPlanningSetting, fMaterialPlanningUnit, fMaterialReturn, fMaterialReturnDRM, fMaterialSubGroupMaster, fMeasurementParameter, fMeterReading, fMeterReadingSimplified, fOpeningBankReconciliation, fOptimizationSetting, fOrderAccountAssignment, fOrderNature, fOtherInformation, fOutwardBillEntry, fPIReceipt, fPOAmendment, fPOBooking, fPOFollowUp, fPackSlip, fPaymentAdvice, fPaymentPlan, fPaymentPlanPartialCancellation, fPaymentRequest, fPaymentVoucher, fPermitMaster, fPicking, fPinToPinDistance, fPolicyEmployeeMapping, fPricingFactor, fProcurementUnit, fProductionEntrySimplified, fProductionFormula, fProductionUnit, fProformaInvoice, fPurchaseBill, fPurchaseOrder, fPurchaseOrganization, fPurchaseVoucher, fQCParameter, fQDAStocktransfer, fQualityParameter, fQuotation, fQuotationClosing, fRateContractorList, fRatioAnalysis, fRatioAnalysisSetting, fReceiptAcknowledgement, fReceiptRequest, fReceiptVoucher, fRecurringVoucher, fReferenceHoldReleaseDetail, fReferenceReconciliation, fReferenceReconciliationReversal, fReleaseRO, fRenameItemDescription, fReportingCOASetup, fRequestforQuotation, fResetMeasurementParameter, fResourceMaster, fResourceReporting, fReverseVoucher, fRevisedEstimation, fRevisedQuotation, fRevisedSCQuotation, fRevisedSalesQuotation, fSCAgreement, fSCOrder, fSCOrderAmendment, fSCQuotation, fSCRFQ, fSCRequisition, fSINDRM, fSINMakeUpdate, fSOChangeCustomStatus, fSOCustomStatus, fSafetyInstructionGroup, fSalaryPaymentPlan, fSaleAccPostingRule, fSalesAgreement, fSalesAgreementChangeStatus, fSalesBOQ, fSalesCommissionTerms, fSalesGroup, fSalesOrder, fSalesOrderAmendment, fSalesOrderChangeStatus, fSalesOrderShipmentDetail, fSalesOrderStatusCategory, fSalesOrganization, fSalesOtherInformation, fSalesPerson, fSalesQuotation, fSalesReturn, fSalesSupplementaryInvoice, fSalesVoucher, fSearch, fSecondWeighment, fServiceBill, fServiceCall, fServiceCallChangeStatus, fServiceCallMonitoring, fServiceCallResourceAllocation, fServiceCallResourceReporting, fServiceContract, fServiceContractCoverageTerm, fServiceContractOccurance, fServiceContractSetup, fServiceOrderReporting, fServiceTaxAbatementRule, fServiceTaxAdvanceAccount, fServiceTaxChallan, fServiceTaxDataVerify, fSetOpeningBalance, fShutdownWorkList, fSingleFieldMaster, fSkillMaster, fSolutionKnowledge, fSpecification, fStateMaster, fStockAdjustment, fStockDifferenceAdjustment, fStockJournalVoucher, fStockMonthlyLocking, fStockTransfer, fStockValueAdjustment, fSubcontractBOQ, fSubcontractReceipt, fSundryPayment, fSundryReceipt, fSupplementaryField, fSupplementaryFieldGroup, fSupplementaryInvoice, fTDCAccountRule, fTDCGroup, fTDCMaster, fTDSDataVerify, fTDSPayment, fTDSQuarterlyReturn, fTDSReturnBankChallanDetail, fTDSTCSSetup, fTDSTCSSetupYearly, fTaskMaster, fTaxBook, fTaxConcessionForm, fTechSpecificationHeadMaster, fTermsNCondition, fTestCertificate, fTradeCertificateMaster, fTradingItemTypeSetting, fTransactionAccountMapping, fTransitInsurancePolicy, fTrialBalance, fTripSheet, fTyreCategoryMaster, fTyreExpenseEntry, fTyreMaster, fTyreMovement, fTyreNSDReading, fTyreRepairCategory, fTyreRepairEntry, fTyreRepairRequest, fUnitMaster, fUnitRoundingSetting, fUpdateDROpeningBalance, fVTPLDrCrNote, fVTPLInvoices, fVTPLSalesReturn, fVehicleAxleLayout, fVehicleGateIn, fVehicleGateInAmendment, fVehicleGateOut, fVehicleInsuranceDeclaration, fVendorAgreement, fVendorCard, fVendorCategory, fVendorContactPerson, fVendorGroup, fVendorLocation, fVendorLocationBank, fVoucherAccountModify, fWarehouse, fWeighBridgeDefaultMachineSetting, fWeighBridgeItemSetting, fWeighmentDelete, fWeighmentDirectEntry, fWeighmentMachineMaster, fWeighmentSetting, fWorkCenter, fWorkLog, fWorkLogCategory
+  warning: damethod:DADepreciation.FillValuesDependent executes FixedAsset.AMADFillValuesDependent but no .sql file was found
+  warning: damethod:DAEquipmentMaster.GetLotNo executes EAM.EAEMGetLotNo but no .sql file was found
+  warning: damethod:DAGeneralFunction.CustomValidation executes ODTGeneralFunction.CustomValidationProcedureName but no .sql file was found
+  warning: damethod:DAChapterHeading.FillValues executes masterdata.MMCHFillValues but no .sql file was found
+  warning: damethod:DAChartOfAccount.SaveAccountGroupDetail executes masterdata.FCOASaveAccountGroupDetail but no .sql file was found
+  warning: damethod:DACommercialInvoice.CustomValidation executes ODTCommercialInvoice.ProcedureName but no .sql file was found
+  warning: damethod:DAExciseInvoice.SaveItemAttributeDetail executes Sales.SDEISaveItemAttributeDetail but no .sql file was found
+  warning: damethod:DAExciseInvoice.CustomeValidation executes ODTExciseInvoice.ProcedureName but no .sql file was found
+  warning: damethod:DAMaterialIssueDRM.CustomValidation executes ODTMaterialIssueDRM.ProcedureName but no .sql file was found
+  warning: damethod:DACustomerEnquiry.CustomValidation executes ODTCustomerEnquiry.ProcedureName but no .sql file was found
+  warning: damethod:DADepreciationBook.FillValuesCODWise executes FixedAsset.AMDBFillValuesCODWise but no .sql file was found
+  warning: damethod:DADispatchChallan.CustomValidation executes ODTDispatchChallan.ProcedureName but no .sql file was found
+  warning: damethod:DASalesQuotation.CustomValidation executes ODTSalesQuotation.ProcedureName but no .sql file was found
+  warning: damethod:DADispatchPlanning.CustomValidation executes ODTDispatchPlanning.ProcedureName but no .sql file was found
+  warning: damethod:DAPurchaseOrder.CustomeValidation executes ODTPurchaseOrder.ProcedureName but no .sql file was found
+  warning: damethod:DAFreightInvoice.FillValuesRefDoc executes Finance.FIFIFillValuesRefDoc but no .sql file was found
+  warning: damethod:DAFreightInvoice.CustomValidation executes ODTFreightInvoice.ProcedureName but no .sql file was found
+  warning: damethod:DAGateEntry.CustomeValidation executes ODTGateEntry.ProcedureName but no .sql file was found
+  warning: damethod:DAMaterialIssue.CustomeValidation executes ODTMaterialIssue.ProcedureName but no .sql file was found
+  warning: damethod:DAInvStockTransfer.CustomeValidation executes ODTInvStockTransfer.ProcedureName but no .sql file was found
+  warning: damethod:DAItemMaster.SaveItemDetail executes masterdata.MMMMSaveItemChapterDetail but no .sql file was found
+  warning: damethod:DALayoutSchedule.Save executes masterdata.Save but no .sql file was found
+  warning: damethod:DALayoutSchedule.Validate executes masterdata.Validate but no .sql file was found
+  warning: damethod:DALayoutSchedule.LoadData executes masterdata.LoadData but no .sql file was found
+  warning: damethod:DALayoutSchedule.Delete executes masterdata.Delete but no .sql file was found
+  warning: damethod:DALayoutSchedule.FillValues executes masterdata.FillValues but no .sql file was found
+  warning: damethod:DAMeterReading.SaveMeterReadingMeasurementDetail executes DAOMeterReading.SaveMeterReadingMeasurementDetail but no .sql file was found
+  warning: damethod:DASCOrder.CustomValidation executes ODTSCOrder.ProcedureName but no .sql file was found
+  warning: damethod:DASalesOrder.CustomValidation executes ODTSalesOrder.ProcedureName but no .sql file was found
+  warning: damethod:DASalesBOQ.Validate executes Sales.SDBQValidate but no .sql file was found
+  warning: damethod:DASalesReturn.GetItemRate executes Sales.SDSRGetItemRate but no .sql file was found
+  warning: damethod:DASubcontractReceipt.CustomValidation executes ODTSubcontractReceipt.ProcedureName but no .sql file was found
+  warning: damethod:DAFinancePosting.FillValues passes @FormCode which Finance.FATPFillValues does not declare
+  warning: damethod:DATaxConcessionForm.LoadData passes @FormCode which masterdata.MECFLoadData does not declare
+  warning: damethod:DATaxConcessionForm.LoadData passes @DocumentNo which masterdata.MECFLoadData does not declare
+  warning: damethod:DAEstimation.SaveOtherDetail passes @Margin1Per which Customize.SDPESaveOtherDetail does not declare
+  warning: damethod:DAEstimation.SaveOtherDetail passes @Margin2Per which Customize.SDPESaveOtherDetail does not declare
+  warning: damethod:DAEstimation.SaveOtherDetail passes @DiscountPer which Customize.SDPESaveOtherDetail does not declare
+  warning: damethod:DAMaterialIssue.GetDeptInfo passes @StockNatureNo which Inventory.IMMIGetDeptInfo does not declare
+  warning: damethod:DAHSNSACCode.Save passes @HSNSACTypeNo which masterdata.HSNSSave does not declare
+  warning: damethod:DAHSNSACCode.Save passes @Chapter which masterdata.HSNSSave does not declare
+  warning: damethod:DAHSNSACCode.Save passes @Code which masterdata.HSNSSave does not declare
+  warning: damethod:DAHSNSACCode.Save passes @Description which masterdata.HSNSSave does not declare
+  warning: damethod:DAHSNSACCode.Save passes @CGST which masterdata.HSNSSave does not declare
+  warning: damethod:DAHSNSACCode.Save passes @SGST which masterdata.HSNSSave does not declare
+  warning: damethod:DAHSNSACCode.Save passes @IGST which masterdata.HSNSSave does not declare
+  warning: damethod:DAHSNSACCode.Save passes @UTGST which masterdata.HSNSSave does not declare
+  warning: damethod:DAHSNSACCode.Validate passes @Code which masterdata.HSNSValidate does not declare
+  warning: damethod:DAItemMaster.Save passes @UnitWeightUnitNo  which masterdata.MMMMSave does not declare
+  warning: damethod:DAItemMaster.Save passes @IsCheckATP  which masterdata.MMMMSave does not declare
+  warning: damethod:DAItemMaster.Save passes @IsMaintainProductionSerialNo  which masterdata.MMMMSave does not declare
+  warning: damethod:DAMaintenanceScheduleOccurrence.Validate passes @OccurrenceDetailNo which EAM.EAMSValidate does not declare
+  warning: damethod:DAMaterialReturnDRM.SaveNotesDetail passes @ReturnNo which DiscreteRM.DRMISaveNotesDetail does not declare
+  warning: damethod:DAOrderNature.SaveActivityContractorSetup passes @ActivityNo  which masterdata.MDONSaveActivityContractorSetup does not declare
+  warning: damethod:DASCReq.ValidateItem passes @BomSerialNos which Inventory.SCRQValidateItem does not declare
+  warning: damethod:DASCReq.ValidateItem passes @WorkOrderTable which Inventory.SCRQValidateItem does not declare
+  warning: damethod:DASalesOrder.Save passes @PreCarriageNo  which Sales.SDSOSave does not declare
+  warning: damethod:DATyreCategoryMaster.SaveDetail passes @RoleMasterNo which masterdata.MTCMSaveDetail does not declare
+  warning: forms/fGateEntry.yaml: validation message not quoted in any rule: "Challan Qty. can't be zero or empty in row N."
+  warning: forms/fRevisedSalesQuotation.yaml: validation message not quoted in any rule: "Delivery Date can't be less than Quotation Date in row <n>."
+  warning: form:fAccountMaster / form:fInputExcisePosting write ['masterdata.mVendorLocationInformation'] but no integrity rule applies to both
+  warning: form:fAccountRuleDefinition / form:fConcessionFormEntry write ['masterdata.FB'] but no integrity rule applies to both
+  warning: form:fAccountRuleDefinition / form:fFreightOrder write ['masterdata.Item'] but no integrity rule applies to both
+  warning: form:fAccountRuleDefinition / form:fFreightOrderAmendment write ['masterdata.Item'] but no integrity rule applies to both
+  warning: form:fAccountRuleDefinition / form:fSalesOrder write ['Finance.ARDFinanceBookRule', 'Finance.ARDImprestRule', 'Finance.ARDIntermediatePostingAccountRule', 'Finance.ARDItemRule', 'Finance.ARDItemSubGroupRule', 'Finance.ARDMain', 'Finance.ARDPayrollComponentRule', 'Finance.ARDSaleAccountRule', 'Finance.ARDTDCAccountRule', 'Finance.ARDVendorLocationRule'] but no integrity rule applies to both
+  warning: form:fBalanceSheet / form:fFSLayoutDesignMapping write ['masterdata.Group'] but no integrity rule applies to both
+  warning: form:fBankJournal / form:fMaterialIssue write ['masterdata.ItemDetail'] but no integrity rule applies to both
+  warning: form:fBankJournal / form:fVoucherAccountModify write ['Finance.accVoucherDetail', 'Finance.accVoucherMain'] but no integrity rule applies to both
+  warning: form:fBillEntryEROS / form:fJobControlSheet write ['masterdata.Agent'] but no integrity rule applies to both
+  warning: form:fCS / form:fPOAmendment write ['Purchase.CSBooking'] but no integrity rule applies to both
+  warning: form:fCS / form:fPOBooking write ['Purchase.CSBooking', 'Purchase.rfqIndentDetail'] but no integrity rule applies to both
+  warning: form:fCashFlow / form:fFSLayoutDesignMapping write ['masterdata.Group'] but no integrity rule applies to both
+  warning: form:fCashJournal / form:fVoucherAccountModify write ['Finance.accVoucherMain'] but no integrity rule applies to both
+  warning: form:fChangeItemUnitWeight / form:fRenameItemDescription write ['masterdata.mItemMaster'] but no integrity rule applies to both
+  warning: form:fChartOfAccount / form:fSalesOrder write ['masterdata.COAAccountGroupDetail'] but no integrity rule applies to both
+  warning: form:fCommercialInvoice / form:fDiscreteRMOpening write ['Inventory.InvLotBillDetail'] but no integrity rule applies to both
+  warning: form:fCommercialInvoice / form:fItemOpening write ['Inventory.InvLotBillDetail', 'Inventory.InvLotDetail', 'Inventory.InvLotItemSerialNoDetail'] but no integrity rule applies to both
+  warning: form:fCommercialInvoice / form:fPaymentPlanPartialCancellation write ['Finance.CashCounterMain'] but no integrity rule applies to both
+  warning: form:fCommercialInvoice / form:fRateContractorList write ['masterdata.Narration'] but no integrity rule applies to both
+  warning: form:fCommercialInvoice / form:fVoucherAccountModify write ['Finance.accVoucherMain'] but no integrity rule applies to both
+  warning: form:fCommercialInvoice / usercontrol:MultiAuthorization write ['Inventory.GRNMain'] but no integrity rule applies to both
+  warning: form:fCostCenterMaster / form:fDispatchChallan write ['masterdata.mCostCenterMasterCompanyDetail'] but no integrity rule applies to both
+  warning: form:fCostCenterMaster / form:fDispatchChallanVTPL write ['masterdata.mCostCenterMasterCompanyDetail'] but no integrity rule applies to both
+  warning: form:fCustomerEnquiry / form:fMaintenanceReportingExtension write ['masterdata.TblDivision'] but no integrity rule applies to both
+  warning: form:fDDPosting / form:fVoucherAccountModify write ['Finance.accVoucherMain'] but no integrity rule applies to both
+  warning: form:fDiscreteRMOpening / form:fVTPLSalesReturn write ['Inventory.InvLotBillDetail'] but no integrity rule applies to both
+  warning: form:fDispatchInvoiceReconcilation / form:fMaterialIssue write ['Sales.InvoiceMain'] but no integrity rule applies to both
+  warning: form:fDrCrNote / form:fGenerateEWayBill write ['Finance.DrCrNoteMain', 'Utility.EWayBillAPIRequest'] but no integrity rule applies to both
+  warning: form:fDrCrNote / form:fRateContractorList write ['masterdata.Narration'] but no integrity rule applies to both
+  warning: form:fFirstWeighment / form:fWarehouse write ['masterdata.CompanyTable'] but no integrity rule applies to both
+  warning: form:fFreightOrder / form:fLCOrderMapping write ['masterdata.Id'] but no integrity rule applies to both
+  warning: form:fFreightOrderMapping / form:fLCOrderMapping write ['masterdata.Id'] but no integrity rule applies to both
+  warning: form:fFreightOrderMapping / form:fPOAmendment write ['Purchase.FreightOrderOrderDetail', 'Purchase.POAmendmentItemLRate', 'Purchase.POItemLRate', 'masterdata.Id'] but no integrity rule applies to both
+  warning: form:fFreightOrderMapping / form:fPurchaseOrder write ['Purchase.FreightOrderOrderDetail', 'Purchase.POAmendmentItemLRate', 'Purchase.POItemLRate', 'masterdata.Id'] but no integrity rule applies to both
+  warning: form:fGenerateEWayBill / form:fMaterialIssue write ['Sales.CommercialInvoiceMain', 'Sales.DispatchChallan', 'Sales.InvoiceMain', 'Sales.SalesReturnMain'] but no integrity rule applies to both
+  warning: form:fGenerateEWayBill / form:fSalesSupplementaryInvoice write ['Sales.SalesSupplementaryInvoiceMain'] but no integrity rule applies to both
+  warning: form:fGenerateEWayBill / form:fVTPLDrCrNote write ['Sales.VTPLInvoiceMain'] but no integrity rule applies to both
+  warning: form:fGenerateEWayBill / form:fVTPLInvoices write ['Sales.VTPLInvoiceMain'] but no integrity rule applies to both
+  warning: form:fInputExcisePosting / form:fVendorLocation write ['masterdata.mVendorLocationInformation'] but no integrity rule applies to both
+  warning: form:fInvoiceCancellation / form:fVoucherAccountModify write ['Finance.accVoucherMain'] but no integrity rule applies to both
+  warning: form:fItemConsumptionPattern / form:fItemSuppliesSource write ['Optimization.ConsumptionPatternItemMakeDetail'] but no integrity rule applies to both
+  warning: form:fItemMaster / form:fRenameItemDescription write ['masterdata.mItemMaster', 'masterdata.mItemMasterRenameDetail'] but no integrity rule applies to both
+  warning: form:fItemMaster / form:fSalesOrder write ['Finance.ARDItemRule'] but no integrity rule applies to both
+  warning: form:fItemOpening / form:fVTPLSalesReturn write ['Inventory.InvLotBillDetail', 'Inventory.InvLotDetail'] but no integrity rule applies to both
+  warning: form:fJobControlSheet / form:fProcurementUnit write ['Optimization.JobControlSheet'] but no integrity rule applies to both
+  warning: form:fLCOrderMapping / form:fPOAmendment write ['masterdata.Id'] but no integrity rule applies to both
+  warning: form:fMaintenanceOrder / form:fRateContractorList write ['masterdata.Narration'] but no integrity rule applies to both
+  warning: form:fMaintenanceOrderAmendment / form:fPOAmendment write ['EAM.MaintenanceOrderMain', 'Notifications.TATAuthorizationDetail'] but no integrity rule applies to both
+  warning: form:fMaintenanceOrderAmendment / form:fRatioAnalysis write ['masterdata.Description'] but no integrity rule applies to both
+  warning: form:fMaterialGroup / form:fRenameItemDescription write ['masterdata.mItemMaster'] but no integrity rule applies to both
+  warning: form:fMaterialIssue / form:fRateContractorList write ['masterdata.Narration'] but no integrity rule applies to both
+  warning: form:fMaterialIssue / usercontrol:GSTVoucherDetail write ['masterdata.ItemDetail'] but no integrity rule applies to both
+  warning: form:fMaterialIssue / usercontrol:MultiAuthorization write ['Inventory.GRNMain'] but no integrity rule applies to both
+  warning: form:fMaterialReturn / form:fWeighmentSetting write ['masterdata.Temp'] but no integrity rule applies to both
+  warning: form:fMaterialSubGroupMaster / form:fRenameItemDescription write ['masterdata.mItemMaster'] but no integrity rule applies to both
+  warning: form:fOptimizationSetting / form:fRateContractorList write ['Optimization.Setting'] but no integrity rule applies to both
+  warning: form:fPOAmendment / form:fPOBooking write ['Purchase.CSBooking'] but no integrity rule applies to both
+  warning: form:fPOAmendment / form:fReleaseRO write ['Purchase.POAmendmentItemTaxDetail', 'Purchase.POAmendmentMain', 'Purchase.POAmendmentPaymentTermsDetail', 'Purchase.POAmendmentTaxDetail', 'Purchase.POAmendmentTermsNConditionDetail', 'Purchase.POItemTaxDetail', 'Purchase.POMain', 'Purchase.POPaymentTermsDetail', 'Purchase.POTaxDetail'] but no integrity rule applies to both
+  warning: form:fPOBooking / form:fPurchaseOrder write ['Purchase.CSBooking'] but no integrity rule applies to both
+  warning: form:fPOBooking / form:fRequestforQuotation write ['Purchase.rfqIndentDetail'] but no integrity rule applies to both
+  warning: form:fPaymentPlan / form:fWeighmentSetting write ['masterdata.Temp'] but no integrity rule applies to both
+  warning: form:fPaymentVoucher / form:fVoucherAccountModify write ['Finance.accVoucherDetail', 'Finance.accVoucherMain'] but no integrity rule applies to both
+  warning: form:fProformaInvoice / form:fWarehouse write ['masterdata.CompanyTable'] but no integrity rule applies to both
+  warning: form:fQDAStocktransfer / form:fReleaseRO write ['Purchase.POAmendmentMain', 'Purchase.POMain'] but no integrity rule applies to both
+  warning: form:fRateContractorList / form:fSCQuotation write ['masterdata.Narration'] but no integrity rule applies to both
+  warning: form:fRatioAnalysis / form:fReportingCOASetup write ['masterdata.TblFB'] but no integrity rule applies to both
+  warning: form:fReleaseRO / form:fSCOrderAmendment write ['Purchase.POAmendmentMain', 'Purchase.POMain'] but no integrity rule applies to both
+  warning: form:fReleaseRO / usercontrol:MultiAuthorization write ['Purchase.POAmendmentMain', 'Purchase.POMain'] but no integrity rule applies to both
+  warning: form:fReportingCOASetup / form:fSalesOrder write ['masterdata.COAAccountGroupDetail'] but no integrity rule applies to both
+  warning: form:fSalesOrder / form:fTDCAccountRule write ['Finance.ARDTDCAccountRule'] but no integrity rule applies to both
+  warning: form:fSalesOrder / form:fTDCMaster write ['Finance.ARDTDCAccountRule'] but no integrity rule applies to both
+  warning: form:fSalesOrder / form:fVendorLocation write ['Finance.ARDVendorLocationRule'] but no integrity rule applies to both
+  warning: form:fStockDifferenceAdjustment / form:fWarehouse write ['masterdata.CompanyTable'] but no integrity rule applies to both
+  warning: form:fVTPLSalesReturn / usercontrol:MultiAuthorization write ['Inventory.GRNMain'] but no integrity rule applies to both
+  warning: form:fVoucherAccountModify / usercontrol:Voucher write ['Finance.accVoucherDetail', 'Finance.accVoucherMain'] but no integrity rule applies to both
+  warning: form:fWarehouse / form:fWeighmentDirectEntry write ['masterdata.CompanyTable'] but no integrity rule applies to both
+  warning: dropped dangling edge sp:customize.grcifinanceposting -CALLS_SP-> sp:masterdata.sp_xml_preparedocument
+  warning: dropped dangling edge sp:customize.grcifinanceposting -CALLS_SP-> sp:masterdata.sp_xml_removedocument
+  warning: dropped dangling edge sp:customize.mdnefinanceposting -CALLS_SP-> sp:masterdata.sp_xml_preparedocument
+  warning: dropped dangling edge sp:customize.mdnefinanceposting -CALLS_SP-> sp:masterdata.sp_xml_removedocument
+  warning: dropped dangling edge sp:discreterm.fifigetinwardoutwardaccount -CALLS_SP-> sp:masterdata.sp_xml_preparedocument
+  warning: dropped dangling edge sp:discreterm.fifigetinwardoutwardaccount -CALLS_SP-> sp:masterdata.sp_xml_removedocument
+  warning: dropped dangling edge sp:finance.faicfinanceposting -CALLS_SP-> sp:masterdata.sp_xml_preparedocument
+  warning: dropped dangling edge sp:finance.faicfinanceposting -CALLS_SP-> sp:masterdata.sp_xml_removedocument
+  warning: dropped dangling edge sp:finance.farpfinanceposting -CALLS_SP-> sp:masterdata.sp_xml_preparedocument
+  warning: dropped dangling edge sp:finance.farpfinanceposting -CALLS_SP-> sp:masterdata.sp_xml_removedocument
+  warning: dropped dangling edge sp:finance.gitrfinanceposting -CALLS_SP-> sp:masterdata.sp_xml_preparedocument
+  warning: dropped dangling edge sp:finance.gitrfinanceposting -CALLS_SP-> sp:masterdata.sp_xml_removedocument
+  warning: dropped dangling edge sp:finance.gtcufinanceposting -CALLS_SP-> sp:masterdata.sp_xml_preparedocument
+  warning: dropped dangling edge sp:finance.gtcufinanceposting -CALLS_SP-> sp:masterdata.sp_xml_removedocument
+  warning: dropped dangling edge sp:finance.pbpbfinanceposting -CALLS_SP-> sp:masterdata.sp_xml_preparedocument
+  warning: dropped dangling edge sp:finance.pbpbfinanceposting -CALLS_SP-> sp:masterdata.sp_xml_removedocument
+  warning: dropped dangling edge sp:information.mrcllastpodetail -CALLS_SP-> sp:masterdata.sp_xml_preparedocument
+  warning: dropped dangling edge sp:information.mrcllastpodetail -CALLS_SP-> sp:masterdata.sp_xml_removedocument
+  warning: dropped dangling edge sp:inventory.igrnfinanceposting -CALLS_SP-> sp:masterdata.sp_xml_preparedocument
+  warning: dropped dangling edge sp:inventory.igrnfinanceposting -CALLS_SP-> sp:masterdata.sp_xml_removedocument
+  warning: dropped dangling edge sp:notifications.sendsms -CALLS_SP-> sp:masterdata.sp_oacreate
+  warning: dropped dangling edge sp:notifications.sendsms -CALLS_SP-> sp:masterdata.sp_oamethod
+  warning: dropped dangling edge sp:notifications.sendsms -CALLS_SP-> sp:masterdata.sp_oageterrorinfo
+  warning: dropped dangling edge sp:notifications.sendsms -CALLS_SP-> sp:masterdata.sp_oagetproperty
+  warning: dropped dangling edge sp:notifications.sendsms -CALLS_SP-> sp:masterdata.sp_oadestroy
+  warning: dropped dangling edge sp:optimization.mrclsuggestdetail -CALLS_SP-> sp:masterdata.sp_xml_preparedocument
+  warning: dropped dangling edge sp:optimization.mrclsuggestdetail -CALLS_SP-> sp:masterdata.sp_xml_removedocument
+  warning: dropped dangling edge sp:processproduction.bpkefinanceposting -CALLS_SP-> sp:masterdata.sp_xml_preparedocument
+  warning: dropped dangling edge sp:processproduction.bpkefinanceposting -CALLS_SP-> sp:masterdata.sp_xml_removedocument
+  warning: dropped dangling edge sp:utility.sendemailthroughprofile -CALLS_SP-> sp:msdb.dbo
+  warning: dropped dangling edge sp:masterdata.notificationjobgeneration -CALLS_SP-> sp:msdb.dbo
+  warning: dropped dangling edge sp:inventory.mispendingphysicalverificationlist -CALLS_SP-> sp:masterdata.sp_executesql
+  warning: dropped dangling edge sp:customize.miserosbudgetedvsactual -CALLS_SP-> sp:masterdata.sp_executesql
+  warning: dropped dangling edge sp:finance.miscashflow -CALLS_SP-> sp:masterdata.sp_executesql
+  warning: dropped dangling edge sp:vtpl.misdispatchmatrix -CALLS_SP-> sp:masterdata.sp_executesql
+  warning: dropped dangling edge sp:finance.misaccountledger -CALLS_SP-> sp:masterdata.sp_executesql
+  warning: dropped dangling edge sp:finance.gstvoucherdetailgetsection -CALLS_SP-> sp:masterdata.sp_xml_preparedocument
+  warning: dropped dangling edge sp:finance.gstvoucherdetailgetsection -CALLS_SP-> sp:masterdata.sp_xml_removedocument
+  warning: dropped dangling edge sp:masterdata.snrsdelete -CALLS_SP-> sp:msdb.dbo
+  warning: dropped dangling edge sp:masterdata.snrssave -CALLS_SP-> sp:masterdata.xp_servicecontrol
+  warning: dropped dangling edge sp:masterdata.snrssave -CALLS_SP-> sp:msdb.dbo
+  warning: dropped dangling edge sp:masterdata.customfieldsdelete -CALLS_SP-> sp:masterdata.sp_executesql
+  warning: dropped dangling edge sp:masterdata.customfieldsloaddata -CALLS_SP-> sp:masterdata.sp_executesql
+  warning: dropped dangling edge sp:masterdata.customfieldssave -CALLS_SP-> sp:masterdata.sp_executesql
+  warning: dropped dangling edge sp:globaldata.itemsearch -CALLS_SP-> sp:masterdata.sp_xml_preparedocument
+  warning: dropped dangling edge sp:globaldata.itemsearch -CALLS_SP-> sp:masterdata.sp_xml_removedocument
+  warning: dropped dangling edge sp:masterdata.itemgroupfillvalues -CALLS_SP-> sp:masterdata.sp_executesql
+  warning: dropped dangling edge sp:vtpl.vtdcbomdetail -CALLS_SP-> sp:masterdata.sp_xml_preparedocument
+  warning: dropped dangling edge sp:vtpl.vtdcbomdetail -CALLS_SP-> sp:masterdata.sp_xml_removedocument
+  warning: dropped dangling edge sp:finance.fdrnreferencefilter -CALLS_SP-> sp:masterdata.sp_executesql
+  warning: dropped dangling edge sp:finance.fifigetinwardoutwardaccount -CALLS_SP-> sp:masterdata.sp_xml_preparedocument
+  warning: dropped dangling edge sp:finance.fifigetinwardoutwardaccount -CALLS_SP-> sp:masterdata.sp_xml_removedocument
+  warning: dropped dangling edge sp:finance.excisergaftersave -CALLS_SP-> sp:masterdata.sp_executesql
+  warning: dropped dangling edge sp:inventory.igrnauthorize -CALLS_SP-> sp:masterdata.sp_executesql
+  warning: dropped dangling edge sp:optimization.gahlitemdetail -CALLS_SP-> sp:masterdata.sp_xml_preparedocument
+  warning: dropped dangling edge sp:optimization.gahlitemdetail -CALLS_SP-> sp:masterdata.sp_xml_removedocument
+  warning: dropped dangling edge sp:optimization.gahlitemimpact -CALLS_SP-> sp:masterdata.sp_xml_preparedocument
+  warning: dropped dangling edge sp:optimization.gahlitemimpact -CALLS_SP-> sp:masterdata.sp_xml_removedocument
+  warning: dropped dangling edge sp:optimization.gahlsave -CALLS_SP-> sp:masterdata.sp_xml_preparedocument
+  warning: dropped dangling edge sp:optimization.gahlsave -CALLS_SP-> sp:masterdata.sp_xml_removedocument
+  warning: dropped dangling edge sp:optimization.gahlsavedetail -CALLS_SP-> sp:masterdata.sp_xml_preparedocument
+  warning: dropped dangling edge sp:optimization.gahlsavedetail -CALLS_SP-> sp:masterdata.sp_xml_removedocument
+  warning: dropped dangling edge sp:optimization.oidssave -CALLS_SP-> sp:masterdata.sp_xml_preparedocument
+  warning: dropped dangling edge sp:optimization.oidssave -CALLS_SP-> sp:masterdata.sp_xml_removedocument
+  warning: dropped dangling edge sp:optimization.oicpitemdetail -CALLS_SP-> sp:masterdata.sp_executesql
+  warning: dropped dangling edge sp:optimization.oicpsaveitemdetail -CALLS_SP-> sp:masterdata.sp_xml_preparedocument
+  warning: dropped dangling edge sp:optimization.oicpsaveitemdetail -CALLS_SP-> sp:masterdata.sp_xml_removedocument
+  warning: dropped dangling edge sp:optimization.oisssave -CALLS_SP-> sp:masterdata.sp_xml_preparedocument
+  warning: dropped dangling edge sp:optimization.oisssave -CALLS_SP-> sp:masterdata.sp_xml_removedocument
+  warning: dropped dangling edge sp:optimization.oisssaveitemmakedetail -CALLS_SP-> sp:masterdata.sp_xml_preparedocument
+  warning: dropped dangling edge sp:optimization.oisssaveitemmakedetail -CALLS_SP-> sp:masterdata.sp_xml_removedocument
+  warning: dropped dangling edge sp:optimization.cicpsave -CALLS_SP-> sp:masterdata.sp_xml_preparedocument
+  warning: dropped dangling edge sp:optimization.cicpsave -CALLS_SP-> sp:masterdata.sp_xml_removedocument
+  warning: dropped dangling edge sp:optimization.ojcssave -CALLS_SP-> sp:masterdata.xp_servicecontrol
+  warning: dropped dangling edge sp:optimization.ojcssave -CALLS_SP-> sp:masterdata.sp_xml_preparedocument
+  warning: dropped dangling edge sp:optimization.ojcssave -CALLS_SP-> sp:masterdata.sp_xml_removedocument
+  warning: dropped dangling edge sp:optimization.ojcssave -CALLS_SP-> sp:msdb.dbo
+  warning: dropped dangling edge sp:optimization.ojcssavejobupdate -CALLS_SP-> sp:msdb.dbo
+  warning: dropped dangling edge sp:notifications.tanrattributedetail -CALLS_SP-> sp:masterdata.sp_xml_preparedocument
+  warning: dropped dangling edge sp:notifications.tanrattributedetail -CALLS_SP-> sp:masterdata.sp_xml_removedocument
+  warning: dropped dangling edge sp:notifications.tanrfillvaluesdependent -CALLS_SP-> sp:masterdata.sp_xml_preparedocument
+  warning: dropped dangling edge sp:notifications.tanrfillvaluesdependent -CALLS_SP-> sp:masterdata.sp_xml_removedocument
+  warning: dropped dangling edge sp:masterdata.paymenttermsloaddata -CALLS_SP-> sp:masterdata.sp_executesql
+  warning: dropped dangling edge sp:masterdata.paymenttermssave -CALLS_SP-> sp:masterdata.sp_executesql
+  warning: dropped dangling edge sp:optimization.opumdelete -CALLS_SP-> sp:msdb.dbo
+  warning: dropped dangling edge sp:optimization.opumsave -CALLS_SP-> sp:masterdata.sp_xml_preparedocument
+  warning: dropped dangling edge sp:optimization.opumsave -CALLS_SP-> sp:masterdata.sp_xml_removedocument
+  warning: dropped dangling edge sp:masterdata.puomsave -CALLS_SP-> sp:masterdata.sp_xml_preparedocument
+  warning: dropped dangling edge sp:masterdata.puomsave -CALLS_SP-> sp:masterdata.sp_xml_removedocument
+  warning: dropped dangling edge sp:optimization.mrclfillvaluesdependent -CALLS_SP-> sp:masterdata.sp_xml_preparedocument
+  warning: dropped dangling edge sp:optimization.mrclfillvaluesdependent -CALLS_SP-> sp:masterdata.sp_xml_removedocument
+  warning: dropped dangling edge sp:optimization.mrclgetiteminfo -CALLS_SP-> sp:masterdata.sp_xml_preparedocument
+  warning: dropped dangling edge sp:optimization.mrclgetiteminfo -CALLS_SP-> sp:masterdata.sp_xml_removedocument
+  warning: dropped dangling edge sp:optimization.mrclitemvendordetail -CALLS_SP-> sp:masterdata.sp_xml_preparedocument
+  warning: dropped dangling edge sp:optimization.mrclitemvendordetail -CALLS_SP-> sp:masterdata.sp_xml_removedocument
+  warning: dropped dangling edge sp:inventory.irrosave -CALLS_SP-> sp:masterdata.sp_xml_preparedocument
+  warning: dropped dangling edge sp:inventory.irrosave -CALLS_SP-> sp:masterdata.sp_xml_removedocument
+  warning: dropped dangling edge sp:purchase.scsoactivitydetail -CALLS_SP-> sp:masterdata.sp_xml_preparedocument
+  warning: dropped dangling edge sp:purchase.scsoactivitydetail -CALLS_SP-> sp:masterdata.sp_xml_removedocument
+  warning: dropped dangling edge sp:purchase.scsogetiteminfo -CALLS_SP-> sp:information.sostockdetail(output/input)
+  warning: dropped dangling edge sp:purchase.scsogetiteminfo -CALLS_SP-> sp:information.soitemsummaryforitem(output/input)
+  warning: dropped dangling edge sp:optimization.ourssave -CALLS_SP-> sp:masterdata.sp_xml_preparedocument
+  warning: dropped dangling edge sp:optimization.ourssave -CALLS_SP-> sp:masterdata.sp_xml_removedocument
+  warning: dropped dangling edge sp:optimization.iovcsave -CALLS_SP-> sp:masterdata.sp_xml_preparedocument
+  warning: dropped dangling edge sp:optimization.iovcsave -CALLS_SP-> sp:masterdata.sp_xml_removedocument
+{
+ "nodes": {
+  "BusinessConcept": 408,
+  "BusinessProcess": 77,
+  "BusinessRule": 4927,
+  "Column": 26109,
+  "Control": 15936,
+  "DAClass": 389,
+  "DAMethod": 3645,
+  "DTClass": 389,
+  "DTMethod": 3649,
+  "DTProperty": 10371,
+  "Form": 402,
+  "FormMethod": 16375,
+  "Module": 10,
+  "StoredProcedure": 4619,
+  "Table": 3404,
+  "UserControl": 23
+ },
+ "edges": {
+  "APPLIES_TO": 13555,
+  "BINDS_TO": 5369,
+  "CALLS": 10694,
+  "CALLS_SP": 5246,
+  "DELEGATES_TO": 3644,
+  "DYNAMIC_EXEC": 56,
+  "EMBEDS": 654,
+  "EXECUTES": 3645,
+  "GOVERNS": 6881,
+  "HANDLES": 7262,
+  "HAS_COLUMN": 26109,
+  "HAS_CONCEPT": 408,
+  "HAS_CONTROL": 15936,
+  "HAS_FORM": 425,
+  "HAS_METHOD": 23669,
+  "HAS_PROCESS": 77,
+  "HAS_PROPERTY": 10371,
+  "HAS_STEP": 415,
+  "IMPLEMENTED_BY": 6764,
+  "INVOKES": 4422,
+  "INVOLVES": 401,
+  "LABELS": 4715,
+  "LEADS_TO": 14,
+  "MANAGES": 399,
+  "PARENT_OF": 16,
+  "PASSES": 18273,
+  "PERSISTED_IN": 1727,
+  "READS": 35958,
+  "REFERENCES": 31316,
+  "RELATED_TO": 47,
+  "SETS": 21193,
+  "SHARES_TABLE": 67564,
+  "USES_COLUMN": 153854,
+  "USES_CONCEPT": 2160,
+  "USES_TABLE": 17145,
+  "WRITES": 8556
+ }
+}
+valid with 241 warnings

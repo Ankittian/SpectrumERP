@@ -375,10 +375,6 @@ def make_embedder(settings):
     return VoyageEmbedderCache(settings.voyage_api_key, settings.voyage_model, settings.embedding_dims, settings.cache_dir)
 
 
-def node_texts(g: Graph) -> dict[str, str]:
-    return {n.id: n.props["text"] for n in g.nodes.values()}
-
-
 def sanitize(props: dict[str, Any]) -> dict[str, Any]:
     """Neo4j properties: primitives or homogeneous lists only."""
     out: dict[str, Any] = {}

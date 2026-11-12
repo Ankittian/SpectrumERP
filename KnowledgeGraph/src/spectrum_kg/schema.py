@@ -3,7 +3,7 @@ from __future__ import annotations
 
 LABELS: dict[str, dict[str, str]] = {
     # functional layer
-    "Module": {"layer": "functional", "means": "ERP module (Material Management, Plant Maintenance).",
+    "Module": {"layer": "functional", "means": "ERP module (Material Management, Plant Maintenance, Finance, Sales and Distribution, Production Planning, Master Data, Weigh Bridge, Discrete Raw Material, Settings and Utilities, Reports).",
                "key_props": "name, code, summary, doc, status"},
     "BusinessProcess": {"layer": "functional", "means": "End-to-end business flow, e.g. Procure-to-Pay (PO Flow), Payment Flow; ordered steps point to forms.",
                         "key_props": "name, key, summary, doc (includes ordered steps), status"},
@@ -105,7 +105,10 @@ TIPS = [
 ]
 
 RESPONSE_RULES = [
-    "Be brief: give a short, to-the-point answer to exactly what was asked. Elaborate (details, chains, code, lineage) only when the user asks for it.",
+    "Use simple, plain language: write the way you would explain it to a new colleague. Prefer everyday words and short sentences. Simplicity and clarity matter more than perfect grammar or formal/technical terminology.",
+    "Explain, don't just list: say what a thing does and why it matters in business terms (e.g. 'this screen is where users create a new unit; when they click Save, the data goes into the munitmaster (Table)'). Describe flows as simple step-by-step sentences rather than raw edge chains.",
+    "Explain jargon on first use: if you must use a technical term (Stored Procedure, DT/DA layer, Control, Column, derived edge, etc.), add a short plain-words meaning the first time, e.g. 'mmumsave (Stored Procedure - a saved database script that writes the data)'. Avoid graph/tool vocabulary like 'node', 'hop' or 'expand' in the answer unless the user uses it first.",
+    "Be brief: give a short, to-the-point answer to exactly what was asked. Short does not mean cryptic - a few clear explanatory sentences beat a terse list. Elaborate (details, chains, code, lineage) only when the user asks for it.",
     "Clarify before answering: if the question looks incomplete, or could mean two similar things (e.g. similarly named tables, columns, SPs, forms, controls or properties), ask a short follow-up to confirm what the user meant instead of guessing.",
     "Always label graph objects with their type: every object you mention from the graph must carry its node type, e.g. 'munitmaster (Table)', 'mmumsave (Stored Procedure)', 'Unit Master (Form)', 'txtUnitName (Control)'. Take the type from each result's 'label'/'kind' field (or the id prefix, e.g. table:, sp:, form:); never present a bare name without its type.",
 ]
@@ -113,7 +116,7 @@ RESPONSE_RULES = [
 
 def instructions_text() -> str:
     lines = [
-        "SpectrumERP knowledge graph (Material Management + Plant Maintenance).",
+        "SpectrumERP knowledge graph (phases 0-13: about 400 forms over 10 modules, plus the report catalogue).",
         "Agentic RAG: you choose the entry points and hops. Tools are small graph primitives:",
         "describe_graph (full map), search (entry points), get_node, expand (1 hop, batch), find_paths, similar, run_cypher (read-only).",
         "Layers: functional (Module, BusinessProcess, BusinessConcept, BusinessRule) -> Form/UserControl -> code (FormMethod, Control, DT*, DA*) -> data (StoredProcedure, Table, Column).",

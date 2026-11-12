@@ -16,7 +16,9 @@ app = typer.Typer(add_completion=False, help="SpectrumERP knowledge graph builde
 
 
 def _report(report, show_warnings: bool = True) -> None:
-    typer.echo(f"bundles: {', '.join(report.bundles)}")
+    typer.echo(f"source: {report.source}")
+    if report.bundles:
+        typer.echo(f"bundles ({len(report.bundles)}): {', '.join(report.bundles)}")
     if show_warnings:
         for w in report.warnings:
             typer.secho(f"  warning: {w}", fg="yellow")
@@ -34,7 +36,7 @@ def build(
                                                "highest-priority nodes first; the rest load without vectors "
                                                "(finish them with `kg embed-step`). 0 = embed nothing new."),
 ):
-    """Extract code + SQL, apply curated domain docs, embed with Voyage AI and load into Neo4j."""
+    """Build the graph (graph_json or form bundles), embed it and load it into Neo4j."""
     settings = load_settings()
     g, report = build_graph(settings, docs="apply" if dry_run else "sync")
     _report(report)
@@ -79,9 +81,9 @@ def embed_step(
     budget: Optional[int] = typer.Option(None, "--budget", help="Max (estimated) tokens to embed in this run. Default: "
                                          "everything for the local model, 450K for Voyage (free tier ~540K/hour)."),
 ):
-    """One resumable slice of the embedding backlog, for scheduled runs on the Voyage free tier.
+    """One resumable slice of the embedding backlog (useful when embedding is slow or rate-limited).
 
-    Rebuilds the graph in memory (Roslyn facts are cached), embeds the highest-priority nodes that have no vector yet
+    Rebuilds the graph in memory, embeds the highest-priority nodes that have no vector yet
     (up to --budget) and writes the vectors of every node whose stored vector is missing or stale into Neo4j.
     Prints `REMAINING <n>`. Needs a graph already loaded (`kg build --embed-budget 0`)."""
     from .embed import embed_order, make_embedder, text_hash
@@ -153,16 +155,16 @@ def _show(ids: list[str], title: str, limit: int = 15) -> None:
 
 @docs_app.command("sync")
 def docs_sync(prune: bool = typer.Option(False, "--prune", help="Delete files of nodes that left the graph (never edited ones).")):
-    """Write/refresh embedding_docs/ from the current graph (all phases).
+    """Write/refresh embedding_docs/ from the current graph.
 
-    Backfills nodes ingested earlier, adds nodes of new phases, refreshes files you did not edit, and never overwrites
+    Backfills nodes ingested earlier, adds new nodes, refreshes files you did not edit, and never overwrites
     a file you edited."""
     settings = load_settings()
     g, report = build_graph(settings, docs="sync", prune_docs=prune)
     for e in report.errors:
         typer.secho(f"  error: {e}", fg="red")
     r = report.docs
-    typer.echo(f"{len(g.nodes)} nodes, phases: {', '.join(dict.fromkeys(settings.phases.values()))}")
+    typer.echo(f"{len(g.nodes)} nodes from {report.source}")
     typer.echo(f"{settings.docs_dir}: {r.summary()}")
     _show(r.drifted, "edited files whose generated text has since changed (review: kg docs diff <id>)")
     _show(r.orphaned, "files of nodes no longer in the graph (kg docs sync --prune)")
@@ -226,18 +228,6 @@ def docs_reset(nodes: Optional[list[str]] = typer.Argument(None, help="Node ids 
     for nid in targets:
         store.reset(nid, report.generated[nid])
     typer.echo(f"reset {len(targets)} file(s); run kg build to re-embed")
-
-
-@app.command()
-def phases():
-    """List the discovered phases and the form bundles in each."""
-    from .extract.bundle import discover_bundles
-    settings = load_settings()
-    by: dict[str, list[str]] = {}
-    for b in discover_bundles(settings):
-        by.setdefault(settings.phase_of(b.root), []).append(b.name)
-    for name, bundles in by.items():
-        typer.echo(f"{name}: {len(bundles)} bundles")
 
 
 @app.command()

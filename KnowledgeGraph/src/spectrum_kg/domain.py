@@ -199,7 +199,7 @@ EVIDENCE_LINES = ("Evidence: code", "Evidence: code + ERP domain (inferred)", "E
 
 
 def coverage_warnings(g: Graph, d: dict[str, Any]) -> list[str]:
-    """Functional-layer quality checks (GRAPH_STRUCTURE.md §5.1 / §6.2 checks 9-10)."""
+    """Functional-layer quality checks (docs/reference/graph-build-spec.md §5.1 / §6.2 checks 9-10)."""
     out: list[str] = []
     for kind, items, keyf in (("concept", d["concepts"], "key"), ("rule", d["rules"], "key"),
                               ("process", d["processes"], "key")):

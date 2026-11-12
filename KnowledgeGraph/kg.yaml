@@ -1,18 +1,18 @@
 # Build configuration for the SpectrumERP knowledge graph.
 # Paths are relative to this file.
 
-# Every folder matching these globs is a phase root holding form bundles (phase-0, phase-1, phase-2, ... combined).
-# To add a phase, drop graphs-by-phase/phase-N/phase-N/<FormBundle>/ in place and run `kg docs sync` / `kg build`.
-# Bundle names must be unique across roots. `source_roots:` (explicit list) is still accepted for one-off folders.
-phase_globs:
-  - ../graphs-by-phase/phase-*/phase-*
+# Graph source. With `graph_json` set, every command loads this prebuilt graph (the combined phase 0-13 build, made on
+# the machine that has the ERP source; see graph/MANIFEST.md) instead of extracting from form bundles.
+graph_json: graph/graph.json
+
+# Extraction from form bundles (used only when `graph_json` is not set, i.e. on a machine with the source).
+# Each root holds one folder per form bundle (Form/, DataLayer/, StoredProcedures/, user controls ...); bundle names
+# must be unique across roots.
+# source_roots:
+#   - ../bundles/phase-0
+#   - ../bundles/phase-1
 bundles: auto                   # auto = every top-level folder containing CONTENTS.md, Form/ or StoredProcedures/
 exclude: [KnowledgeGraph, .venv, .git, .vs, .claude]
-
-# Nested SPs (called only from other SPs, so absent from the form bundles), one embedding-text .txt per SP.
-# Only the SQL after the `Code:` line is parsed; a bundle's copy of the same SP takes precedence.
-nested_sp_dirs:
-  - ../nestedSP_embedding_text
 
 # One editable .txt per graph node holding the exact text that gets embedded. Edit a file and the next build embeds
 # your version (see `kg docs --help`).
