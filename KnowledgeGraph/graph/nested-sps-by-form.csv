@@ -1,0 +1,305 @@
+form,entry_sp,nested_sp,depth,path
+fAccountMaster,masterdata.FIAMDelete,masterdata.VIVCDelete,2,masterdata.FIAMDelete -> masterdata.VIVCDelete
+fAccountMaster,masterdata.FIAMSaveMain,Utility.CreateMissingVoucherRef,2,masterdata.FIAMSaveMain -> Utility.CreateMissingVoucherRef
+fAccountMaster,masterdata.FIAMSaveMain,Finance.VoucherSaveReferenceDetail,3,masterdata.FIAMSaveMain -> Utility.CreateMissingVoucherRef -> Finance.VoucherSaveReferenceDetail
+fAccountMaster,masterdata.FIAMSaveMain,Utility.ConvertOnAccountToNewReference,3,masterdata.FIAMSaveMain -> Utility.CreateMissingVoucherRef -> Utility.ConvertOnAccountToNewReference
+fChartOfAccount,masterdata.FCOASave,masterdata.AIAGSave,2,masterdata.FCOASave -> masterdata.AIAGSave
+fChartOfAccount,masterdata.FCOALoadData,masterdata.COAStructure,2,masterdata.FCOALoadData -> masterdata.COAStructure
+fCityMaster,masterdata.ADCTDelete,masterdata.MDLMDelete,2,masterdata.ADCTDelete -> masterdata.MDLMDelete
+fCityMaster,masterdata.ADCTSave,masterdata.MDLMSave,2,masterdata.ADCTSave -> masterdata.MDLMSave
+fGRN,Inventory.IGRNAuthorize,Customize.ISKGChangeNumber,2,Inventory.IGRNAuthorize -> Customize.ISKGChangeNumber
+fGRN,Inventory.IGRNAuthorize,Finance.FIFIAuthorize,2,Inventory.IGRNAuthorize -> Finance.FIFIAuthorize
+fGRN,Inventory.IGRNDelete,Finance.IEIPDelete,2,Inventory.IGRNDelete -> Finance.IEIPDelete
+fGRN,Finance.VoucherSaveForTransaction,Finance.VoucherDelete,2,Finance.VoucherSaveForTransaction -> Finance.VoucherDelete
+fGRN,Finance.IEIPSave,Finance.VoucherSaveFromTransaction,2,Finance.IEIPSave -> Finance.VoucherSaveFromTransaction
+fGRN,Inventory.IGRNSave,Inventory.ExciseChallanSave,2,Inventory.IGRNSave -> Inventory.ExciseChallanSave
+fGRN,Inventory.IGRNDelete,Inventory.GatepassOutStatus,2,Inventory.IGRNDelete -> Inventory.GatepassOutStatus
+fGRN,Inventory.IGRNAuthorize,Inventory.IGRNBillDetailInsert,2,Inventory.IGRNAuthorize -> Inventory.IGRNBillDetailInsert
+fGRN,Inventory.IGRNDelete,Inventory.IndentStatus,2,Inventory.IGRNDelete -> Inventory.IndentStatus
+fGRN,Inventory.IGRNDelete,Inventory.InvLotDelete,2,Inventory.IGRNDelete -> Inventory.InvLotDelete
+fGRN,Inventory.IGRNAuthorize,Inventory.InvLotMapCalculation,2,Inventory.IGRNAuthorize -> Inventory.InvLotMapCalculation
+fGRN,Inventory.IGRNAuthorize,Inventory.InvLotMaterialTransaction,2,Inventory.IGRNAuthorize -> Inventory.InvLotMaterialTransaction
+fGRN,Inventory.IGRNValidate,Inventory.ValidateForBalQtyGEGPISRN,2,Inventory.IGRNValidate -> Inventory.ValidateForBalQtyGEGPISRN
+fGRN,Finance.IEIPSave,masterdata.DocumentNumberGeneration,2,Finance.IEIPSave -> masterdata.DocumentNumberGeneration
+fGRN,Inventory.IGRNSave,masterdata.DocumentNumberGenerationDuplicate,2,Inventory.IGRNSave -> masterdata.DocumentNumberGenerationDuplicate
+fGRN,masterdata.DocumentNumberFillValuesDependent,masterdata.DocumentNumberInitialization,2,masterdata.DocumentNumberFillValuesDependent -> masterdata.DocumentNumberInitialization
+fGRN,Inventory.IGRNAuthorize,Production.IMLotMaterialTransaction,2,Inventory.IGRNAuthorize -> Production.IMLotMaterialTransaction
+fGRN,Inventory.IGRNDelete,Purchase.POStatus,2,Inventory.IGRNDelete -> Purchase.POStatus
+fGRN,Inventory.IGRNDelete,Purchase.SCOStatus,2,Inventory.IGRNDelete -> Purchase.SCOStatus
+fGRN,Inventory.IGRNDelete,Sales.SOStatus,2,Inventory.IGRNDelete -> Sales.SOStatus
+fGRN,Finance.VoucherSaveForTransaction,AuditTrail.SaveVoucherAuditLog,3,Finance.VoucherSaveForTransaction -> Finance.VoucherDelete -> AuditTrail.SaveVoucherAuditLog
+fGRN,Inventory.IGRNAuthorize,Customize.ISKGNumberGeneration,3,Inventory.IGRNAuthorize -> Customize.ISKGChangeNumber -> Customize.ISKGNumberGeneration
+fGRN,Finance.VoucherSaveForTransaction,Finance.VoucherSaveBeforeDelete,3,Finance.VoucherSaveForTransaction -> Finance.VoucherDelete -> Finance.VoucherSaveBeforeDelete
+fGRN,Inventory.IGRNAuthorize,Inventory.InvLotBillTaxTransaction,3,Inventory.IGRNAuthorize -> Inventory.InvLotMaterialTransaction -> Inventory.InvLotBillTaxTransaction
+fGRN,Inventory.IGRNDelete,Inventory.SCReqStatus,3,Inventory.IGRNDelete -> Purchase.SCOStatus -> Inventory.SCReqStatus
+fGRN,Inventory.IGRNAuthorize,Purchase.FreightAmount,3,Inventory.IGRNAuthorize -> Inventory.IGRNBillDetailInsert -> Purchase.FreightAmount
+fGRN,Inventory.IGRNAuthorize,Utility.UCYNSaveMain,3,Inventory.IGRNAuthorize -> Customize.ISKGChangeNumber -> Utility.UCYNSaveMain
+fGateEntry,GateEntry.IMGEDelete,Customize.DeleteGateEntryLog_Kusum,2,GateEntry.IMGEDelete -> Customize.DeleteGateEntryLog_Kusum
+fGateEntry,GateEntry.IMGEGetItemInfo,Information.ItemSummary,2,GateEntry.IMGEGetItemInfo -> Information.ItemSummary
+fGateEntry,GateEntry.IMGEGetItemInfo,Information.ItemSummaryRM,2,GateEntry.IMGEGetItemInfo -> Information.ItemSummaryRM
+fGateEntry,GateEntry.IMGEGetTransporterInfo,Information.PendingGEForFI,2,GateEntry.IMGEGetTransporterInfo -> Information.PendingGEForFI
+fGateEntry,GateEntry.IMGEGetTransporterInfo,Information.PendingInvoiceForPaymentForTransporter,2,GateEntry.IMGEGetTransporterInfo -> Information.PendingInvoiceForPaymentForTransporter
+fGateEntry,GateEntry.IMGEGetVendorInfo,Information.RejectionRatioForVendor,2,GateEntry.IMGEGetVendorInfo -> Information.RejectionRatioForVendor
+fGateEntry,GateEntry.IMGEGetItemInfo,Information.StockDetail,2,GateEntry.IMGEGetItemInfo -> Information.StockDetail
+fGateEntry,GateEntry.IMGEValidate,Inventory.ValidateForBalQtyGEGPISRN,2,GateEntry.IMGEValidate -> Inventory.ValidateForBalQtyGEGPISRN
+fGateEntry,GateEntry.IMGESaveMain,masterdata.DocumentNumberGeneration,2,GateEntry.IMGESaveMain -> masterdata.DocumentNumberGeneration
+fGateEntry,GateEntry.IMGESaveMain,masterdata.DocumentNumberInitialization,3,GateEntry.IMGESaveMain -> masterdata.DocumentNumberGeneration -> masterdata.DocumentNumberInitialization
+fIndent,Inventory.MMPRGetDeptInfo,Information.BudgetForDept,2,Inventory.MMPRGetDeptInfo -> Information.BudgetForDept
+fIndent,Inventory.MMPRGetItemInfo,Information.ConsumptionDetail,2,Inventory.MMPRGetItemInfo -> Information.ConsumptionDetail
+fIndent,Inventory.MMPRGetItemInfo,Information.ItemSummary,2,Inventory.MMPRGetItemInfo -> Information.ItemSummary
+fIndent,Inventory.MMPRGetCostCenterInfo,Information.ItemSummaryForCost,2,Inventory.MMPRGetCostCenterInfo -> Information.ItemSummaryForCost
+fIndent,Inventory.MMPRGetDeptInfo,Information.MonthWisePRValueForDept,2,Inventory.MMPRGetDeptInfo -> Information.MonthWisePRValueForDept
+fIndent,Inventory.MMPRGetCostCenterInfo,Information.PendingMaterialRequestForCostCenter,2,Inventory.MMPRGetCostCenterInfo -> Information.PendingMaterialRequestForCostCenter
+fIndent,Inventory.MMPRGetDeptInfo,Information.PendingMaterialRequestForDept,2,Inventory.MMPRGetDeptInfo -> Information.PendingMaterialRequestForDept
+fIndent,Inventory.MMPRGetDocumentInfo,Information.PRBillDetail,2,Inventory.MMPRGetDocumentInfo -> Information.PRBillDetail
+fIndent,Inventory.MMPRGetDocumentInfo,Information.PRDrCrDetail,2,Inventory.MMPRGetDocumentInfo -> Information.PRDrCrDetail
+fIndent,Inventory.MMPRGetDocumentInfo,Information.PRGRNDetail,2,Inventory.MMPRGetDocumentInfo -> Information.PRGRNDetail
+fIndent,Inventory.MMPRGetDocumentInfo,Information.PRPaymentDetail,2,Inventory.MMPRGetDocumentInfo -> Information.PRPaymentDetail
+fIndent,Inventory.MMPRGetCostCenterInfo,Information.PRPendingPurchaseOrderForCostCenter,2,Inventory.MMPRGetCostCenterInfo -> Information.PRPendingPurchaseOrderForCostCenter
+fIndent,Inventory.MMPRGetDeptInfo,Information.PRPendingPurchaseOrderForDept,2,Inventory.MMPRGetDeptInfo -> Information.PRPendingPurchaseOrderForDept
+fIndent,Inventory.MMPRGetCostCenterInfo,Information.PRPendingPurchaseRequestForCostCenter,2,Inventory.MMPRGetCostCenterInfo -> Information.PRPendingPurchaseRequestForCostCenter
+fIndent,Inventory.MMPRGetDeptInfo,Information.PRPendingPurchaseRequestForDept,2,Inventory.MMPRGetDeptInfo -> Information.PRPendingPurchaseRequestForDept
+fIndent,Inventory.MMPRGetDocumentInfo,Information.PRPurchaseDetail,2,Inventory.MMPRGetDocumentInfo -> Information.PRPurchaseDetail
+fIndent,Inventory.MMPRGetDocumentInfo,Information.PRRejectionDetail,2,Inventory.MMPRGetDocumentInfo -> Information.PRRejectionDetail
+fIndent,Inventory.MMPRGetItemInfo,Information.PRSODetail,2,Inventory.MMPRGetItemInfo -> Information.PRSODetail
+fIndent,Inventory.MMPRGetItemInfo,Information.PurchaseOrderDetail,2,Inventory.MMPRGetItemInfo -> Information.PurchaseOrderDetail
+fIndent,Inventory.MMPRGetItemInfo,Information.PurchaseRequestDetail,2,Inventory.MMPRGetItemInfo -> Information.PurchaseRequestDetail
+fIndent,Inventory.MMPRGetDocumentInfo,Information.PurchaseRequestDetailForDocument,2,Inventory.MMPRGetDocumentInfo -> Information.PurchaseRequestDetailForDocument
+fIndent,Inventory.MMPRGetDocumentInfo,Information.PurchaseRequestReferenceDetailForDocument,2,Inventory.MMPRGetDocumentInfo -> Information.PurchaseRequestReferenceDetailForDocument
+fIndent,Inventory.MMPRGetItemInfo,Information.StockDetail,2,Inventory.MMPRGetItemInfo -> Information.StockDetail
+fIndent,Inventory.MMPRGetCostCenterInfo,Information.StockDetailForCostCenter,2,Inventory.MMPRGetCostCenterInfo -> Information.StockDetailForCostCenter
+fIndent,Inventory.MMPRDelete,Inventory.IndentRequisitionStatus,2,Inventory.MMPRDelete -> Inventory.IndentRequisitionStatus
+fIndent,Inventory.MMPRAuthorize,Inventory.MMPRSendAuthorizationMail,2,Inventory.MMPRAuthorize -> Inventory.MMPRSendAuthorizationMail
+fIndent,Inventory.MMPRSave,masterdata.DocumentNumberGeneration,2,Inventory.MMPRSave -> masterdata.DocumentNumberGeneration
+fIndent,Inventory.MMPRDelete,Project.MaterialPlanningStatus,2,Inventory.MMPRDelete -> Project.MaterialPlanningStatus
+fIndent,Inventory.MMPRSave,masterdata.DocumentNumberInitialization,3,Inventory.MMPRSave -> masterdata.DocumentNumberGeneration -> masterdata.DocumentNumberInitialization
+fIndent,Inventory.MMPRAuthorize,Notifications.SendSMS,3,Inventory.MMPRAuthorize -> Inventory.MMPRSendAuthorizationMail -> Notifications.SendSMS
+fIndent,Inventory.MMPRAuthorize,Utility.SendEmailThroughProfile,3,Inventory.MMPRAuthorize -> Inventory.MMPRSendAuthorizationMail -> Utility.SendEmailThroughProfile
+fIndentRequisition,Inventory.IDMRGetDeptInfo,Information.BudgetForDept,2,Inventory.IDMRGetDeptInfo -> Information.BudgetForDept
+fIndentRequisition,Inventory.IDMRGetItemInfo,Information.ConsumptionDetail,2,Inventory.IDMRGetItemInfo -> Information.ConsumptionDetail
+fIndentRequisition,Inventory.IDMRGetItemInfo,Information.ItemSummary,2,Inventory.IDMRGetItemInfo -> Information.ItemSummary
+fIndentRequisition,Inventory.IDMRGetCostCenterInfo,Information.ItemSummaryForCost,2,Inventory.IDMRGetCostCenterInfo -> Information.ItemSummaryForCost
+fIndentRequisition,Inventory.IDMRGetItemInfo,Information.MaterialRequestDetail,2,Inventory.IDMRGetItemInfo -> Information.MaterialRequestDetail
+fIndentRequisition,Inventory.IDMRGetDeptInfo,Information.MRPendingPurchaseOrderForDept,2,Inventory.IDMRGetDeptInfo -> Information.MRPendingPurchaseOrderForDept
+fIndentRequisition,Inventory.IDMRGetCostCenterInfo,Information.PendingMaterialRequestForCostCenter,2,Inventory.IDMRGetCostCenterInfo -> Information.PendingMaterialRequestForCostCenter
+fIndentRequisition,Inventory.IDMRGetDeptInfo,Information.PendingMaterialRequestForDept,2,Inventory.IDMRGetDeptInfo -> Information.PendingMaterialRequestForDept
+fIndentRequisition,Inventory.IDMRGetCostCenterInfo,Information.PendingPurchaseOrderForCostCenter,2,Inventory.IDMRGetCostCenterInfo -> Information.PendingPurchaseOrderForCostCenter
+fIndentRequisition,Inventory.IDMRGetCostCenterInfo,Information.PendingPurchaseRequestForCostCenter,2,Inventory.IDMRGetCostCenterInfo -> Information.PendingPurchaseRequestForCostCenter
+fIndentRequisition,Inventory.IDMRGetDeptInfo,Information.PendingPurchaseRequestForDept,2,Inventory.IDMRGetDeptInfo -> Information.PendingPurchaseRequestForDept
+fIndentRequisition,Inventory.IDMRGetItemInfo,Information.PurchaseOrderDetail,2,Inventory.IDMRGetItemInfo -> Information.PurchaseOrderDetail
+fIndentRequisition,Inventory.IDMRGetItemInfo,Information.PurchaseRequestDetail,2,Inventory.IDMRGetItemInfo -> Information.PurchaseRequestDetail
+fIndentRequisition,Inventory.IDMRGetItemInfo,Information.StockDetail,2,Inventory.IDMRGetItemInfo -> Information.StockDetail
+fIndentRequisition,Inventory.IDMRGetCostCenterInfo,Information.StockDetailForCostCenter,2,Inventory.IDMRGetCostCenterInfo -> Information.StockDetailForCostCenter
+fIndentRequisition,Inventory.IDMRSave,masterdata.DocumentNumberGeneration,2,Inventory.IDMRSave -> masterdata.DocumentNumberGeneration
+fIndentRequisition,Inventory.IDMRSave,masterdata.DocumentNumberInitialization,3,Inventory.IDMRSave -> masterdata.DocumentNumberGeneration -> masterdata.DocumentNumberInitialization
+fInspectionEntry,Inventory.IMIEAuthorize,Inventory.UpdateGRNQtyFromWeighment,2,Inventory.IMIEAuthorize -> Inventory.UpdateGRNQtyFromWeighment
+fInspectionEntry,Inventory.IMIESave,masterdata.DocumentNumberGeneration,2,Inventory.IMIESave -> masterdata.DocumentNumberGeneration
+fInspectionEntry,Inventory.IMIEGetPOQCDetail,Purchase.POQCDetail,2,Inventory.IMIEGetPOQCDetail -> Purchase.POQCDetail
+fInspectionEntry,Inventory.IMIESave,masterdata.DocumentNumberInitialization,3,Inventory.IMIESave -> masterdata.DocumentNumberGeneration -> masterdata.DocumentNumberInitialization
+fInspectionIntimation,Inventory.GRIISave,masterdata.DocumentNumberGeneration,2,Inventory.GRIISave -> masterdata.DocumentNumberGeneration
+fInspectionIntimation,Inventory.GRIISave,masterdata.DocumentNumberInitialization,3,Inventory.GRIISave -> masterdata.DocumentNumberGeneration -> masterdata.DocumentNumberInitialization
+fItemStandardAttributeValue,masterdata.MMMMSaveAttributeStandardValue,masterdata.ISVMSave,2,masterdata.MMMMSaveAttributeStandardValue -> masterdata.ISVMSave
+fPaymentAdvice,Finance.FIPASave,masterdata.DocumentNumberGeneration,2,Finance.FIPASave -> masterdata.DocumentNumberGeneration
+fPaymentAdvice,Finance.FIPASave,masterdata.DocumentNumberInitialization,3,Finance.FIPASave -> masterdata.DocumentNumberGeneration -> masterdata.DocumentNumberInitialization
+fPaymentPlan,Finance.FIPPSaveMain,masterdata.DocumentNumberGeneration,2,Finance.FIPPSaveMain -> masterdata.DocumentNumberGeneration
+fPaymentPlan,Finance.FIPPFillValuesDependent,masterdata.procOperativeAccount,2,Finance.FIPPFillValuesDependent -> masterdata.procOperativeAccount
+fPaymentPlan,Finance.FIPPSaveMain,masterdata.DocumentNumberInitialization,3,Finance.FIPPSaveMain -> masterdata.DocumentNumberGeneration -> masterdata.DocumentNumberInitialization
+fPaymentRequest,Finance.FIPRSaveMain,masterdata.DocumentNumberGeneration,2,Finance.FIPRSaveMain -> masterdata.DocumentNumberGeneration
+fPaymentRequest,Finance.FIPRSaveMain,masterdata.DocumentNumberInitialization,3,Finance.FIPRSaveMain -> masterdata.DocumentNumberGeneration -> masterdata.DocumentNumberInitialization
+fPaymentVoucher,Finance.VoucherDelete,AuditTrail.SaveVoucherAuditLog,2,Finance.VoucherDelete -> AuditTrail.SaveVoucherAuditLog
+fPaymentVoucher,Finance.VoucherGSTPosting,Finance.VoucherGSTDetailItemWiseSave,2,Finance.VoucherGSTPosting -> Finance.VoucherGSTDetailItemWiseSave
+fPaymentVoucher,Finance.VoucherGSTPosting,Finance.VoucherGSTDetailSave,2,Finance.VoucherGSTPosting -> Finance.VoucherGSTDetailSave
+fPaymentVoucher,Finance.VoucherDelete,Finance.VoucherSaveBeforeDelete,2,Finance.VoucherDelete -> Finance.VoucherSaveBeforeDelete
+fPurchaseBill,Finance.PBPBDelete,Finance.IEIPDelete,2,Finance.PBPBDelete -> Finance.IEIPDelete
+fPurchaseBill,Finance.PBPBDelete,Finance.VoucherDelete,2,Finance.PBPBDelete -> Finance.VoucherDelete
+fPurchaseBill,Finance.IEIPSave,Finance.VoucherSaveFromTransaction,2,Finance.IEIPSave -> Finance.VoucherSaveFromTransaction
+fPurchaseBill,Finance.PBPBAuthorize,Inventory.InvLotBillMapCalculation,2,Finance.PBPBAuthorize -> Inventory.InvLotBillMapCalculation
+fPurchaseBill,Finance.PBPBAuthorize,Inventory.InvLotBillTaxTransaction,2,Finance.PBPBAuthorize -> Inventory.InvLotBillTaxTransaction
+fPurchaseBill,Finance.PBPBDelete,Inventory.InvLotDelete,2,Finance.PBPBDelete -> Inventory.InvLotDelete
+fPurchaseBill,Finance.PBPBAuthorize,Inventory.InvLotMaterialTransaction,2,Finance.PBPBAuthorize -> Inventory.InvLotMaterialTransaction
+fPurchaseBill,Finance.IEIPSave,masterdata.DocumentNumberGeneration,2,Finance.IEIPSave -> masterdata.DocumentNumberGeneration
+fPurchaseBill,Finance.PBPBAuthorize,masterdata.TDSTCSThreholdStatus,2,Finance.PBPBAuthorize -> masterdata.TDSTCSThreholdStatus
+fPurchaseBill,Finance.PBPBDelete,AuditTrail.SaveVoucherAuditLog,3,Finance.PBPBDelete -> Finance.VoucherDelete -> AuditTrail.SaveVoucherAuditLog
+fPurchaseBill,Finance.PBPBDelete,Finance.VoucherSaveBeforeDelete,3,Finance.PBPBDelete -> Finance.VoucherDelete -> Finance.VoucherSaveBeforeDelete
+fPurchaseBill,Finance.PBPBAuthorize,Inventory.InvLotMapCalculation,3,Finance.PBPBAuthorize -> Inventory.InvLotMaterialTransaction -> Inventory.InvLotMapCalculation
+fPurchaseBill,Finance.IEIPSave,masterdata.DocumentNumberInitialization,3,Finance.IEIPSave -> masterdata.DocumentNumberGeneration -> masterdata.DocumentNumberInitialization
+fPurchaseBill,Finance.PBPBAuthorize,Purchase.FreightAmount,3,Finance.PBPBAuthorize -> Inventory.InvLotBillTaxTransaction -> Purchase.FreightAmount
+fPurchaseOrder,Notifications.TANRSaveUserApproval,EAM.EAMOAuthorize,2,Notifications.TANRSaveUserApproval -> EAM.EAMOAuthorize
+fPurchaseOrder,Notifications.TANRSaveUserApproval,EAM.EAMOSendAuthorizationMail,2,Notifications.TANRSaveUserApproval -> EAM.EAMOSendAuthorizationMail
+fPurchaseOrder,Notifications.TANRSaveUserApproval,EAM.EAOCAuthorize,2,Notifications.TANRSaveUserApproval -> EAM.EAOCAuthorize
+fPurchaseOrder,Notifications.TANRSaveUserApproval,EAM.EAOCSendAuthorizationMail,2,Notifications.TANRSaveUserApproval -> EAM.EAOCSendAuthorizationMail
+fPurchaseOrder,Notifications.TANRSaveUserApproval,EAM.EARQAuthorize,2,Notifications.TANRSaveUserApproval -> EAM.EARQAuthorize
+fPurchaseOrder,Notifications.TANRSaveUserApproval,EAM.EARQSendAuthorizationMail,2,Notifications.TANRSaveUserApproval -> EAM.EARQSendAuthorizationMail
+fPurchaseOrder,Purchase.PMPOLoadData,Finance.FOAMFillValuesOrderNo,2,Purchase.PMPOLoadData -> Finance.FOAMFillValuesOrderNo
+fPurchaseOrder,Purchase.PMPOGetDeptInfo,Information.BudgetForDept,2,Purchase.PMPOGetDeptInfo -> Information.BudgetForDept
+fPurchaseOrder,Purchase.PMPOGetItemInfo,Information.ItemSummary,2,Purchase.PMPOGetItemInfo -> Information.ItemSummary
+fPurchaseOrder,Purchase.PMPOGetItemInfo,Information.LastPORate,2,Purchase.PMPOGetItemInfo -> Information.LastPORate
+fPurchaseOrder,Purchase.PMPOGetDeptInfo,Information.MonthWisePOValueForDept,2,Purchase.PMPOGetDeptInfo -> Information.MonthWisePOValueForDept
+fPurchaseOrder,Purchase.PMPOGetVendorInfo,Information.PendingInvoiceForPaymentForVendor,2,Purchase.PMPOGetVendorInfo -> Information.PendingInvoiceForPaymentForVendor
+fPurchaseOrder,Purchase.PMPOGetDeptInfo,Information.PendingMaterialRequestForDept,2,Purchase.PMPOGetDeptInfo -> Information.PendingMaterialRequestForDept
+fPurchaseOrder,Purchase.PMPOGetItemInfo,Information.PendingMaterialRequestForItem,2,Purchase.PMPOGetItemInfo -> Information.PendingMaterialRequestForItem
+fPurchaseOrder,Purchase.PMPOGetVendorInfo,Information.PendingMRNforInvoiceForVendor,2,Purchase.PMPOGetVendorInfo -> Information.PendingMRNforInvoiceForVendor
+fPurchaseOrder,Purchase.PMPOGetDeptInfo,Information.PendingPurchaseOrderForDept,2,Purchase.PMPOGetDeptInfo -> Information.PendingPurchaseOrderForDept
+fPurchaseOrder,Purchase.PMPOGetItemInfo,Information.PendingPurchaseOrderForItem,2,Purchase.PMPOGetItemInfo -> Information.PendingPurchaseOrderForItem
+fPurchaseOrder,Purchase.PMPOGetVendorInfo,Information.PendingPurchaseOrderForVendor,2,Purchase.PMPOGetVendorInfo -> Information.PendingPurchaseOrderForVendor
+fPurchaseOrder,Purchase.PMPOGetItemInfo,Information.PendingPurchaseRequestForItem,2,Purchase.PMPOGetItemInfo -> Information.PendingPurchaseRequestForItem
+fPurchaseOrder,Purchase.PMPOPODetail,Information.POBillDetail,2,Purchase.PMPOPODetail -> Information.POBillDetail
+fPurchaseOrder,Purchase.PMPOPODetail,Information.PODrCrDetail,2,Purchase.PMPOPODetail -> Information.PODrCrDetail
+fPurchaseOrder,Purchase.PMPOPODetail,Information.POGateEntryDetail,2,Purchase.PMPOPODetail -> Information.POGateEntryDetail
+fPurchaseOrder,Purchase.PMPOPODetail,Information.POGRNDetail,2,Purchase.PMPOPODetail -> Information.POGRNDetail
+fPurchaseOrder,Purchase.PMPOPODetail,Information.POPaymentDetail,2,Purchase.PMPOPODetail -> Information.POPaymentDetail
+fPurchaseOrder,Purchase.PMPOGetDeptInfo,Information.POPendingPurchaseRequestForDept,2,Purchase.PMPOGetDeptInfo -> Information.POPendingPurchaseRequestForDept
+fPurchaseOrder,Purchase.PMPOPODetail,Information.PORejectionDetail,2,Purchase.PMPOPODetail -> Information.PORejectionDetail
+fPurchaseOrder,Purchase.PMPOPODetail,Information.POSourceDetail,2,Purchase.PMPOPODetail -> Information.POSourceDetail
+fPurchaseOrder,Purchase.PMPOGetVendorInfo,Information.POTotalAmendment,2,Purchase.PMPOGetVendorInfo -> Information.POTotalAmendment
+fPurchaseOrder,Purchase.PMPOGetItemInfo,Information.POTotalAmendmentForItem,2,Purchase.PMPOGetItemInfo -> Information.POTotalAmendmentForItem
+fPurchaseOrder,Purchase.PMPOPODetail,Information.PurchaseDetail,2,Purchase.PMPOPODetail -> Information.PurchaseDetail
+fPurchaseOrder,Purchase.PMPOGetVendorInfo,Information.RejectionRatioForVendor,2,Purchase.PMPOGetVendorInfo -> Information.RejectionRatioForVendor
+fPurchaseOrder,Purchase.PMPOGetItemInfo,Information.StockDetail,2,Purchase.PMPOGetItemInfo -> Information.StockDetail
+fPurchaseOrder,Notifications.TANRSaveUserApproval,Inventory.IGRNAuthorizeForMail,2,Notifications.TANRSaveUserApproval -> Inventory.IGRNAuthorizeForMail
+fPurchaseOrder,Notifications.TANRSaveUserApproval,Inventory.IGRNSendAuthorizationMail,2,Notifications.TANRSaveUserApproval -> Inventory.IGRNSendAuthorizationMail
+fPurchaseOrder,Purchase.PMPODelete,Inventory.IndentStatus,2,Purchase.PMPODelete -> Inventory.IndentStatus
+fPurchaseOrder,Purchase.PMPOSave,masterdata.DocumentNumberGeneration,2,Purchase.PMPOSave -> masterdata.DocumentNumberGeneration
+fPurchaseOrder,Purchase.PMPOSendAuthorizationMail,Notifications.SendSMS,2,Purchase.PMPOSendAuthorizationMail -> Notifications.SendSMS
+fPurchaseOrder,Purchase.PMPOAuthorize,Project.ProjectBudgetValidation,2,Purchase.PMPOAuthorize -> Project.ProjectBudgetValidation
+fPurchaseOrder,Notifications.TANRSaveUserApproval,Project.WBSPAuthorize,2,Notifications.TANRSaveUserApproval -> Project.WBSPAuthorize
+fPurchaseOrder,Notifications.TANRSaveUserApproval,Project.WBSPDelete,2,Notifications.TANRSaveUserApproval -> Project.WBSPDelete
+fPurchaseOrder,Notifications.TANRSaveUserApproval,Project.WBSPSendAuthorizationMail,2,Notifications.TANRSaveUserApproval -> Project.WBSPSendAuthorizationMail
+fPurchaseOrder,Purchase.PMPOAuthorize,Purchase.PMPOInsertPOIntoPortal,2,Purchase.PMPOAuthorize -> Purchase.PMPOInsertPOIntoPortal
+fPurchaseOrder,Purchase.PMPOAuthorize,Purchase.QuotationChangeStatus,2,Purchase.PMPOAuthorize -> Purchase.QuotationChangeStatus
+fPurchaseOrder,Notifications.TANRSaveUserApproval,Purchase.SCSOAuthorize,2,Notifications.TANRSaveUserApproval -> Purchase.SCSOAuthorize
+fPurchaseOrder,Notifications.TANRSaveUserApproval,Purchase.SCSODelete,2,Notifications.TANRSaveUserApproval -> Purchase.SCSODelete
+fPurchaseOrder,Notifications.TANRSaveUserApproval,Purchase.SCSOSendAuthorizationMail,2,Notifications.TANRSaveUserApproval -> Purchase.SCSOSendAuthorizationMail
+fPurchaseOrder,Notifications.TANRSaveUserApproval,Sales.SDPEAuthorize,2,Notifications.TANRSaveUserApproval -> Sales.SDPEAuthorize
+fPurchaseOrder,Notifications.TANRSaveUserApproval,Sales.SDPEDelete,2,Notifications.TANRSaveUserApproval -> Sales.SDPEDelete
+fPurchaseOrder,Notifications.TANRSaveUserApproval,Sales.SDPESendAuthorizationMail,2,Notifications.TANRSaveUserApproval -> Sales.SDPESendAuthorizationMail
+fPurchaseOrder,Notifications.TANRSaveUserApproval,Sales.SDSOAuthorize,2,Notifications.TANRSaveUserApproval -> Sales.SDSOAuthorize
+fPurchaseOrder,Notifications.TANRSaveUserApproval,Sales.SDSODelete,2,Notifications.TANRSaveUserApproval -> Sales.SDSODelete
+fPurchaseOrder,Notifications.TANRSaveUserApproval,Sales.SDSOSendAuthorizationMail,2,Notifications.TANRSaveUserApproval -> Sales.SDSOSendAuthorizationMail
+fPurchaseOrder,Purchase.PMPOSendAuthorizationMail,Utility.SendEmailThroughProfile,2,Purchase.PMPOSendAuthorizationMail -> Utility.SendEmailThroughProfile
+fPurchaseOrder,Purchase.PMPOLoadData,CustomerService.CMSOFillValuesAccountAssignment,3,Purchase.PMPOLoadData -> Finance.FOAMFillValuesOrderNo -> CustomerService.CMSOFillValuesAccountAssignment
+fPurchaseOrder,Notifications.TANRSaveUserApproval,EAM.ChangeMRStatus,3,Notifications.TANRSaveUserApproval -> EAM.EARQAuthorize -> EAM.ChangeMRStatus
+fPurchaseOrder,Notifications.TANRSaveUserApproval,EAM.MaintenanceOccurrenceStatus,3,Notifications.TANRSaveUserApproval -> EAM.EAMOAuthorize -> EAM.MaintenanceOccurrenceStatus
+fPurchaseOrder,Notifications.TANRSaveUserApproval,Inventory.SCReqStatus,3,Notifications.TANRSaveUserApproval -> Purchase.SCSODelete -> Inventory.SCReqStatus
+fPurchaseOrder,Notifications.TANRSaveUserApproval,masterdata.CCCMDelete,3,Notifications.TANRSaveUserApproval -> Sales.SDSODelete -> masterdata.CCCMDelete
+fPurchaseOrder,Purchase.PMPOSave,masterdata.DocumentNumberInitialization,3,Purchase.PMPOSave -> masterdata.DocumentNumberGeneration -> masterdata.DocumentNumberInitialization
+fPurchaseOrder,Purchase.PMPOLoadData,Purchase.SCSOFillValuesAccountAssignment,3,Purchase.PMPOLoadData -> Finance.FOAMFillValuesOrderNo -> Purchase.SCSOFillValuesAccountAssignment
+fPurchaseOrder,Notifications.TANRSaveUserApproval,Sales.SalesAgreementStatus,3,Notifications.TANRSaveUserApproval -> Sales.SDSODelete -> Sales.SalesAgreementStatus
+fPurchaseOrder,Notifications.TANRSaveUserApproval,Sales.SDPEPreCalRevision,3,Notifications.TANRSaveUserApproval -> Sales.SDPEAuthorize -> Sales.SDPEPreCalRevision
+fPurchaseOrder,Purchase.PMPOLoadData,Sales.SDSEFillValuesAccountAssignment,3,Purchase.PMPOLoadData -> Finance.FOAMFillValuesOrderNo -> Sales.SDSEFillValuesAccountAssignment
+fPurchaseOrder,Purchase.PMPOLoadData,Sales.SDSOFillValuesAccountAssignment,3,Purchase.PMPOLoadData -> Finance.FOAMFillValuesOrderNo -> Sales.SDSOFillValuesAccountAssignment
+fPurchaseOrder,Notifications.TANRSaveUserApproval,Sales.SDSOSaveExportCostProvision,3,Notifications.TANRSaveUserApproval -> Sales.SDSOAuthorize -> Sales.SDSOSaveExportCostProvision
+fPurchaseOrder,Notifications.TANRSaveUserApproval,Sales.SDSOUpdateItemSchedule,3,Notifications.TANRSaveUserApproval -> Sales.SDSODelete -> Sales.SDSOUpdateItemSchedule
+fPurchaseOrder,Notifications.TANRSaveUserApproval,Sales.SOStatus,3,Notifications.TANRSaveUserApproval -> Sales.SDSODelete -> Sales.SOStatus
+fQualityParameter,masterdata.QMQPDelete,masterdata.MDQCDelete,2,masterdata.QMQPDelete -> masterdata.MDQCDelete
+fQualityParameter,masterdata.QMQPSave,masterdata.MDQCSave,2,masterdata.QMQPSave -> masterdata.MDQCSave
+fQuotation,Purchase.POMQGetItemInfo,Information.Last5POInfo,2,Purchase.POMQGetItemInfo -> Information.Last5POInfo
+fQuotation,Purchase.POMQGetItemInfo,Information.PendingQuotationForPO,2,Purchase.POMQGetItemInfo -> Information.PendingQuotationForPO
+fQuotation,Purchase.POMQGetVendorInfo,Information.QuotationPORatio,2,Purchase.POMQGetVendorInfo -> Information.QuotationPORatio
+fQuotation,Purchase.POMQGetVendorInfo,Information.RejectionRatioForVendor,2,Purchase.POMQGetVendorInfo -> Information.RejectionRatioForVendor
+fQuotation,Purchase.POMQSave,masterdata.DocumentNumberGeneration,2,Purchase.POMQSave -> masterdata.DocumentNumberGeneration
+fQuotation,Purchase.POMQSave,masterdata.DocumentNumberInitialization,3,Purchase.POMQSave -> masterdata.DocumentNumberGeneration -> masterdata.DocumentNumberInitialization
+fRequestforQuotation,Purchase.PRFQGetItemInfo,Information.AgreementDetail,2,Purchase.PRFQGetItemInfo -> Information.AgreementDetail
+fRequestforQuotation,Purchase.PRFQGetItemInfo,Information.Last5POInfo,2,Purchase.PRFQGetItemInfo -> Information.Last5POInfo
+fRequestforQuotation,Purchase.PRFQGetItemInfo,Information.PendingRFQForItem,2,Purchase.PRFQGetItemInfo -> Information.PendingRFQForItem
+fRequestforQuotation,Purchase.PRFQGetVendorInfo,Information.PendingRFQForVendor,2,Purchase.PRFQGetVendorInfo -> Information.PendingRFQForVendor
+fRequestforQuotation,Purchase.PRFQDelete,Inventory.IndentStatus,2,Purchase.PRFQDelete -> Inventory.IndentStatus
+fRequestforQuotation,Purchase.PRFQSave,masterdata.DocumentNumberGeneration,2,Purchase.PRFQSave -> masterdata.DocumentNumberGeneration
+fRequestforQuotation,Purchase.PRFQSave,masterdata.DocumentNumberInitialization,3,Purchase.PRFQSave -> masterdata.DocumentNumberGeneration -> masterdata.DocumentNumberInitialization
+fVendorCard,masterdata.FIAMSaveMain,Utility.CreateMissingVoucherRef,2,masterdata.FIAMSaveMain -> Utility.CreateMissingVoucherRef
+fVendorCard,masterdata.FIAMSaveMain,Finance.VoucherSaveReferenceDetail,3,masterdata.FIAMSaveMain -> Utility.CreateMissingVoucherRef -> Finance.VoucherSaveReferenceDetail
+fVendorCard,masterdata.FIAMSaveMain,Utility.ConvertOnAccountToNewReference,3,masterdata.FIAMSaveMain -> Utility.CreateMissingVoucherRef -> Utility.ConvertOnAccountToNewReference
+DocumentYearlydll,masterdata.DocumentNumberFillValuesDependent,masterdata.DocumentNumberInitialization,2,masterdata.DocumentNumberFillValuesDependent -> masterdata.DocumentNumberInitialization
+MultiAuthorization,Notifications.TANRSaveUserApproval,EAM.EAMOAuthorize,2,Notifications.TANRSaveUserApproval -> EAM.EAMOAuthorize
+MultiAuthorization,Notifications.TANRSaveUserApproval,EAM.EAMOSendAuthorizationMail,2,Notifications.TANRSaveUserApproval -> EAM.EAMOSendAuthorizationMail
+MultiAuthorization,Notifications.TANRSaveUserApproval,EAM.EAOCAuthorize,2,Notifications.TANRSaveUserApproval -> EAM.EAOCAuthorize
+MultiAuthorization,Notifications.TANRSaveUserApproval,EAM.EAOCSendAuthorizationMail,2,Notifications.TANRSaveUserApproval -> EAM.EAOCSendAuthorizationMail
+MultiAuthorization,Notifications.TANRSaveUserApproval,EAM.EARQAuthorize,2,Notifications.TANRSaveUserApproval -> EAM.EARQAuthorize
+MultiAuthorization,Notifications.TANRSaveUserApproval,EAM.EARQSendAuthorizationMail,2,Notifications.TANRSaveUserApproval -> EAM.EARQSendAuthorizationMail
+MultiAuthorization,Notifications.TANRSaveUserApproval,Inventory.IGRNAuthorizeForMail,2,Notifications.TANRSaveUserApproval -> Inventory.IGRNAuthorizeForMail
+MultiAuthorization,Notifications.MultiAuthorizationMail,Inventory.IGRNSendAuthorizationMail,2,Notifications.MultiAuthorizationMail -> Inventory.IGRNSendAuthorizationMail
+MultiAuthorization,Notifications.MultiAuthorizationMail,Inventory.MMPRSendAuthorizationMail,2,Notifications.MultiAuthorizationMail -> Inventory.MMPRSendAuthorizationMail
+MultiAuthorization,Notifications.TANRSaveUserApproval,Project.WBSPAuthorize,2,Notifications.TANRSaveUserApproval -> Project.WBSPAuthorize
+MultiAuthorization,Notifications.TANRSaveUserApproval,Project.WBSPDelete,2,Notifications.TANRSaveUserApproval -> Project.WBSPDelete
+MultiAuthorization,Notifications.MultiAuthorizationMail,Project.WBSPSendAuthorizationMail,2,Notifications.MultiAuthorizationMail -> Project.WBSPSendAuthorizationMail
+MultiAuthorization,Notifications.TANRSaveUserApproval,Purchase.PMPOAuthorize,2,Notifications.TANRSaveUserApproval -> Purchase.PMPOAuthorize
+MultiAuthorization,Notifications.TANRSaveUserApproval,Purchase.PMPODelete,2,Notifications.TANRSaveUserApproval -> Purchase.PMPODelete
+MultiAuthorization,Notifications.TANRSaveUserApproval,Purchase.PMPOSendAuthorizationMail,2,Notifications.TANRSaveUserApproval -> Purchase.PMPOSendAuthorizationMail
+MultiAuthorization,Notifications.TANRSaveUserApproval,Purchase.SCSOAuthorize,2,Notifications.TANRSaveUserApproval -> Purchase.SCSOAuthorize
+MultiAuthorization,Notifications.TANRSaveUserApproval,Purchase.SCSODelete,2,Notifications.TANRSaveUserApproval -> Purchase.SCSODelete
+MultiAuthorization,Notifications.TANRSaveUserApproval,Purchase.SCSOSendAuthorizationMail,2,Notifications.TANRSaveUserApproval -> Purchase.SCSOSendAuthorizationMail
+MultiAuthorization,Notifications.TANRSaveUserApproval,Sales.SDPEAuthorize,2,Notifications.TANRSaveUserApproval -> Sales.SDPEAuthorize
+MultiAuthorization,Notifications.TANRSaveUserApproval,Sales.SDPEDelete,2,Notifications.TANRSaveUserApproval -> Sales.SDPEDelete
+MultiAuthorization,Notifications.MultiAuthorizationMail,Sales.SDPESendAuthorizationMail,2,Notifications.MultiAuthorizationMail -> Sales.SDPESendAuthorizationMail
+MultiAuthorization,Notifications.TANRSaveUserApproval,Sales.SDSOAuthorize,2,Notifications.TANRSaveUserApproval -> Sales.SDSOAuthorize
+MultiAuthorization,Notifications.TANRSaveUserApproval,Sales.SDSODelete,2,Notifications.TANRSaveUserApproval -> Sales.SDSODelete
+MultiAuthorization,Notifications.MultiAuthorizationMail,Sales.SDSOSendAuthorizationMail,2,Notifications.MultiAuthorizationMail -> Sales.SDSOSendAuthorizationMail
+MultiAuthorization,Notifications.TANRSaveUserApproval,EAM.ChangeMRStatus,3,Notifications.TANRSaveUserApproval -> EAM.EARQAuthorize -> EAM.ChangeMRStatus
+MultiAuthorization,Notifications.TANRSaveUserApproval,EAM.MaintenanceOccurrenceStatus,3,Notifications.TANRSaveUserApproval -> EAM.EAMOAuthorize -> EAM.MaintenanceOccurrenceStatus
+MultiAuthorization,Notifications.TANRSaveUserApproval,Finance.FOAMFillValuesOrderNo,3,Notifications.TANRSaveUserApproval -> Sales.SDSOAuthorize -> Finance.FOAMFillValuesOrderNo
+MultiAuthorization,Notifications.TANRSaveUserApproval,Inventory.IndentStatus,3,Notifications.TANRSaveUserApproval -> Purchase.PMPODelete -> Inventory.IndentStatus
+MultiAuthorization,Notifications.TANRSaveUserApproval,Inventory.SCReqStatus,3,Notifications.TANRSaveUserApproval -> Purchase.SCSODelete -> Inventory.SCReqStatus
+MultiAuthorization,Notifications.TANRSaveUserApproval,masterdata.CCCMDelete,3,Notifications.TANRSaveUserApproval -> Sales.SDSODelete -> masterdata.CCCMDelete
+MultiAuthorization,Notifications.MultiAuthorizationMail,Notifications.SendSMS,3,Notifications.MultiAuthorizationMail -> Inventory.IGRNSendAuthorizationMail -> Notifications.SendSMS
+MultiAuthorization,Notifications.TANRSaveUserApproval,Project.ProjectBudgetValidation,3,Notifications.TANRSaveUserApproval -> Purchase.PMPOAuthorize -> Project.ProjectBudgetValidation
+MultiAuthorization,Notifications.TANRSaveUserApproval,Purchase.PMPOInsertPOIntoPortal,3,Notifications.TANRSaveUserApproval -> Purchase.PMPOAuthorize -> Purchase.PMPOInsertPOIntoPortal
+MultiAuthorization,Notifications.TANRSaveUserApproval,Purchase.QuotationChangeStatus,3,Notifications.TANRSaveUserApproval -> Purchase.PMPOAuthorize -> Purchase.QuotationChangeStatus
+MultiAuthorization,Notifications.TANRSaveUserApproval,Sales.SalesAgreementStatus,3,Notifications.TANRSaveUserApproval -> Sales.SDSODelete -> Sales.SalesAgreementStatus
+MultiAuthorization,Notifications.TANRSaveUserApproval,Sales.SDPEPreCalRevision,3,Notifications.TANRSaveUserApproval -> Sales.SDPEAuthorize -> Sales.SDPEPreCalRevision
+MultiAuthorization,Notifications.TANRSaveUserApproval,Sales.SDSOSaveExportCostProvision,3,Notifications.TANRSaveUserApproval -> Sales.SDSOAuthorize -> Sales.SDSOSaveExportCostProvision
+MultiAuthorization,Notifications.TANRSaveUserApproval,Sales.SDSOUpdateItemSchedule,3,Notifications.TANRSaveUserApproval -> Sales.SDSODelete -> Sales.SDSOUpdateItemSchedule
+MultiAuthorization,Notifications.TANRSaveUserApproval,Sales.SOStatus,3,Notifications.TANRSaveUserApproval -> Sales.SDSODelete -> Sales.SOStatus
+MultiAuthorization,Notifications.MultiAuthorizationMail,Utility.SendEmailThroughProfile,3,Notifications.MultiAuthorizationMail -> Inventory.IGRNSendAuthorizationMail -> Utility.SendEmailThroughProfile
+MultiAuthorization,Notifications.TANRSaveUserApproval,CustomerService.CMSOFillValuesAccountAssignment,4,Notifications.TANRSaveUserApproval -> Sales.SDSOAuthorize -> Finance.FOAMFillValuesOrderNo -> CustomerService.CMSOFillValuesAccountAssignment
+MultiAuthorization,Notifications.TANRSaveUserApproval,Purchase.PMPOFillValuesAccountAssignment,4,Notifications.TANRSaveUserApproval -> Sales.SDSOAuthorize -> Finance.FOAMFillValuesOrderNo -> Purchase.PMPOFillValuesAccountAssignment
+MultiAuthorization,Notifications.TANRSaveUserApproval,Purchase.SCSOFillValuesAccountAssignment,4,Notifications.TANRSaveUserApproval -> Sales.SDSOAuthorize -> Finance.FOAMFillValuesOrderNo -> Purchase.SCSOFillValuesAccountAssignment
+MultiAuthorization,Notifications.TANRSaveUserApproval,Sales.SDSEFillValuesAccountAssignment,4,Notifications.TANRSaveUserApproval -> Sales.SDSOAuthorize -> Finance.FOAMFillValuesOrderNo -> Sales.SDSEFillValuesAccountAssignment
+MultiAuthorization,Notifications.TANRSaveUserApproval,Sales.SDSOFillValuesAccountAssignment,4,Notifications.TANRSaveUserApproval -> Sales.SDSOAuthorize -> Finance.FOAMFillValuesOrderNo -> Sales.SDSOFillValuesAccountAssignment
+Voucher,Finance.VoucherSaveAfterInsert,Finance.AutoAdjustVoucher,2,Finance.VoucherSaveAfterInsert -> Finance.AutoAdjustVoucher
+Voucher,Finance.VoucherSaveMain,Finance.VoucherSaveBeforeDelete,2,Finance.VoucherSaveMain -> Finance.VoucherSaveBeforeDelete
+Voucher,Finance.VoucherSaveAfterInsert,Finance.VoucherSaveChildDetail,2,Finance.VoucherSaveAfterInsert -> Finance.VoucherSaveChildDetail
+Voucher,Finance.VoucherSaveMain,masterdata.DocumentNumberGeneration,2,Finance.VoucherSaveMain -> masterdata.DocumentNumberGeneration
+Voucher,Finance.VoucherSaveMain,masterdata.DocumentNumberGenerationDuplicate,2,Finance.VoucherSaveMain -> masterdata.DocumentNumberGenerationDuplicate
+Voucher,Finance.VoucherFillValuesDependent,masterdata.procOperativeAccount,2,Finance.VoucherFillValuesDependent -> masterdata.procOperativeAccount
+Voucher,Finance.VoucherSaveAfterInsert,Finance.FBRRSaveReference,3,Finance.VoucherSaveAfterInsert -> Finance.VoucherSaveChildDetail -> Finance.FBRRSaveReference
+Voucher,Finance.VoucherSaveMain,masterdata.DocumentNumberInitialization,3,Finance.VoucherSaveMain -> masterdata.DocumentNumberGeneration -> masterdata.DocumentNumberInitialization
+fucFinancePosting,Finance.FinancePostingFillValuesDocumentDetails,Customize.AMRRFinancePosting,2,Finance.FinancePostingFillValuesDocumentDetails -> Customize.AMRRFinancePosting
+fucFinancePosting,Finance.FinancePostingFillValuesDocumentDetails,Customize.EAMCFinancePosting,2,Finance.FinancePostingFillValuesDocumentDetails -> Customize.EAMCFinancePosting
+fucFinancePosting,Finance.FinancePostingFillValuesDocumentDetails,Customize.ERJCFinancePosting,2,Finance.FinancePostingFillValuesDocumentDetails -> Customize.ERJCFinancePosting
+fucFinancePosting,Finance.FinancePostingFillValuesDocumentDetails,Customize.GRCIFinancePosting,2,Finance.FinancePostingFillValuesDocumentDetails -> Customize.GRCIFinancePosting
+fucFinancePosting,Finance.FinancePostingFillValuesDocumentDetails,Customize.MDNEFinancePosting,2,Finance.FinancePostingFillValuesDocumentDetails -> Customize.MDNEFinancePosting
+fucFinancePosting,Finance.FinancePostingFillValuesDocumentDetails,DiscreteRM.DRSAFinancePosting,2,Finance.FinancePostingFillValuesDocumentDetails -> DiscreteRM.DRSAFinancePosting
+fucFinancePosting,Finance.FinancePostingFillValuesDocumentDetails,DiscreteRM.DRSNFinancePosting,2,Finance.FinancePostingFillValuesDocumentDetails -> DiscreteRM.DRSNFinancePosting
+fucFinancePosting,Finance.FinancePostingFillValuesDocumentDetails,Finance.FAICFinancePosting,2,Finance.FinancePostingFillValuesDocumentDetails -> Finance.FAICFinancePosting
+fucFinancePosting,Finance.FinancePostingFillValuesDocumentDetails,Finance.FARPFinancePosting,2,Finance.FinancePostingFillValuesDocumentDetails -> Finance.FARPFinancePosting
+fucFinancePosting,Finance.FinancePostingFillValuesDocumentDetails,Finance.FASBFinancePosting,2,Finance.FinancePostingFillValuesDocumentDetails -> Finance.FASBFinancePosting
+fucFinancePosting,Finance.FinancePostingFillValuesDocumentDetails,Finance.FOBEFinancePosting,2,Finance.FinancePostingFillValuesDocumentDetails -> Finance.FOBEFinancePosting
+fucFinancePosting,Finance.FinancePostingFillValuesDocumentDetails,Finance.FSDAFinancePosting,2,Finance.FinancePostingFillValuesDocumentDetails -> Finance.FSDAFinancePosting
+fucFinancePosting,Finance.FinancePostingFillValuesDocumentDetails,Finance.GITRFinancePosting,2,Finance.FinancePostingFillValuesDocumentDetails -> Finance.GITRFinancePosting
+fucFinancePosting,Finance.FinancePostingFillValuesDocumentDetails,Finance.GTCUFinancePosting,2,Finance.FinancePostingFillValuesDocumentDetails -> Finance.GTCUFinancePosting
+fucFinancePosting,Finance.FinancePostingFillValuesDocumentDetails,Finance.ISMLFinancePosting,2,Finance.FinancePostingFillValuesDocumentDetails -> Finance.ISMLFinancePosting
+fucFinancePosting,Finance.FinancePostingFillValuesDocumentDetails,Finance.PBPBFinancePosting,2,Finance.FinancePostingFillValuesDocumentDetails -> Finance.PBPBFinancePosting
+fucFinancePosting,Finance.FinancePostingFillValuesDocumentDetails,Inventory.IGRNFinancePosting,2,Finance.FinancePostingFillValuesDocumentDetails -> Inventory.IGRNFinancePosting
+fucFinancePosting,Finance.FinancePostingFillValuesDocumentDetails,Inventory.IMMIFinancePosting,2,Finance.FinancePostingFillValuesDocumentDetails -> Inventory.IMMIFinancePosting
+fucFinancePosting,Finance.FinancePostingFillValuesDocumentDetails,Inventory.IMMRFinancePosting,2,Finance.FinancePostingFillValuesDocumentDetails -> Inventory.IMMRFinancePosting
+fucFinancePosting,Finance.FinancePostingFillValuesDocumentDetails,Inventory.IMSTFinancePosting,2,Finance.FinancePostingFillValuesDocumentDetails -> Inventory.IMSTFinancePosting
+fucFinancePosting,Finance.FinancePostingFillValuesDocumentDetails,Inventory.IMSTInterUnitFinancePosting,2,Finance.FinancePostingFillValuesDocumentDetails -> Inventory.IMSTInterUnitFinancePosting
+fucFinancePosting,Finance.FinancePostingFillValuesDocumentDetails,Inventory.MGPIFinancePosting,2,Finance.FinancePostingFillValuesDocumentDetails -> Inventory.MGPIFinancePosting
+fucFinancePosting,Finance.FinancePostingFillValuesDocumentDetails,Inventory.MGPOFinancePosting,2,Finance.FinancePostingFillValuesDocumentDetails -> Inventory.MGPOFinancePosting
+fucFinancePosting,Finance.FinancePostingFillValuesDocumentDetails,Inventory.MMSAFinancePosting,2,Finance.FinancePostingFillValuesDocumentDetails -> Inventory.MMSAFinancePosting
+fucFinancePosting,Finance.FinancePostingFillValuesDocumentDetails,Inventory.MSVAFinancePosting,2,Finance.FinancePostingFillValuesDocumentDetails -> Inventory.MSVAFinancePosting
+fucFinancePosting,Finance.FinancePostingFillValuesDocumentDetails,Inventory.QDASFinancePosting,2,Finance.FinancePostingFillValuesDocumentDetails -> Inventory.QDASFinancePosting
+fucFinancePosting,Finance.FinancePostingFillValuesDocumentDetails,Inventory.SCMRFinancePosting,2,Finance.FinancePostingFillValuesDocumentDetails -> Inventory.SCMRFinancePosting
+fucFinancePosting,Finance.FinancePostingFillValuesMiscChargeItemNo,masterdata.procOperativeAccount,2,Finance.FinancePostingFillValuesMiscChargeItemNo -> masterdata.procOperativeAccount
+fucFinancePosting,Finance.FinancePostingFillValuesDocumentDetails,ProcessProduction.BORCFinancePosting,2,Finance.FinancePostingFillValuesDocumentDetails -> ProcessProduction.BORCFinancePosting
+fucFinancePosting,Finance.FinancePostingFillValuesDocumentDetails,ProcessProduction.BPKEFinancePosting,2,Finance.FinancePostingFillValuesDocumentDetails -> ProcessProduction.BPKEFinancePosting
+fucFinancePosting,Finance.FinancePostingFillValuesDocumentDetails,ProcessProduction.BPPEFinancePosting,2,Finance.FinancePostingFillValuesDocumentDetails -> ProcessProduction.BPPEFinancePosting
+fucFinancePosting,Finance.FinancePostingFillValuesDocumentDetails,Production.PMLEFinancePosting,2,Finance.FinancePostingFillValuesDocumentDetails -> Production.PMLEFinancePosting
+fucFinancePosting,Finance.FinancePostingFillValuesDocumentDetails,Quality.QMIRFinancePosting,2,Finance.FinancePostingFillValuesDocumentDetails -> Quality.QMIRFinancePosting
+fucFinancePosting,Finance.FinancePostingFillValuesDocumentDetails,Sales.ERCIFinancePosting,2,Finance.FinancePostingFillValuesDocumentDetails -> Sales.ERCIFinancePosting
+fucFinancePosting,Finance.FinancePostingFillValuesDocumentDetails,Sales.SDPKFinancePosting,2,Finance.FinancePostingFillValuesDocumentDetails -> Sales.SDPKFinancePosting
+fucFinancePosting,Finance.FinancePostingFillValuesDocumentDetails,Sales.SDPSFinancePosting,2,Finance.FinancePostingFillValuesDocumentDetails -> Sales.SDPSFinancePosting
+fucFinancePosting,Finance.FinancePostingFillValuesDocumentDetails,Sales.SOCCFinancePosting,2,Finance.FinancePostingFillValuesDocumentDetails -> Sales.SOCCFinancePosting
+fucFinancePosting,Finance.FinancePostingFillValuesDocumentDetails,VTPL.VTIEFinancePosting,2,Finance.FinancePostingFillValuesDocumentDetails -> VTPL.VTIEFinancePosting
+fucFinancePosting,Finance.FinancePostingFillValuesDocumentDetails,VTPL.VTPLFinancePosting,2,Finance.FinancePostingFillValuesDocumentDetails -> VTPL.VTPLFinancePosting
+fucFinancePosting,Finance.FinancePostingFillValuesDocumentDetails,Inventory.IGRNDropShipmentFinancePosting,3,Finance.FinancePostingFillValuesDocumentDetails -> Inventory.IGRNFinancePosting -> Inventory.IGRNDropShipmentFinancePosting
