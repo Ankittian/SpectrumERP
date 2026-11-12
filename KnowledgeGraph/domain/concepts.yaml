@@ -5560,3 +5560,80 @@ concepts:
   - Sales.VTPLInvoiceMain
   - Sales.VTPLInvoiceTaxDetail
   - Sales.VTPLInvoicesItemDetail
+- key: user-login
+  name: User Login
+  module: ADM
+  synonyms:
+  - ERP User
+  - Login Session
+  summary: An ERP user account and the record of each application session it opens.
+  description: |
+    Evidence: code
+    A user of SpectrumERP, kept in Security.Login with an encrypted password, user type (1 = administrator), Inactive flag, last company, last module, explorer-bar style and recent-documents XML. Security.LoginSelect authenticates it and writes one Security.LoginDetail row per application session (login, date, IP address, GUID, port) and the AppGUID / LoginSystem of the latest session [Security.LoginSelect.sql:36-41,133-154]. masterdata.LLLLUpdate writes the last company, module, style and recent documents back when the main window closes [MDIProject.vb:557-597].
+  related_to:
+  - concept: user-role
+    how: roles granted to the login
+  - concept: company
+    how: last company and companies the login may use
+  tables:
+  - Security.Login
+  - Security.LoginDetail
+- key: user-role
+  name: User Role and Form Rights
+  module: ADM
+  synonyms:
+  - Role Rights
+  - Temporary Role
+  summary: A role that grants a login access to a company and to the menu forms and toolbar actions of that company.
+  description: |
+    Evidence: code
+    Roles (Security.mRoleMaster, one company each) are granted to a login permanently (Security.LoginRoleDetail) or for a date range (Security.LoginTempRoleDetail). Security.mRoleMasterFormDetail holds the right bits per role and form (open, save, update, delete, release, authorize, ...). The login screen uses them to decide which companies a user may enter [Security.LoginSelect.sql:94-109], masterdata.MDIMenuSelect to decide which menu forms the user sees [MDIMenuSelect.sql:40-127], and Security.CheckFormRights to allow each toolbar action [ClsCommonFunction.cs:1666-1714].
+  related_to:
+  - concept: user-login
+    how: granted to logins
+  - concept: application-menu
+    how: rights per menu form
+  tables:
+  - Security.mRoleMaster
+  - Security.mRoleMasterFormDetail
+  - Security.LoginRoleDetail
+  - Security.LoginTempRoleDetail
+- key: financial-year
+  name: Financial Year
+  module: ADM
+  synonyms:
+  - Fiscal Year
+  summary: The accounting year a user works in, with its start and end dates; only open years can be chosen at login.
+  description: |
+    Evidence: code
+    Financial years are rows of masterdata.mFYear (YearNo, YearName, StartDate, EndDate, StatusNo); the table has no company column, so years are shared by all companies. The login screen offers only years with StatusNo = 1, newest first [masterdata.LLLLFillValues.sql:49-51], pre-selects the year containing today [fLogin.vb:47-56] and requires the working date to fall inside the chosen year [fLogin.vb:321-336].
+  tables:
+  - masterdata.mFYear
+- key: application-menu
+  name: Application Menu
+  module: ADM
+  synonyms:
+  - Form Master
+  - Module Menu
+  summary: The module and form tree of the main window, read from GlobalData.FormMaster and GlobalData.ModuleMaster.
+  description: |
+    Evidence: code
+    Every screen of the desktop client is a row of GlobalData.FormMaster (FormNo, FormName = VB class, FormCode = rights key, FormCaption, ParentMenu, ModuleNo, IsMaster, IsReport, SubRoutineCalled, IsVisible, IsHeadOfficeVisible, FormMainTableinDB), grouped into the modules of GlobalData.ModuleMaster. masterdata.MDIMenuSelect returns the rows a user may see and the main window builds its ribbon and tree from them, then creates the chosen form by reflection from FormName [MDIProject.vb:1987-2083,2265-2336].
+  related_to:
+  - concept: user-role
+    how: filtered by the user's roles
+  tables:
+  - GlobalData.FormMaster
+  - GlobalData.ModuleMaster
+- key: form-backlog-window
+  name: Back-dated and Future Entry Window
+  module: ADM
+  summary: Per form, role and company, how far back or forward a document date may be when saving.
+  description: |
+    Evidence: code
+    Security.FormBackLogLoginDetail holds FromDate, ToDate, UptoDays and FutureEntryUpTo per form, role and company. masterdata.MDIMenuSelect returns the rows for the user's company as its second result set [MDIMenuSelect.sql:196-220]; the main window checks a document date against them before every save and delete [ClsCommonFunc.vb:228-250; MDIProject.vb:1518-1520].
+  related_to:
+  - concept: application-menu
+    how: one window per menu form
+  tables:
+  - Security.FormBackLogLoginDetail

@@ -1,0 +1,47 @@
+# Scaffolded with `kg scaffold-doc fLogin`, then completed from fLogin.vb / fLogin.designer.vb and its SPs.
+# Stored procedures: Security.LoginSelect, masterdata.GetFinancialYear, masterdata.LLLLFillValues
+form: fLogin
+title: Login
+module: ADM
+kind: component
+users:
+- Every ERP user
+- System administrator (database configuration and licence registration)
+summary: The startup screen where a user signs in and chooses the company, financial year and working date for the session.
+purpose: |
+  What it is: The first window of the desktop client (MainForm in Application.myapp) [fLogin.vb:20-85]. When it applies: Every time the application starts. Business outcome: An authenticated user with a company, an open financial year and a working date inside it, which every later screen uses as its context, and the main window opened with the user's menu [fLogin.vb:183-424].
+functional_description: |
+  - Login Group: User Name and Password text boxes, Company Name and Financial Year combos and a Working Date picker, with Ok and Cancel [fLogin.designer.vb:147-248,356].
+  - Database Configuration Group: Database Server and Database text boxes saved to the user's registry, with Ok, Cancel, Configure and Register [fLogin.designer.vb:274-398; fLogin.vb:450-470].
+  - User Name / Password: on leaving either box the credentials are stored, the company list is reloaded for that user and the user's last company is pre-selected [fLogin.vb:536-566].
+  - Company Name: companies the user holds a role or a temporary role in today; all active companies for an administrator [masterdata.LLLLFillValues.sql:31-47].
+  - Financial Year: open years (StatusNo 1), newest first; the year containing today is pre-selected [masterdata.LLLLFillValues.sql:49-51; fLogin.vb:47-56].
+  - Working Date: defaults to today; changing it re-selects the year that contains it [fLogin.vb:506-521].
+actions:
+  Ok: Validates the entries and the licence, authenticates through Security.LoginSelect, checks company access and that the working date is inside the year, sets the session context and opens the main window [fLogin.vb:183-424].
+  Cancel: Closes the login and so the application [fLogin.vb:440-446].
+  Configure: Loads an encrypted licence file and registers it for this server [fLogin.vb:612-660].
+  Register: Opens the registration form after a confirmation [fLogin.vb:590-610].
+validations:
+- Enter User Name.
+- Enter Password.
+- Select valid Company Name.
+- Select valid Financial Year.
+- Invalid User Name or Password, try again!
+- Invalid user or password.
+- Please Check Configuration
+- No Access to selected company.
+- Working date should be between
+- Server id doesn't match with registered server id.
+manages:
+- user-login
+uses_concepts:
+- company
+- financial-year
+- user-role
+method_notes:
+  FillValues: Fills the company and year lists through masterdata.LLLLFillValues.
+  ValidateForm: Requires user, password, company and year, then runs the licence service-period and ConfigCheck.
+  OK_Click: Authenticates through Security.LoginSelect, checks company access and working date (masterdata.GetFinancialYear), sets the globals and opens mdiProject.
+  GetLoginDetails: Calls Security.LoginSelect with the user, password, IP address, GUID and port.
+  Me_Load: Licence base set-up, server and database from the registry, company and year lists, today's year.

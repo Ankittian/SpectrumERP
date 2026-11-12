@@ -23939,7 +23939,9 @@ rules:
     Evidence: code
     MobileApp.AuthorizeThroughApp is a physical table; every listed screen inserts, updates or deletes its rows, so edits from one screen can overwrite another's.
     Writers: form:fSundryPayment, usercontrol:Voucher.
+    form:mdiProject also updates it: masterdata.NotificationFillValues sets IsInProgress = 1 on the pending mobile-app authorisations it hands to the main window [masterdata.NotificationFillValues.sql:137-148].
   applies_to:
+  - form:mdiProject
   - form:fGRN
   - form:fPurchaseBill
   - form:fPurchaseOrder
@@ -89649,3 +89651,313 @@ rules:
   - concept:vtpl-debit-credit-note
   processes:
   - p12-finance-vouchers-notes-and-journals
+- key: login-mandatory-credentials
+  name: 'Login: user, password, company and year are required'
+  type: validation
+  summary: The login cannot proceed until user name, password, company and financial year are filled.
+  description: |
+    Evidence: code
+    fLogin.ValidateForm stops OK with "Enter User Name.", "Enter Password.", "Select valid Company Name." or "Select valid Financial Year." when the field is empty or the combo has no valid value [fLogin.vb:139-160].
+  applies_to:
+  - form:fLogin
+  - concept:user-login
+  implemented_by:
+  - method:fLogin.ValidateForm
+  processes:
+  - application-startup
+- key: login-authenticate-active-user
+  name: 'Login: only an active user with the right password gets in'
+  type: validation
+  summary: The user id is matched case-insensitively, the decrypted password case-sensitively, and inactive logins are refused.
+  description: |
+    Evidence: code
+    Security.LoginSelect finds the login where upper(LoginID) = upper(@LoginName), the decrypted Pwd equals @Pwd under a case-sensitive collation, and Inactive = 0 [Security.LoginSelect.sql:36-41]. If no user row comes back, fLogin shows "Invalid User Name or Password, try again!" and stays open [fLogin.vb:227-231]. The ERP credentials are also the SQL Server login of the connection, so a SQL error 18456 shows "Invalid user or password." and any other connection error "Please Check Configuration" [fLogin.vb:74-80,427-433].
+  applies_to:
+  - form:fLogin
+  - concept:user-login
+  implemented_by:
+  - sp:Security.LoginSelect
+  - method:fLogin.OK_Click
+  - method:fLogin.Me_Load
+  processes:
+  - application-startup
+- key: login-company-access
+  name: 'Login: a non-admin user may enter only companies granted by a role'
+  type: control
+  summary: A user who is not an administrator must hold a permanent role, or a temporary role valid today, in the chosen company.
+  description: |
+    Evidence: code
+    Result set 2 of Security.LoginSelect lists the companies of the login's roles in Security.LoginRoleDetail and of its temporary roles in Security.LoginTempRoleDetail whose FromDate-ToDate covers today [Security.LoginSelect.sql:94-109]. For a user whose UserType is not 1 (administrator), fLogin refuses a company that is not in that list with "No Access to selected company." [fLogin.vb:313-319]. The company combo is already limited to the same companies (administrators see all) by masterdata.LLLLFillValues [masterdata.LLLLFillValues.sql:20-47].
+  applies_to:
+  - form:fLogin
+  - concept:company
+  - concept:user-role
+  implemented_by:
+  - sp:Security.LoginSelect
+  - sp:masterdata.LLLLFillValues
+  - method:fLogin.OK_Click
+  processes:
+  - application-startup
+- key: login-open-financial-years-only
+  name: 'Login: only open financial years can be chosen'
+  type: control
+  summary: The year list shows only years with StatusNo 1, newest first, and pre-selects the year that contains today.
+  description: |
+    Evidence: code
+    masterdata.LLLLFillValues returns masterdata.mFYear rows where StatusNo = 1 ordered by StartDate descending [masterdata.LLLLFillValues.sql:49-51]; fLogin pre-selects the year containing today through masterdata.GetFinancialYear(@Dated) [fLogin.vb:47-56], and re-selects the year whenever the working date changes [fLogin.vb:506-521]. A closed year is simply not offered.
+  applies_to:
+  - form:fLogin
+  - concept:financial-year
+  implemented_by:
+  - sp:masterdata.LLLLFillValues
+  - sp:masterdata.GetFinancialYear
+  - method:fLogin.FillValues
+  - method:fLogin.dtWorkingDate_ValueChanged
+  processes:
+  - application-startup
+- key: login-working-date-in-year
+  name: 'Login: working date inside the chosen financial year'
+  type: validation
+  summary: The working date picked at login must lie between the start and end of the chosen financial year.
+  description: |
+    Evidence: code
+    On OK fLogin reads the chosen year through masterdata.GetFinancialYear(@YearNo) and, if the working date is outside StartDate-EndDate, shows "Working date should be between <start> and <end>" (dates as dd/MM/yyyy) and puts the focus on the date [fLogin.vb:321-336].
+  applies_to:
+  - form:fLogin
+  - concept:financial-year
+  implemented_by:
+  - sp:masterdata.GetFinancialYear
+  - method:fLogin.OK_Click
+  processes:
+  - application-startup
+- key: login-licence-check
+  name: 'Login: licence and service period are checked before entry'
+  type: control
+  summary: The licence DLL must accept the working date, and a licence file must belong to this server.
+  description: |
+    Evidence: code
+    ValidateForm reads the service period and calls Configuration.Main.ConfigCheck(working date); if it fails, the Register and Configure buttons are shown instead of entering [fLogin.vb:163-176]. When a licence file is loaded through Configure, its unique id must match this server or the screen shows "Server id doesn't match with registered server id." [fLogin.vb:646-651]. The licence DLL has no source in the export.
+  applies_to:
+  - form:fLogin
+  implemented_by:
+  - method:fLogin.ValidateForm
+  - method:fLogin.btnConfigure_Click
+  processes:
+  - application-startup
+- key: login-records-session
+  name: 'Login: each successful login records an application session'
+  type: workflow
+  summary: A successful login writes a session row with IP, GUID and port and stamps the user with the latest session.
+  description: |
+    Evidence: code
+    Security.LoginSelect deletes the login's earlier rows for the same IP address, sets Ping = 0 on sessions older than two days, inserts a Security.LoginDetail row only when login, IP address, GUID and port are all given, and updates Security.Login.AppGUID and LoginSystem [Security.LoginSelect.sql:133-154]. The pre-selection call made when the password box is left passes no IP address, so it records no session [fLogin.vb:560-566].
+  applies_to:
+  - form:fLogin
+  - concept:user-login
+  implemented_by:
+  - sp:Security.LoginSelect
+  - method:fLogin.GetLoginDetails
+  processes:
+  - application-startup
+- key: login-sets-session-context
+  name: 'Login: company, year, working date and user become the session context'
+  type: derivation
+  summary: After all checks pass, the chosen company, year, working date and user are copied into the process-wide globals every screen passes to its SPs.
+  description: |
+    Evidence: code
+    fLogin sets gCompanyNo, giYearNo, gDefaultDate, gdtStartDate/gdtEndDate and the login and company flags from the LoginSelect result sets, copies them into BaseArchitecture's globalVar, then creates the main window with the recent documents, last module, server time and session timeout and closes itself [fLogin.vb:195-424].
+  applies_to:
+  - form:fLogin
+  - form:mdiProject
+  - concept:company
+  - concept:financial-year
+  implemented_by:
+  - method:fLogin.OK_Click
+  processes:
+  - application-startup
+- key: menu-filtered-by-role
+  name: 'Main window: the menu shows only forms the user''s roles allow'
+  type: control
+  summary: Administrators see every visible form; other users see the forms of their roles and of temporary roles valid today.
+  description: |
+    Evidence: code
+    masterdata.MDIMenuSelect(@CompanyNo, @LoginNo) gives an administrator of the head-office company every GlobalData.FormMaster row with IsHeadOfficeVisible (or IsVisible in a single-company set-up), other users the forms of their roles in the company plus temporary roles whose dates cover today, adds report rows without a form code and the parent menus [MDIMenuSelect.sql:40-158]. The main window draws one ribbon button per module and a tree of IsVisible rows, falling back to Master Data when the last module is not allowed [MDIProject.vb:1995-2246].
+  applies_to:
+  - form:mdiProject
+  - concept:application-menu
+  - concept:user-role
+  implemented_by:
+  - sp:masterdata.MDIMenuSelect
+  - method:mdiProject.LoadModuleMenuTree
+  - method:mdiProject.CreateExplorerbar
+  - method:mdiProject.CreateTree
+  processes:
+  - application-startup
+- key: menu-opens-form-by-name
+  name: 'Main window: a menu item opens the form named in Form Master'
+  type: workflow
+  summary: The chosen menu row's FormName is turned into a form by reflection, tagged with its FormCode and opened inside the main window.
+  description: |
+    Evidence: code
+    CreateFormInstance reads {FormName, IsReport, SubroutineCalled, FormMainTableinDB, FormCode, FormCaption} from the node; a report row with a SubroutineCalled runs that method of the main window by name, any other row is created with CreateInstance("SpectrumERP." & FormName), gets Tag = FormCode (the rights key) and is opened through FnInitiliseForm; an already open form is re-activated [MDIProject.vb:2265-2336,355-400]. If the class does not exist the user sees "Form does not exist in project." [MDIProject.vb:2279,2303]; an unknown code typed in the form search gives "Invalid Form Code." and an empty one "No Form Code specified." [MDIProject.vb:378-381,477-480].
+  applies_to:
+  - form:mdiProject
+  - concept:application-menu
+  implemented_by:
+  - method:mdiProject.CreateFormInstance
+  - method:mdiProject.FnInitiliseForm
+  - method:mdiProject.OpenFormWithCode
+  processes:
+  - application-startup
+- key: toolbar-action-rights
+  name: 'Main window: every toolbar action is checked against the user''s form rights'
+  type: control
+  summary: Save, update, release, authorize, delete and the other toolbar actions run only if the user's role grants that right on the form.
+  description: |
+    Evidence: code
+    Before calling the active form through IMDIFunctions, the main window calls CheckRights with the form's Tag and the action (save or update by whether a record is loaded, release or authorize by the document status, delete, print, ...) [MDIProject.vb:1488-1538,1767-1769]. CheckRights returns true at once for an administrator and otherwise asks Security.CheckFormRights, showing "Insufficient Access Rights !" when it is refused [ClsCommonFunction.cs:1666-1714]; the SP allows an empty code, RCRC, ---- and Notify and reads the right bit of the login's permanent and active temporary roles [Security.CheckFormRights.sql:43-57]. A toolbar click with no active form shows "Some error occured , Please close form." [MDIProject.vb:1471-1473].
+  applies_to:
+  - form:mdiProject
+  - concept:user-role
+  implemented_by:
+  - sp:Security.CheckFormRights
+  - method:mdiProject.utbmMDIParent_ToolClick
+  - method:mdiProject.CallSave
+  - method:mdiProject.CallDelete
+  processes:
+  - application-startup
+- key: master-change-at-head-office-only
+  name: 'Main window: masters are saved and deleted only in the head-office company'
+  type: control
+  summary: A form marked IsMaster in Form Master can be saved or deleted only when the login company is the head office.
+  description: |
+    Evidence: code
+    For a form whose Form Master row has IsMaster = 1, the main window refuses save with "Permission denied to save <form caption>." and delete with "Permission denied to delete <form caption>." when gCompanyNo differs from gHeadOfficeNo [MDIProject.vb:1480-1485,1758-1763].
+  applies_to:
+  - form:mdiProject
+  - concept:company
+  - concept:application-menu
+  implemented_by:
+  - method:mdiProject.CallSave
+  - method:mdiProject.CallDelete
+  processes:
+  - application-startup
+- key: save-within-service-period
+  name: 'Main window: no document dated after the licence service period'
+  type: validation
+  summary: A document whose date is after the licence service period cannot be saved.
+  description: |
+    Evidence: code
+    For forms with a document number control, CallSave compares the document date with gServicePeriod (read from the licence at login) and stops with "Service period expired." [MDIProject.vb:1512-1517; fLogin.vb:165].
+  applies_to:
+  - form:mdiProject
+  implemented_by:
+  - method:mdiProject.CallSave
+  processes:
+  - application-startup
+- key: save-within-backlog-window
+  name: 'Main window: back-dated and future entries only inside the allowed window'
+  type: validation
+  summary: The document date must lie inside the back-dated and future entry window set for the form, role and company.
+  description: |
+    Evidence: code
+    Before save and delete the main window calls CheckBackLog(form code, document date), which checks the back-log rows returned by masterdata.MDIMenuSelect and shows "Transaction on back date are disabled." or "Transaction on future date are disabled." [ClsCommonFunc.vb:228-250; MDIProject.vb:1518-1520; MDIMenuSelect.sql:196-220].
+  applies_to:
+  - form:mdiProject
+  - concept:form-backlog-window
+  implemented_by:
+  - sp:masterdata.MDIMenuSelect
+  - method:mdiProject.CallSave
+  processes:
+  - application-startup
+- key: demo-licence-record-limit
+  name: 'Main window: demo licence limits masters and transactions'
+  type: control
+  summary: Under a demo licence a form can hold at most 50 master records or 100 transactions.
+  description: |
+    Evidence: code
+    When gIsDemoVersion is set, CallSave counts the rows of the form's main table (FormMainTableinDB) with inline SQL and stops with "You can't create more than 50 master in Demo version." for a master form over 50 rows or "You can't create more than 100 transaction in Demo version." over 100 [MDIProject.vb:1540-1566].
+  applies_to:
+  - form:mdiProject
+  implemented_by:
+  - method:mdiProject.CallSave
+  processes:
+  - application-startup
+- key: switch-context-with-no-open-forms
+  name: 'Main window: company, year and working date change only with no screen open'
+  type: control
+  summary: The change company, financial year and working date screens open only when no other screen is open.
+  description: |
+    Evidence: code
+    ChangeCompany, ChangeFinancialYear and ChangeWorkingDate open their screens only when FormCount() is 0 (the dashboard, messages and chat windows do not count) and otherwise show "Close all forms to change company.", "Close all forms to change financial year." or "Close all forms to change working date." [MDIProject.vb:514-553,1316-1327,2344-2360]. While a switch screen is open, no normal menu form can be opened [MDIProject.vb:2296-2298].
+  applies_to:
+  - form:mdiProject
+  - concept:company
+  - concept:financial-year
+  implemented_by:
+  - method:mdiProject.ChangeCompany
+  - method:mdiProject.ChangeFinancialYear
+  - method:mdiProject.ChangeWorkingDate
+  - method:mdiProject.FormCount
+  processes:
+  - application-startup
+- key: session-timeout
+  name: 'Main window: toolbar actions stop when the session times out'
+  type: control
+  summary: After the configured number of minutes since login, toolbar actions are refused until the user logs in again.
+  description: |
+    Evidence: code
+    The timeout comes from Config.DBCommonSetting.DefaultSessionTimeOutMinute at login [fLogin.vb:401-405]. SessionExpired compares it with the seconds elapsed since login and shows "Your session has expired. Kindly relogin to the system." [MDIProject.vb:2848-2857]; it is checked on every toolbar click [MDIProject.vb:1352-1354]. The elapsed counter is not reset by activity.
+  applies_to:
+  - form:mdiProject
+  - concept:user-login
+  implemented_by:
+  - method:mdiProject.SessionExpired
+  - method:mdiProject.utbmMDIParent_ToolClick
+  processes:
+  - application-startup
+- key: single-active-session
+  name: 'Main window: a login may act from only its latest session when logins are licensed'
+  type: control
+  summary: When the licence limits the number of logins, each toolbar action first checks that this instance is still the login's active session.
+  description: |
+    Evidence: code
+    If the licence login count is above 0, every toolbar click calls CheckAuthentication, which asks Security.CheckAuthentication with the login, this instance's GUID and IP address and stops with the message the SP returns when it answers 0 [MDIProject.vb:1346-1350; ClsCommonFunc.vb:1307-1327].
+  applies_to:
+  - form:mdiProject
+  - concept:user-login
+  implemented_by:
+  - sp:Security.CheckAuthentication
+  - method:mdiProject.utbmMDIParent_ToolClick
+  processes:
+  - application-startup
+- key: logout-saves-preferences
+  name: 'Main window: closing saves the user''s last company, module and recent documents'
+  type: workflow
+  summary: When the main window closes, the last company, last module, explorer style and recent documents are stored on the login.
+  description: |
+    Evidence: code
+    mdiProject_FormClosing asks "Do you really want to Quit ?" and mdiProject_FormClosed calls masterdata.LLLLUpdate with LastLoginCompanyNo, LastLoginModule, UltraExplorerBarStyle/ViewStyle and the recent-documents XML [MDIProject.vb:557-605]. The next login pre-selects that company and opens that module [fLogin.vb:560-566,388].
+  applies_to:
+  - form:mdiProject
+  - concept:user-login
+  implemented_by:
+  - sp:masterdata.LLLLUpdate
+  - method:mdiProject.mdiProject_FormClosed
+  processes:
+  - application-startup
+- key: shared-write-security-login
+  name: Security.Login is written by several screens
+  type: integrity
+  summary: Security.Login is written by 2 screens.
+  description: |
+    Evidence: code
+    Security.Login is a physical table; the login screen updates AppGUID and LoginSystem through Security.LoginSelect [Security.LoginSelect.sql:151-154] and the main window updates the last company, module, style and recent documents through masterdata.LLLLUpdate when it closes [MDIProject.vb:557-597]. The two touch different columns of the same user row, so neither overwrites the other's values.
+    Writers: form:fLogin, form:mdiProject.
+  applies_to:
+  - form:fLogin
+  - form:mdiProject
+  implemented_by:
+  - table:Security.Login
+  processes:
+  - application-startup

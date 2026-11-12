@@ -1,0 +1,60 @@
+# Scaffolded with `kg scaffold-doc mdiProject`, then completed from MDIProject.vb / MDIProject.Designer.vb and its SPs.
+# Stored procedures: masterdata.LLLLUpdate, masterdata.MDIMenuSelect, masterdata.NotificationFillValues
+# Also called outside the DT/DA chain (no graph edge): Security.CheckFormRights (BaseArchitecture CheckRights),
+# Security.CheckAuthentication (ClsCommonFunc), masterdata.ColumnChooserLoadData (direct, Attachment DB, not in export).
+form: mdiProject
+title: SpectrumERP
+module: ADM
+kind: component
+users:
+- Every ERP user
+summary: The main window of the desktop client, which shows the user's module menu and runs the toolbar actions of every screen opened in it.
+purpose: |
+  What it is: The MDI container (IsMdiContainer = True) that fLogin opens after a successful login [MDIProject.Designer.vb:638; fLogin.vb:378-424]. When it applies: For the whole session. Business outcome: The user sees only the screens the roles allow, opens them inside one window, and every save, delete, release, authorize, print or other toolbar action passes the same rights, licence, session and date checks before it reaches the screen through IMDIFunctions [MDIProject.vb:1344-1596].
+functional_description: |
+  - Ribbon and Module Buttons: one button per module the user has forms in; the last used module opens first, else Master Data [MDIProject.vb:1995-2110].
+  - Navigation Tree: the Form Master rows of the module, nested by ParentMenu, IsVisible only [MDIProject.vb:2085-2246].
+  - Toolbar: New, Save, Delete, Open, Search, First/Previous/Next/Last, Print, Preview, Export, E-mail, Notify, Close, Close All; disabled until a screen is active [MDIProject.vb:709-797,1344-1426].
+  - Recent Documents: the user's last opened screens, saved on the login at logout [MDIProject.vb:883-915,557-597].
+  - Status Bar: user, server time, company, database, financial year and working date; double-click company, year or date to switch [fLogin.vb:390-421; MDIProject.vb:2561-2566].
+  - Dashboard and Messages: two permanent child windows opened at start [MDIProject.vb:40-41,789-795].
+  - Notifications: alerts and pending mobile-app authorisations from masterdata.NotificationFillValues [MDIProject.vb:2398-2403].
+  - Search Data Grid (udgSearchData), Document Management Grid (udgDocMgt) and Item Drop-down (uddItem): grids used by the search and document attachment panes.
+actions:
+  Open menu item: Creates the form named in Form Master by reflection and opens it inside the window [MDIProject.vb:2265-2336].
+  Save: Checks rights, head-office lock, service period, back-log window and demo limit, then calls the active screen's Save [MDIProject.vb:1466-1596].
+  Delete: Checks the head-office lock, rights and back-log window, then calls the active screen's Delete [MDIProject.vb:1754-1840].
+  Change Company / Financial Year / Working Date: Opens the switch screen when no other screen is open [MDIProject.vb:514-553,1316-1327].
+  Close: Asks for confirmation and saves the last company, module and recent documents [MDIProject.vb:557-605].
+validations:
+- Close all forms to change company.
+- Close all forms to change financial year.
+- Close all forms to change working date.
+- Form does not exist in project.
+- Invalid Form Code.
+- No Form Code specified.
+- Some error occured , Please close form.
+- Service period expired.
+- Your session has expired. Kindly relogin to the system.
+- Permission denied to save
+- Permission denied to delete
+- You can't create more than 50 master in Demo version.
+- You can't create more than 100 transaction in Demo version.
+manages:
+- application-menu
+uses_concepts:
+- user-login
+- user-role
+- company
+- financial-year
+- form-backlog-window
+method_notes:
+  GetMenuData: Reads the role-filtered menu through masterdata.MDIMenuSelect.
+  LoadModuleMenuTree: Builds the module ribbon and keeps the menu, back-log, daily-print and digital-sign result sets.
+  CreateFormInstance: Creates the chosen form by reflection from FormName and sets its Tag to FormCode.
+  utbmMDIParent_ToolClick: Licence session check, session timeout, then dispatches the toolbar action to the active form.
+  CallSave: Head-office lock, CheckRights (Security.CheckFormRights), service period, back-log window, demo limit, then IMDIFunctions.Save.
+  CallDelete: Head-office lock, CheckRights, back-log window, then IMDIFunctions.Delete.
+  mdiProject_Load: Loads column layouts (masterdata.ColumnChooserLoadData, Attachment DB), starts the session timer and builds the tools.
+  mdiProject_FormClosed: Saves last company, module, style and recent documents through masterdata.LLLLUpdate.
+  SessionExpired: Compares the elapsed seconds with the timeout set at login.

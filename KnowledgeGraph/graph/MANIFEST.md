@@ -1,6 +1,18 @@
 # spectrum-kg-all-phases: MANIFEST
 
-One combined build of Phases 0-13 (built 11 Nov 2026): every phase's form bundles, one merged `NestedSPs`, `SingleFieldConfigs` and `Reports-13*` are source roots of a single `build_graph` run. `graph/graph.json` is `json.dumps(Graph.to_json(), indent=1, default=str)`, the same call `kg build --dry-run` makes, and it is not post-processed: every property, including the full `code`, is kept.
+One combined build of Phases 0-13 plus the application shell (built 11 Nov 2026; shell added 12 Nov 2026): every phase's form bundles, the shell bundles `fLogin` and `mdiProject`, one merged `NestedSPs`, `SingleFieldConfigs` and `Reports-13*` are source roots of a single `build_graph` run. `graph/graph.json` is `json.dumps(Graph.to_json(), indent=1, default=str)`, the same call `kg build --dry-run` makes, and it is not post-processed: every property, including the full `code`, is kept.
+
+## 0. Update 12 Nov 2026: application shell (fLogin, mdiProject)
+
+- **Baseline reproduced first.** The Phase 2-13 bundles were not kept, so they were regenerated from the same `source.zip` and `DbExport-20261111.zip` with `tools-phase-2-13/bundle.py`; NestedSPs, SingleFieldConfigs and Reports-13* were rebuilt from the SP file list of the 11 Nov `graph.json`. The rebuilt graph was byte-identical to the 11 Nov one (SHA-256 `c88936a8...0bac`, 90,733 nodes, 508,940 edges, 241 warnings) before anything was added.
+- **New source bundles (phase `shell`).** `fLogin/` and `mdiProject/` in the §2 layout (Form/, DataLayer/, StoredProcedures/, CONTENTS.md), built with the same `bundle.py` plus an override for `fLogin`, because `forms/index.csv` points `fLogin` at the HIRA payroll login. The builder has a single `source_root` and only finds top-level bundles, so the two bundles sit at the top level next to every other bundle (not in a `phase-shell/` sub-root); `graph/phase-map.csv` marks them phase `shell`. A copy is delivered as `phase-shell/`.
+  - `fLogin`: `Code/fLogin.vb` + `fLogin.designer.vb`; DTLogin/DALogin/DAOLogin, DTSecurity/DASecurity/DAOSecurity; SPs `masterdata.LLLLFillValues`, `masterdata.GetFinancialYear`, `Security.LoginSelect`, `Security.UserCompanySelect` (named in DAOSecurity, not called by fLogin).
+  - `mdiProject`: `Code/MDIProject.vb` + `MDIProject.Designer.vb`; DTPMDI/DAPMDI/DAOPMDI, DTNotification/DANotification/DAONotification; SPs `masterdata.MDIMenuSelect`, `masterdata.LLLLUpdate`, `masterdata.NotificationFillValues`, `masterdata.MDINotificationFormDetail`, `masterdata.DemoVersion` (DAO-named) plus `Security.CheckFormRights` and `Security.CheckAuthentication` (called through `BaseArchitecture.ClsCommonFunction.CheckRights` and `ClsCommonFunc.CheckAuthentication`, so no code edge reaches them from the form). `masterdata.ColumnChooserLoadData` (called directly from `mdiProject_Load`, Attachment DB) is not in the export.
+  - NestedSPs: +122 SPs, the `GlobalData.NotificationMain` procedures that `masterdata.NotificationFillValues` runs through `exec(@Query)` (125 configured, 3 already present). Their literal EXECs reach only `sp_executesql`. NestedSPs now holds 499 SPs.
+- **kg.yaml: no change.** Both forms inherit `System.Windows.Forms.Form` (already in `ui.form_base_types`); every helper is `ExecuteProc` / `ExecuteScalar` (already in `datalayer.exec_methods`). The calls outside DA classes cannot be linked by configuration.
+- **Domain.** `domain/forms/fLogin.yaml`, `domain/forms/mdiProject.yaml` (module ADM, scaffolded with `kg scaffold-doc` and completed); concepts `user-login`, `user-role`, `financial-year`, `application-menu`, `form-backlog-window` (reused: `company`); process `processes/application-startup.yaml`; 20 rules (19 new D1 rules and `shared-write-security-login`), and `form:mdiProject` added to `shared-write-mobileapp-authorizethroughapp`.
+- **Menu map.** `graph/mdi-menu-map.csv`: one row per menu item that opens a form, 1,180 from `GlobalData.FormMaster` (source `table`) and 9 hard-coded opens in `MDIProject.vb` (source `code`); column `in_graph` marks targets that are bundled forms in this graph (472 rows, 397 distinct forms).
+- **Counts.** Nodes 90,733 -> 91,249 (+516). Edges 508,940 -> 511,468 (+2,528). Warnings 241 -> 244: the 3 new ones are dropped `CALLS_SP` edges from the new notification SPs to `sp_executesql`. No new warning names `fLogin` or `mdiProject`.
 
 ## 1. Builder and inputs
 
@@ -36,11 +48,11 @@ One combined build of Phases 0-13 (built 11 Nov 2026): every phase's form bundle
 
 ## 2. kg validate
 
-- Errors: **0**. Warnings: **241**.
+- Errors: **0**. Warnings: **244**.
 
 | Warning kind | Count |
 |---|---|
-| dropped dangling SP-to-SP call (system or not in export) | 105 |
+| dropped dangling SP-to-SP call (system or not in export) | 108 |
 | two forms write the same table, no integrity rule covers both | 76 |
 | data-layer SP with no .sql (runtime-built name or missing from export) | 32 |
 | parameter passed that the SP does not declare | 26 |
@@ -50,65 +62,65 @@ The dropped SP-to-SP calls are to SQL Server system procedures (`sp_executesql`,
 
 ## 3. Counts
 
-Nodes: 90,733. Edges: 508,940. By type in `graph/stats.json`.
+Nodes: 91,249. Edges: 511,468. By type in `graph/stats.json`.
 
 | Label | Nodes |
 |---|---|
-| BusinessConcept | 408 |
-| BusinessProcess | 77 |
-| BusinessRule | 4,927 |
-| Column | 26,109 |
-| Control | 15,936 |
-| DAClass | 389 |
-| DAMethod | 3,645 |
-| DTClass | 389 |
-| DTMethod | 3,649 |
-| DTProperty | 10,371 |
-| Form | 402 |
-| FormMethod | 16,375 |
+| BusinessConcept | 413 |
+| BusinessProcess | 78 |
+| BusinessRule | 4,947 |
+| Column | 26,219 |
+| Control | 15,988 |
+| DAClass | 393 |
+| DAMethod | 3,654 |
+| DTClass | 393 |
+| DTMethod | 3,658 |
+| DTProperty | 10,393 |
+| Form | 404 |
+| FormMethod | 16,498 |
 | Module | 10 |
-| StoredProcedure | 4,619 |
-| Table | 3,404 |
+| StoredProcedure | 4,751 |
+| Table | 3,427 |
 | UserControl | 23 |
 
 | Edge type | Edges |
 |---|---|
-| APPLIES_TO | 13,555 |
-| BINDS_TO | 5,369 |
-| CALLS | 10,694 |
-| CALLS_SP | 5,246 |
-| DELEGATES_TO | 3,644 |
+| APPLIES_TO | 13,599 |
+| BINDS_TO | 5,375 |
+| CALLS | 10,824 |
+| CALLS_SP | 5,252 |
+| DELEGATES_TO | 3,653 |
 | DYNAMIC_EXEC | 56 |
 | EMBEDS | 654 |
-| EXECUTES | 3,645 |
-| GOVERNS | 6,881 |
-| HANDLES | 7,262 |
-| HAS_COLUMN | 26,109 |
-| HAS_CONCEPT | 408 |
-| HAS_CONTROL | 15,936 |
-| HAS_FORM | 425 |
-| HAS_METHOD | 23,669 |
-| HAS_PROCESS | 77 |
-| HAS_PROPERTY | 10,371 |
-| HAS_STEP | 415 |
-| IMPLEMENTED_BY | 6,764 |
-| INVOKES | 4,422 |
-| INVOLVES | 401 |
-| LABELS | 4,715 |
+| EXECUTES | 3,654 |
+| GOVERNS | 6,901 |
+| HANDLES | 7,290 |
+| HAS_COLUMN | 26,219 |
+| HAS_CONCEPT | 413 |
+| HAS_CONTROL | 15,988 |
+| HAS_FORM | 427 |
+| HAS_METHOD | 23,810 |
+| HAS_PROCESS | 78 |
+| HAS_PROPERTY | 10,393 |
+| HAS_STEP | 417 |
+| IMPLEMENTED_BY | 6,810 |
+| INVOKES | 4,430 |
+| INVOLVES | 407 |
+| LABELS | 4,722 |
 | LEADS_TO | 14 |
-| MANAGES | 399 |
+| MANAGES | 401 |
 | PARENT_OF | 16 |
-| PASSES | 18,273 |
-| PERSISTED_IN | 1,727 |
-| READS | 35,958 |
-| REFERENCES | 31,316 |
-| RELATED_TO | 47 |
-| SETS | 21,193 |
-| SHARES_TABLE | 67,564 |
-| USES_COLUMN | 153,854 |
-| USES_CONCEPT | 2,160 |
-| USES_TABLE | 17,145 |
-| WRITES | 8,556 |
+| PASSES | 18,296 |
+| PERSISTED_IN | 1,737 |
+| READS | 36,197 |
+| REFERENCES | 31,398 |
+| RELATED_TO | 53 |
+| SETS | 21,213 |
+| SHARES_TABLE | 68,288 |
+| USES_COLUMN | 154,558 |
+| USES_CONCEPT | 2,168 |
+| USES_TABLE | 17,187 |
+| WRITES | 8,570 |
 
 Form bundles per phase (each form once, in the first phase that has it; `fSingleFieldMaster` is in Phase 1 only):
 
@@ -126,9 +138,10 @@ Form bundles per phase (each form once, in the first phase that has it; `fSingle
 | 10 | 6 |
 | 11 | 75 |
 | 12 | 96 |
-| **All** | **399** |
+| shell | 2 |
+| **All** | **401** |
 
-Other bundles: NestedSPs (377 SPs not already in a form bundle), SingleFieldConfigs (54 SPs), Reports-13a/b/c/d/e/g. User-control folders inside form bundles are listed in `graph/phase-map.csv` as `usercontrol`.
+Other bundles: NestedSPs (499 SPs not already in a form bundle), SingleFieldConfigs (54 SPs), Reports-13a/b/c/d/e/g. User-control folders inside form bundles are listed in `graph/phase-map.csv` as `usercontrol`.
 
 ## 4. Integrity
 
@@ -139,11 +152,11 @@ Other bundles: NestedSPs (377 SPs not already in a form bundle), SingleFieldConf
 
 | Label | Nodes | With code | Max length | Median length | Over 3,000 chars |
 |---|---|---|---|---|---|
-| DAMethod | 3,645 | 3,645 | 9,674 | 553 | 48 |
-| DTMethod | 3,649 | 3,649 | 565 | 191 | 0 |
-| FormMethod | 16,375 | 16,375 | 52,925 | 816 | 1,846 |
+| DAMethod | 3,654 | 3,654 | 9,674 | 553 | 48 |
+| DTMethod | 3,658 | 3,658 | 565 | 191 | 0 |
+| FormMethod | 16,498 | 16,498 | 52,925 | 814 | 1,859 |
 | Module | 10 | 10 | 3 | 2 | 0 |
-| StoredProcedure | 4,619 | 4,587 | 276,604 | 2,343 | 1,957 |
+| StoredProcedure | 4,751 | 4,719 | 276,604 | 2,428 | 2,079 |
 
 `Module.code` is the module code (for example `MM`), not source. The code is complete: SP code is the whole export file text, method code is the whole method body as Roslyn extracted it. Only the embedding `text` cuts it to the builder's `Code:` block (CODE_CHARS = 3000).
 
@@ -157,10 +170,10 @@ Other bundles: NestedSPs (377 SPs not already in a form bundle), SingleFieldConf
 
 ## 7. Plan forms with no bundle
 
-1 of 400 forms in the KB validation plan (Phases 0-12; Phase 13 is reports): `fOtherVoucher` (no source, see above).
+1 of 400 forms in the KB validation plan (fLogin and mdiProject are not in the plan; they are the `shell` bundles) (Phases 0-12; Phase 13 is reports): `fOtherVoucher` (no source, see above).
 Phase 13 reports: 617 of 879 have their SP in the export and are in Reports-13*; 191 (13f, payroll) read the HIRA database and 71 have no ProcName.
 
 ## 8. SHA-256
 
-`graph/graph.json`: `c88936a85dcd1a698e47fa63c6665d863d2b099c30746fcbf5bbab1b441a0bac` (275,507,935 bytes).
+`graph/graph.json`: `5880b499d5a1cb5a6c46136544f8251c1123face61ee8d2689ee3cf316c1428c` (278,159,290 bytes). Previous (11 Nov): `c88936a85dcd1a698e47fa63c6665d863d2b099c30746fcbf5bbab1b441a0bac`.
 

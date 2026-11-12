@@ -1396,3 +1396,5 @@ Reports-13d,13,report
 Reports-13e,13,report
 Reports-13g,13,report
 NestedSPs,multiple,nested-sp
+fLogin,shell,form
+mdiProject,shell,form

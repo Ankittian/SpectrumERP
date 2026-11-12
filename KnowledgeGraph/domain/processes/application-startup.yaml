@@ -1,0 +1,32 @@
+key: application-startup
+name: Application Startup
+module: ADM
+status: active
+summary: A user logs in, picks company, financial year and working date, and the main window loads the menu the user may see.
+description: |
+  Evidence: code
+  The desktop client starts with fLogin as its main form (My Project/Application.myapp). The user enters user name and password (also the SQL Server login), picks a company, an open financial year and a working date; Security.LoginSelect authenticates the user and returns the user, company flags, allowed companies, recent documents, SSRS credentials, server time, role detail and DB settings [fLogin.vb:183-424]. fLogin then creates mdiProject, which reads the role-filtered menu from masterdata.MDIMenuSelect and builds the module ribbon and tree [MDIProject.vb:622-797,1995-2246]. When the user picks a menu item, the main window creates that form by reflection from its FormName and opens it inside itself; from then on every toolbar action passes the rights, licence, session and date checks of the main window [MDIProject.vb:1344-1596,2265-2336].
+steps:
+- order: 1
+  name: Log in with user name and password
+  form: fLogin
+  description: Security.LoginSelect checks the user; the company list is limited to the user's roles.
+- order: 2
+  name: Select company, financial year and working date
+  form: fLogin
+  description: Only open years are offered and the working date must be inside the year; the choice becomes the session context.
+- order: 3
+  name: Load the menu the user is allowed to see
+  form: mdiProject
+  description: masterdata.MDIMenuSelect returns the role-filtered Form Master rows, back-log windows and daily-print settings.
+- order: 4
+  name: Open a screen from the menu
+  form: mdiProject
+  description: The FormName of the chosen row is created by reflection, tagged with its FormCode and shown inside the main window.
+concepts:
+- user-login
+- user-role
+- company
+- financial-year
+- application-menu
+- form-backlog-window
