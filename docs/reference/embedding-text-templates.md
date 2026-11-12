@@ -171,4 +171,4 @@ Rules: {in[IMPLEMENTED_BY]}
 ## Notes
 - Embedding is cached by `sha256(model|dims|text)`; changing any template invalidates the cached vectors for affected nodes.
 - Relationships are embedded only as the plain-text name lists shown above — not as vectors.
-- See also `node_types.md` for a summary table of the same content.
+- See also `node-types.md` for a summary table of the same content.

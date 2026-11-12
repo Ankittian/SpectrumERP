@@ -1,4 +1,4 @@
-"""End-to-end assertions on the extracted + curated graph (no Neo4j needed)."""
+"""End-to-end assertions on the graph from kg.yaml (the combined phase 0-13 graph.json; no Neo4j needed)."""
 from spectrum_kg.load import documented_types_check
 
 
@@ -24,18 +24,22 @@ def test_save_chain_reaches_conversion_sp(graph):
     assert sps == {"sp:masterdata.mmumsaveunitconversiondetail"}
 
 
-def test_every_sp_is_reachable_from_a_form(graph):
+def test_every_master_data_sp_is_reachable_from_a_form(graph):
+    """Report SPs (Reports-13*), Single Field configs and SPs only named at run time have no form, so this is
+    checked on the phase-0 master-data bundles, whose SPs are all called from their forms."""
+    bundles = {"fUnitMaster", "fMaterialGroup", "fMaterialSubGroupMaster"}
     reached = {e.dst for e in graph.edges.values() if e.type == "CALLS_SP"}
-    assert {n.id for n in graph.by_label("StoredProcedure")} <= reached
+    sps = {n.id for n in graph.by_label("StoredProcedure") if bundles & set(n.props.get("bundles") or [])}
+    assert sps and sps <= reached
 
 
 def test_shared_qc_control_is_one_node(graph):
     g = graph
     qc = g.nodes["sp:masterdata.qcfillvalues"]
-    assert sorted(qc.props["bundles"]) == ["fMaterialGroup", "fMaterialSubGroupMaster"]
-    assert len(g.by_label("UserControl")) == 1
+    assert {"fMaterialGroup", "fMaterialSubGroupMaster"} <= set(qc.props["bundles"])   # one node, many bundles
+    assert [n.id for n in g.by_label("UserControl") if n.props["name"] == "QCGroup"] == ["usercontrol:QCGroup"]
     hosts = {e.src for e in g.inc("usercontrol:QCGroup", "EMBEDS")}
-    assert hosts == {"form:fMaterialGroup", "form:fMaterialSubGroupMaster"}
+    assert {"form:fMaterialGroup", "form:fMaterialSubGroupMaster"} <= hosts
     assert "sp:masterdata.qcfillvalues" in reach(g, "usercontrol:QCGroup", ["CALLS_SP"])
 
 
@@ -74,10 +78,13 @@ def test_functional_layer(graph):
     g = graph
     steps = {e.dst: e.props["order"] for e in g.out("process:material-master-setup", "HAS_STEP")}
     assert steps["form:fUnitMaster"] == 1 and steps["form:fMaterialSubGroupMaster"] == 4
-    assert g.nodes["form:fItemMaster"].props["status"] == "planned"
+    # cross-phase placeholders are real forms in the combined graph; only screens with no source stay planned
+    assert g.nodes["form:fItemMaster"].props["status"] != "planned"
+    planned = {n.id for n in g.by_label("Form") if n.props.get("status") == "planned"}
+    assert planned == {"form:fMaintenanceWorkOrder", "form:fOtherVoucher", "form:fQCGroupMaster"}
     assert "concept:material-sub-group" in reach(g, "concept:material-group", ["PARENT_OF"])
     assert "form:fUnitMaster" in reach(g, "module:MM", ["HAS_FORM"])
-    rule_targets = reach(g, "rule:subgroup-unit-links-shared", ["IMPLEMENTED_BY"])
+    rule_targets = reach(g, "rule:shared-write-masterdata-msubgroupunitdetail", ["IMPLEMENTED_BY"])
     assert "table:masterdata.msubgroupunitdetail" in rule_targets
     for n in g.nodes.values():
         assert n.props.get("text"), n.id

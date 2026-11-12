@@ -1,7 +1,8 @@
 # SpectrumERP Knowledge Graph — Setup Guide
 
-This repo contains a **knowledge graph of the SpectrumERP codebase** (Material Management + Plant Maintenance) and an
-**MCP server** called `spectrum-kg` that lets Claude (or any other MCP client) explore it: business processes, forms,
+This repo contains a **knowledge graph of the SpectrumERP codebase** (all 14 delivery phases, 0-13: about 400 forms
+across Material Management, Plant Maintenance, Finance, Sales and Distribution, Production Planning, Master Data,
+Weigh Bridge, Discrete Raw Material, Settings and the report catalogue) and an **MCP server** called `spectrum-kg` that lets Claude (or any other MCP client) explore it: business processes, forms,
 code methods, stored procedures, tables and columns.
 
 This guide takes you from `git clone` to asking Claude questions about the ERP.
@@ -326,7 +327,7 @@ The first search may take 30–60 seconds while the local embedding model downlo
 | `run_cypher` | Read-only Cypher query (escape hatch) |
 
 The server never writes to the database. More detail on the graph model: [`KnowledgeGraph/README.md`](KnowledgeGraph/README.md)
-and [`KnowledgeGraph/GRAPH_STRUCTURE.md`](KnowledgeGraph/GRAPH_STRUCTURE.md).
+and [`docs/reference/graph-build-spec.md`](docs/reference/graph-build-spec.md).
 
 ---
 
@@ -436,53 +437,36 @@ curl.exe -i http://192.168.1.50:8765/mcp
 
 ---
 
-## Part B (optional) — build your own graph
+## Part B (optional) — load the graph into your own Neo4j
 
-Only needed if you have your **own empty Neo4j instance** or want to rebuild after changing the domain docs.
+Only needed if you have your **own empty Neo4j instance**, or want to reload or re-embed the shared graph.
 
-**Extra prerequisites:** .NET SDK 8+ (for the Roslyn code extractor) and the **form source bundles**.
+The graph itself is built on the machine that has the ERP source (phases 0-13 in one build) and delivered as
+`KnowledgeGraph/graph/graph.json` (about 275 MB, **not in git**, get it from the team). `kg.yaml` points at it
+(`graph_json: graph/graph.json`), so every `kg` command loads that file; no source code or .NET is needed here.
+How it was built, and its counts and checks, are in `KnowledgeGraph/graph/MANIFEST.md`.
 
-The source bundles live in `graphs-by-phase/`, which is **not in git** (it's in `.gitignore`). Get the folder from the
-team and place it at the repo root so you have:
-
-```
-SpectrumERP\
-  graphs-by-phase\
-    phase-0\phase-0\<FormName>\...   (extract phase-0.zip here)
-    phase-1\phase-1\<FormName>\...   (extract phase-1.zip here)
-  KnowledgeGraph\
-```
-
-These paths are configured in `KnowledgeGraph/kg.yaml` (`source_roots`).
-
-**Nested stored procedures** (SPs called only from other SPs, so they are not in any form bundle) live in
-`embedding_text/` (in git), one `<schema>.<name>.txt` per SP, configured as `nested_sp_dirs` in `kg.yaml`. Only the SQL
-after the `Code:` line is parsed, so they get the same READS / WRITES / USES_COLUMN / CALLS_SP edges as bundle SPs.
-If a form bundle also has the SP, the bundle's `.sql` wins. To add more, drop new `.txt` files there and rebuild.
-
-Then, from `KnowledgeGraph\`:
+From `KnowledgeGraph\`:
 
 ```powershell
-.\.venv\Scripts\kg validate      # offline check: parses code + SQL, verifies the YAML in domain/ (must be clean)
-.\.venv\Scripts\kg build         # computes embeddings and loads everything into Neo4j
-.\.venv\Scripts\kg stats         # node/edge counts of the extracted graph (offline)
+.\.venv\Scripts\kg stats         # node/edge counts of graph.json (offline)
+.\.venv\Scripts\kg build         # embeds every node and loads everything into Neo4j
 ```
 
 Then re-run the connection check from step 5 to confirm the graph is in Neo4j.
 
-- The first build compiles the Roslyn extractor automatically (`dotnet build`) and caches results in `.cache/`.
-- `kg build` is safe to re-run; only changed texts are re-embedded.
-- With `EMBEDDING_PROVIDER=local` embedding runs on your PC (a GPU helps; CPU works but is slower).
-- With `EMBEDDING_PROVIDER=voyage` on the free tier, load first and embed in slices:
-  `kg build --embed-budget 0`, then `kg embed-step --budget 480000` repeatedly (or schedule it with
-  `scripts\schedule-embedding.ps1`). See [`KnowledgeGraph/README.md`](KnowledgeGraph/README.md).
+- `kg build` is safe to re-run; only new or changed texts are re-embedded (vectors are cached in `.cache/`).
+- With `EMBEDDING_PROVIDER=local` embedding runs on your PC (a GPU helps; CPU works but is slower). To load first and
+  embed in resumable slices: `kg build --embed-budget 0`, then `kg embed-step` until it prints `COMPLETE`.
 - `kg export-html` writes `kg-graph.html`, an offline interactive viewer of the graph (no Neo4j needed).
+- To rebuild the graph from source (new forms, changed domain docs), see
+  [`KnowledgeGraph/README.md`](KnowledgeGraph/README.md#building-from-source).
 
 Run the tests:
 
 ```powershell
-.\.venv\Scripts\python -m pytest            # offline tests (need graphs-by-phase)
-.\.venv\Scripts\python -m pytest -m live    # tests against your Neo4j (need .env)
+.\.venv\Scripts\python -m pytest -m "not live"   # offline tests (need graph/graph.json)
+.\.venv\Scripts\python -m pytest -m live         # tests against your Neo4j (need .env)
 ```
 
 ---
@@ -491,17 +475,22 @@ Run the tests:
 
 ```
 SpectrumERP/
-  README.md                      ← this guide
-  KnowledgeGraph/                MCP server + graph builder (Python)
-    run-mcp.cmd                  start MCP server (stdio)        — used by local clients
-    run-mcp-http.cmd             start MCP server (HTTP :8765)   — for network clients
-    .env.example                 settings template → copy to .env
-    kg.yaml                      build config
-    domain/                      curated functional docs (modules, processes, concepts, rules, forms)
-    src/spectrum_kg/             server + builder source
-    README.md, GRAPH_STRUCTURE.md  technical reference
-  functional documentations/     functional docs per form
-  functional_template.md, technical_doc_template_SP/   documentation templates
-  graphs-by-phase/               form source bundles (NOT in git — get from the team)
-  embedding_text/                nested stored procedures (SQL in a `Code:` section), loaded by `kg build`
+  README.md                        this guide
+  KnowledgeGraph/                  MCP server + graph builder (Python package spectrum_kg)
+    run-mcp.cmd                    start MCP server (stdio)        - used by local clients
+    run-mcp-http.cmd               start MCP server (HTTP :8765)   - for network clients
+    .env.example                   settings template -> copy to .env
+    kg.yaml                        build config (graph source, extraction settings)
+    graph/                         the combined phase 0-13 graph: MANIFEST.md, stats, build log, form/phase lists
+                                   (graph.json itself is not in git)
+    domain/                        curated functional layer the graph was built with (modules, processes,
+                                   concepts, rules, one doc per form)
+    src/spectrum_kg/               server + builder source
+    tests/, eval/                  tests and agentic-RAG evaluation questions
+    tools/RoslynExtractor/         .NET code extractor (only for building from source)
+  docs/
+    reference/                     graph model, embedding-text templates, MCP token usage, build spec, KG map
+    plans/                         EC2 pipeline, roles + observability, the original plan
+    templates/                     functional / technical documentation templates
+    history/kg-gaps/               gap log of the phase 0-1 graph (6 Nov 2026)
 ```

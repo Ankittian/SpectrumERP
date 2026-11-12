@@ -14,7 +14,6 @@ def norm(s: str) -> str:
 
 
 # ---- stable node ids -------------------------------------------------------------------------
-def form_id(name: str) -> str: return f"form:{name}"
 def ui_id(kind: str, name: str) -> str: return f"{'form' if kind == 'Form' else 'usercontrol'}:{name}"
 def control_id(owner: str, name: str) -> str: return f"control:{owner}.{name}"
 def method_id(owner: str, name: str) -> str: return f"method:{owner}.{name}"
@@ -111,6 +110,18 @@ class Graph:
             "edges": [{"src": e.src, "type": e.type, "dst": e.dst, **e.props}
                       for e in sorted(self.edges.values(), key=lambda e: e.key)],
         }
+
+    @classmethod
+    def from_json(cls, data: dict[str, Any]) -> "Graph":
+        """Inverse of to_json(): rebuild a graph written by `kg build --dry-run` (or a build on another machine)."""
+        g = cls()
+        for rec in data["nodes"]:
+            props = {k: v for k, v in rec.items() if k != "id"}   # `kind` stays a prop too, as enrich() sets it
+            g.nodes[rec["id"]] = Node(rec["id"], rec["kind"], props)
+        for rec in data["edges"]:
+            e = Edge(rec["src"], rec["type"], rec["dst"], {k: v for k, v in rec.items() if k not in ("src", "type", "dst")})
+            g.edges[e.key] = e
+        return g
 
     def stats(self) -> dict[str, dict[str, int]]:
         return {

@@ -1,25 +1,30 @@
-"""Build the full in-memory graph: code + SQL extraction, linking, derived edges, curated domain layer."""
+"""Build the full in-memory graph.
+
+Two sources (kg.yaml):
+* `graph_json`   - a prebuilt graph (`kg build --dry-run` output, e.g. the combined all-phases build) is loaded as is:
+                   domain layer, derived edges and embedding text are already in it.
+* `source_roots` - form bundles (code + SQL): extraction, linking, derived edges, then the curated domain layer.
+"""
 from __future__ import annotations
 
-import os
+import json
 from dataclasses import dataclass, field
 
 from . import domain, link
 from .config import Settings
 from .embed import enrich
-from .embedding_docs import EmbeddingDocs, SyncReport, node_phases
+from .embedding_docs import EmbeddingDocs, SyncReport
 from .load import documented_types_check
 from .extract.bundle import discover_bundles
 from .extract.code import build_code_graph, collect_types
 from .extract.roslyn import extract_code_facts
-from .extract.tsql import parse_sp_embedding_text, parse_sp_file
+from .extract.tsql import parse_sp_file
 from .model import Graph
-
-NESTED_SP_BUNDLE = "nested-sp"   # bundles value for SPs loaded from nested_sp_dirs
 
 
 @dataclass
 class BuildReport:
+    source: str = ""
     bundles: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
@@ -32,9 +37,32 @@ def build_graph(settings: Settings, with_domain: bool = True, docs: str = "apply
     """docs: "off"   - use the generated embedding text as is;
             "apply" - read-only: nodes whose file in embedding_docs/ was hand-edited embed the edited text;
             "sync"  - like apply, and also write new/refreshed files + manifest (what `kg build` / `kg docs sync` do)."""
-    g = Graph()
     report = BuildReport()
+    if settings.graph_json:
+        report.source = str(settings.graph_json)
+        g = Graph.from_json(json.loads(settings.graph_json.read_text(encoding="utf-8")))
+    else:
+        g = _extract(settings, report, with_domain)
+    for e in g.dangling_edges():
+        report.warnings.append(f"dropped dangling edge {e.src} -{e.type}-> {e.dst}")
+        del g.edges[e.key]
+    if not settings.graph_json:
+        enrich(g)
+    report.generated = {i: n.props["text"] for i, n in g.nodes.items()}
+    if docs != "off":
+        store = EmbeddingDocs(settings.docs_dir)
+        report.docs, overrides = store.plan(g, report.generated, write=docs == "sync", prune=prune_docs)
+        for nid, text in overrides.items():
+            g.nodes[nid].props["text"] = text
+    report.warnings += documented_types_check(g)
+    return g, report
+
+
+def _extract(settings: Settings, report: BuildReport, with_domain: bool) -> Graph:
+    """Form bundles -> graph: Roslyn (VB/C#) + sqlglot (T-SQL), linking, derived shortcuts, curated domain layer."""
+    g = Graph()
     bundles = discover_bundles(settings)
+    report.source = ", ".join(str(r) for r in settings.source_roots)
     report.bundles = [b.name for b in bundles]
 
     code_files = [f for b in bundles for f in b.code_files]
@@ -51,24 +79,6 @@ def build_graph(settings: Settings, with_domain: bool = True, docs: str = "apply
                             f.relative_to(settings.source_root).as_posix()))
             except Exception as ex:  # keep building; report the file
                 report.errors.append(f"{f}: {ex}")
-    # nested SPs (called only from other SPs). Added after the bundles, so a bundle's copy of the same SP wins.
-    repo_root = settings.project_dir.parent
-    in_bundles = {sp.qualified.lower() for sp, _, _ in sps}
-    for d in settings.nested_sp_dirs:
-        if not d.is_dir():
-            report.warnings.append(f"nested_sp_dirs: {d} not found")
-            continue
-        for f in sorted(d.glob("*.txt")):
-            try:
-                sp = parse_sp_embedding_text(f, settings.sql.get("default_schema", "dbo"))
-            except Exception as ex:
-                report.errors.append(f"{f}: {ex}")
-                continue
-            if sp.qualified.lower() != f.stem.lower():
-                report.warnings.append(f"{f.name}: file name differs from procedure {sp.qualified}")
-            if sp.qualified.lower() in in_bundles:
-                continue   # the form bundle's .sql is authoritative
-            sps.append((sp, NESTED_SP_BUNDLE, os.path.relpath(f, repo_root).replace(os.sep, "/")))
     link.build_sql_graph(g, sps, settings.sql.get("error_log_tables", []))
     report.warnings += link.resolve_code_to_sql(g, cm)
     g.finalize_names()
@@ -79,20 +89,7 @@ def build_graph(settings: Settings, with_domain: bool = True, docs: str = "apply
         w, e = domain.apply_domain(g, settings.domain_dir)
         report.warnings += w
         report.errors += e
-
-    for e in g.dangling_edges():
-        report.warnings.append(f"dropped dangling edge {e.src} -{e.type}-> {e.dst}")
-        del g.edges[e.key]
-    enrich(g)
-    report.generated = {i: n.props["text"] for i, n in g.nodes.items()}
-    if docs != "off":
-        store = EmbeddingDocs(settings.docs_dir)
-        report.docs, overrides = store.plan(g, report.generated, node_phases(g, settings),
-                                            write=docs == "sync", prune=prune_docs)
-        for nid, text in overrides.items():
-            g.nodes[nid].props["text"] = text
-    report.warnings += documented_types_check(g)
-    return g, report
+    return g
 
 
 def _canonical_schema_names(g: Graph) -> None:
