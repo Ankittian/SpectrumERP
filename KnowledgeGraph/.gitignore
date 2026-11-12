@@ -3,3 +3,4 @@
 tools/bin/
 *.egg-info/
 kg-graph.html
+/flashcards
