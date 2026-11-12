@@ -1,0 +1,8 @@
+﻿"APINo","APIName","Description","ProcName","Tag","Inactive","Parameters","TableName"
+"1","LiftMaster","get lift master","Customize.EROSGetLiftMaster","EROS","0","FromDate,ToDate",
+"2","CustomerMaster","get Customer master","Customize.EROSGetCustomerDetail","EROS","0","FromDate,ToDate",
+"3","ContractDetail","get Contract detail","Customize.EROSGetAMCDetail","EROS","0","FromDate,ToDate",
+"4","ItemMaster","get item master","Customize.EROSGetItemMaster","EROS","0","FromDate,ToDate",
+"5","SaveMR","Save Material Request","[Customize].[SaveMRThroughErosAPI]","EROS","0","",
+"6","MRDetail","Get Material Request Detail","[Customize].[EROSGetMaterialRequestDetail]","EROS","0","RequestNo",
+"7","IssueDetail","Get Material Issue Detail","[Customize].[EROSGetMaterialIssueDetail]","EROS","0","RequestNo",

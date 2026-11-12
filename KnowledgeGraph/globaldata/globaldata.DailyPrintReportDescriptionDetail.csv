@@ -1,0 +1,123 @@
+﻿"ReportDescriptionDetailNo","ReportDescriptionNo","ParameterName","Query"
+"1","738","VoucherNo","Select 'VoucherNo' ParaName,VoucherNo ParaValue  from Sales.InvoiceMain where InvoiceNo=@PK and VoucherNo is not null"
+"2","822","VoucherNo","Select 'VoucherNo' ParaName ,CONVERT(Varchar(500), VoucherNo) ParaValue From Finance.FreightInvoiceMain PBM where PBM.FreightInvoiceNo=@PK And Authorizedby Is Not Null And PBM.VoucherNo Is Not Null"
+"3","777","Amount","Select 'Amount' ParaName ,CONVERT(Varchar(500), SpecificCrAmount) ParaValue
+From Finance.accVoucherPaymentDetail
+Where VoucherNo=@Pk"
+"4","777","InFavourof","Select 'InFavourof' ParaName ,CONVERT(Varchar(500), InFavourOf) ParaValue
+From Finance.accVoucherPaymentDetail
+Where VoucherNo=@PK"
+"5","777","ChequeDate","Select 'ChequeDate' ParaName ,CONVERT(Varchar(500), PaymentReferenceDate,101) ParaValue
+From Finance.accVoucherPaymentDetail
+Where VoucherNo=@PK"
+"6","777","CompanyNo","Select 'CompanyNo' ParaName ,CONVERT(Varchar(500), VM.CompanyNo) ParaValue
+From Finance.accVoucherPaymentDetail PD
+Inner Join Finance.accVoucherMain VM on VM.VoucherNo=PD.VoucherNo
+Where VM.VoucherNo=@PK"
+"7","709","Amount","Select 'Amount' ParaName ,CONVERT(Varchar(500), SpecificCrAmount) ParaValue
+From Finance.accVoucherPaymentDetail
+Where VoucherNo=@Pk"
+"8","709","InFavourof","Select 'InFavourof' ParaName ,CONVERT(Varchar(500), InFavourOf) ParaValue
+From Finance.accVoucherPaymentDetail
+Where VoucherNo=@PK"
+"9","709","ChequeDate","Select 'ChequeDate' ParaName ,CONVERT(Varchar(500), PaymentReferenceDate,103) ParaValue
+From Finance.accVoucherPaymentDetail
+Where VoucherNo=@PK"
+"10","709","CompanyNo","Select 'CompanyNo' ParaName ,CONVERT(Varchar(500), VM.CompanyNo) ParaValue
+From Finance.accVoucherPaymentDetail PD
+Inner Join Finance.accVoucherMain VM on VM.VoucherNo=PD.VoucherNo
+Where VM.VoucherNo=@PK"
+"11","775","Amount","Select 'Amount' ParaName ,CONVERT(Varchar(500), SpecificCrAmount) ParaValue
+From Finance.accVoucherPaymentDetail
+Where VoucherNo=@Pk"
+"12","775","InFavourof","Select 'InFavourof' ParaName ,CONVERT(Varchar(500), InFavourOf) ParaValue
+From Finance.accVoucherPaymentDetail
+Where VoucherNo=@PK"
+"13","775","ChequeDate","Select 'ChequeDate' ParaName ,CONVERT(Varchar(500), PaymentReferenceDate,101) ParaValue
+From Finance.accVoucherPaymentDetail
+Where VoucherNo=@PK"
+"14","775","CompanyNo","Select 'CompanyNo' ParaName ,CONVERT(Varchar(500), VM.CompanyNo) ParaValue
+From Finance.accVoucherPaymentDetail PD
+Inner Join Finance.accVoucherMain VM on VM.VoucherNo=PD.VoucherNo
+Where VM.VoucherNo=@PK"
+"15","875","Amount","Select 'Amount' ParaName ,CONVERT(Varchar(500), SpecificCrAmount) ParaValue
+From Finance.accVoucherPaymentDetail
+Where VoucherNo=@Pk"
+"16","875","InFavourof","Select 'InFavourof' ParaName ,CONVERT(Varchar(500), InFavourOf) ParaValue
+From Finance.accVoucherPaymentDetail
+Where VoucherNo=@PK"
+"17","875","ChequeDate","Select 'ChequeDate' ParaName ,CONVERT(Varchar(500), PaymentReferenceDate,103) ParaValue
+From Finance.accVoucherPaymentDetail
+Where VoucherNo=@PK"
+"18","875","CompanyNo","Select 'CompanyNo' ParaName ,CONVERT(Varchar(500), VM.CompanyNo) ParaValue
+From Finance.accVoucherPaymentDetail PD
+Inner Join Finance.accVoucherMain VM on VM.VoucherNo=PD.VoucherNo
+Where VM.VoucherNo=@PK"
+"19","907","InvoiceNo","Select  'InvoiceNo' ParaName,ICM.RefDocumentNo ParaValue From [Sales].[InvoiceCancellationMain] ICM Where ICM.InvoiceCancellationNo=@PK And ICM.InvoiceTypeNo = 1"
+"20","908","InvoiceNo","Select  'InvoiceNo' ParaName,ICM.RefDocumentNo ParaValue From [Sales].[InvoiceCancellationMain] ICM Where ICM.InvoiceCancellationNo=@PK And ICM.InvoiceTypeNo = 1"
+"21","854","IsExport","Select 'IsExport' ParaName,Case When CM.CompanyName Like '%HIRA%' and IM.InvoiceCategoryNo = 2 Then 1    Else 0    End ParaValue  from Sales.InvoiceMain IM  Inner Join masterdata.mCompanyMaster CM On CM.CompanyNo = Im.CompanyNo  Where Im.InvoiceNo = @PK"
+"22","985","VoucherNo","Select 'VoucherNo' ParaName ,CONVERT(Varchar(500), VoucherNo) ParaValue  From [Finance].[SundryPaymentMain]  Where SundryPaymentNo=@PK  And VoucherNo is Not Null"
+"23","795","VoucherNo","Select 'VoucherNo' ParaName ,CONVERT(Varchar(500), VoucherNo) ParaValue From Finance.PurchaseBillMain PBM where PBM.PurchaseBillNo=@PK And Authorizedby Is Not Null And PBM.VoucherNo Is Not Null"
+"24","315","VoucherNo","Select 'VoucherNo' ParaName ,CONVERT(Varchar(500), VoucherNo) ParaValue 
+From Finance.DrCrNoteMain PBM 
+where PBM.DrCrNoteNo=@PK And Authorizedby Is Not Null And PBM.VoucherNo Is Not Null"
+"25","852","IsExport","Select 'IsExport' ParaName,Case When CM.CompanyName Like '%HIRA%' and IM.InvoiceCategoryNo = 2 Then 1    Else 0    End ParaValue  from Sales.InvoiceMain IM  Inner Join masterdata.mCompanyMaster CM On CM.CompanyNo = Im.CompanyNo  Where Im.InvoiceNo = @PK"
+"26","1046","PONo","Select 'PONo' ParaName ,CONVERT(Varchar(500), PONo) ParaValue
+From Purchase.POAmendmentMain 
+Where POAmendmentNo =@PK"
+"27","907","IsExport","Select 'IsExport' [ParaName],Case When IM.InvoiceCategoryNo = 2 Then 1 else 0 end  [ParaValue]
+from Sales.InvoiceCancellationMain ICM
+Inner Join Sales.InvoiceMain IM On IM.InvoiceNo = ICM.RefDocumentNo
+where ICM.InvoiceCancellationNo = @PK And InvoiceTypeNo = 1"
+"28","853","IsExport","Select 'IsExport' ParaName,Case When CM.CompanyName Like '%HIRA%' and IM.InvoiceCategoryNo = 2 Then 1    Else 0    End ParaValue  from Sales.InvoiceMain IM  Inner Join masterdata.mCompanyMaster CM On CM.CompanyNo = Im.CompanyNo  Where Im.InvoiceNo = @PK"
+"31","1151","VendorNo","Select 'VendorNo' ParaName ,CONVERT(Varchar(500), VendorNo) ParaValue  
+From [Purchase].[RFQVendorDetail]  
+Where RFQNo = @PK  And VendorNo is Not Null"
+"32","1171","VoucherNo","Select 'VoucherNo' ParaName ,CONVERT(Varchar(500), VoucherNo) ParaValue   From Finance.DrCrNoteMain PBM   where PBM.DrCrNoteNo=@PK And Authorizedby Is Not Null And PBM.VoucherNo Is Not Null"
+"33","1173","VoucherNo","Select 'VoucherNo' ParaName ,CONVERT(Varchar(500), VoucherNo) ParaValue   From Finance.DrCrNoteMain PBM   where PBM.DrCrNoteNo=@PK And Authorizedby Is Not Null And PBM.VoucherNo Is Not Null"
+"34","1187","GateInNo","Select 'UniqueNo' ParaName ,IJ.formcode+CONVERT(Varchar(500), GateInNo) ParaValue   
+	From GateEntry.VehicleGateOutMain   GOM
+	Inner Join ( 
+				Select 1 [GOSourceDocNo],'SGPI_' formcode
+				union 
+				Select 2 [GOSourceDocNo],'IMGE_' formcode
+	) IJ on IJ.GOSourceDocNo = GOM.SourceDocumentNo
+	Where GateOutNo=@PK"
+"39","1105","VoucherNo","Select 'VoucherNo' ParaName ,CONVERT(Varchar(500), VoucherNo) ParaValue 
+From Finance.DrCrNoteMain PBM 
+where PBM.DrCrNoteNo=@PK And Authorizedby Is Not Null And PBM.VoucherNo Is Not Null"
+"41","1283","VoucherNo","Select 'VoucherNo' ParaName ,CONVERT(Varchar(500), VoucherNo) ParaValue  From [Finance].[SundryPaymentMain]  Where SundryPaymentNo=@PK  And VoucherNo is Not Null"
+"43","1186","UniqueNo","Select 'UniqueNo' ParaName ,'SGPI_'+CONVERT(Varchar(500), GateInNo) ParaValue    From GateEntry.VehicleGateEntryMain  Where GateInNo=@PK"
+"44","1318","UniqueNo","Select 'UniqueNo' ParaName ,'SGPI_'+CONVERT(Varchar(500), GateInNo) ParaValue    From GateEntry.VehicleGateEntryMain  Where GateInNo=@PK"
+"45","1332","GateInNo","Select 'UniqueNo' ParaName ,IJ.formcode+CONVERT(Varchar(500), GateInNo) ParaValue      From GateEntry.VehicleGateOutMain   GOM   Inner Join (       Select 1 [GOSourceDocNo],'SGPI_' formcode      union       Select 2 [GOSourceDocNo],'IMGE_' formcode   ) IJ on IJ.GOSourceDocNo = GOM.SourceDocumentNo   Where GateOutNo=@PK"
+"48","1284","VoucherNo","Select 'VoucherNo' ParaName ,CONVERT(Varchar(500), VoucherNo) ParaValue   From Finance.DrCrNoteMain PBM   where PBM.DrCrNoteNo=@PK And Authorizedby Is Not Null And PBM.VoucherNo Is Not Null"
+"49","820","VoucherNo","Select 'VoucherNo' ParaName ,CONVERT(Varchar(500), VoucherNo) ParaValue From Finance.ServiceBillMain PBM where PBM.ServiceBillNo=@PK And Authorizedby Is Not Null And PBM.VoucherNo Is Not Null"
+"50","227","VoucherNo","Select 'VoucherNo' ParaName ,CONVERT(Varchar(500), VoucherNo) ParaValue 
+From Finance.DrCrNoteMain PBM 
+where PBM.DrCrNoteNo=@PK And Authorizedby Is Not Null And PBM.VoucherNo Is Not Null"
+"62","1217","VoucherNo","Select 'VoucherNo' ParaName ,CONVERT(Varchar(500), VoucherNo) ParaValue  From [Finance].[SundryPaymentMain]  Where SundryPaymentNo=@PK  And VoucherNo is Not Null"
+"67","1285","VoucherNo","Select 'VoucherNo' ParaName ,CONVERT(Varchar(500), VoucherNo) ParaValue   From Finance.PurchaseBillMain PBM   where PBM.PurchaseBillNo=@PK And Authorizedby Is Not Null And PBM.VoucherNo Is Not Null"
+"70","1348","VoucherNo","Select 'VoucherNo' ParaName ,CONVERT(Varchar(500), VoucherNo) ParaValue   From Finance.DrCrNoteMain PBM   where PBM.DrCrNoteNo=@PK And Authorizedby Is Not Null And PBM.VoucherNo Is Not Null"
+"71","813","VoucherNo","Select 'VoucherNo' ParaName ,CONVERT(Varchar(500), VoucherNo) ParaValue 
+From Finance.DrCrNoteMain PBM 
+where PBM.DrCrNoteNo=@PK And Authorizedby Is Not Null And PBM.VoucherNo Is Not Null"
+"90","1419","VoucherNo","Select 'VoucherNo' ParaName ,CONVERT(Varchar(500), VoucherNo) ParaValue  From [Finance].[CommissionBillMain]  Where CommissionBillNo=@PK  And VoucherNo is Not Null"
+"100","1422","SCOrderAmendmentNo","Select 'SCOrderAmendmentNo' ParaName,SCOrderAmendmentNo ParaValue    from Purchase.SCOrderAmendmentMain AM  Where SCOrderNo = @PK  and (AM.AmendmentNo = 0         OR          (AM.AmendmentNo > 0 and         AM.AmendmentNo in (Select MAX(AmendmentNo) from Purchase.SCOrderAmendmentMain Where SCOrderNo = @PK and AuthorizedBy is not null))         )"
+"103","1450","VoucherNo","Select 'VoucherNo' ParaName ,CONVERT(Varchar(500), VoucherNo) ParaValue   From Finance.DrCrNoteMain PBM   where PBM.DrCrNoteNo=@PK And Authorizedby Is Not Null And PBM.VoucherNo Is Not Null"
+"104","1449","VoucherNo","Select 'VoucherNo' ParaName ,CONVERT(Varchar(500), VoucherNo) ParaValue   From Finance.DrCrNoteMain PBM   where PBM.DrCrNoteNo=@PK And Authorizedby Is Not Null And PBM.VoucherNo Is Not Null"
+"106","1219","VoucherNo","Select 'VoucherNo' ParaName,VoucherNo ParaValue  from Sales.InvoiceMain where InvoiceNo=@PK and VoucherNo is not null"
+"107","1420","SCOrderAmendmentNo","Select 'SCOrderAmendmentNo' ParaName,SCOrderAmendmentNo ParaValue    from Purchase.SCOrderAmendmentMain AM  Where SCOrderNo = @PK  and (AM.AmendmentNo = 0         OR          (AM.AmendmentNo > 0 and         AM.AmendmentNo in (Select MAX(AmendmentNo) from Purchase.SCOrderAmendmentMain Where SCOrderNo = @PK and AuthorizedBy is not null))         )"
+"110","789","VoucherNo","Select 'VoucherNo' ParaName ,CONVERT(Varchar(500), VoucherNo) ParaValue
+From [Finance].[SundryPaymentMain]
+Where SundryPaymentNo=@PK
+And VoucherNo is Not Null"
+"112","1423","SalesOrderAmendmentNo","Select 'SalesOrderAmendmentNo' ParaName,SalesOrderAmendmentNo ParaValue    from Sales.SalesOrderAmendmentMain AM   Where SalesOrderNo = @PK       and  (       AM.AmendmentNo=0        OR        ( AM.AmendmentNo > 0          And AM.AmendmentNo in            (Select MAX(AmendmentNo) from Sales.SalesOrderAmendmentMain Where SalesOrderNo = @PK and AuthorizedBy is not null)          )      )"
+"117","1447","VoucherNo","Select 'VoucherNo' ParaName ,CONVERT(Varchar(500), VoucherNo) ParaValue   From Finance.DrCrNoteMain PBM   where PBM.DrCrNoteNo=@PK And Authorizedby Is Not Null And PBM.VoucherNo Is Not Null"
+"118","1448","VoucherNo","Select 'VoucherNo' ParaName ,CONVERT(Varchar(500), VoucherNo) ParaValue   From Finance.DrCrNoteMain PBM   where PBM.DrCrNoteNo=@PK And Authorizedby Is Not Null And PBM.VoucherNo Is Not Null"
+"120","1249","VoucherNo","Select 'VoucherNo' ParaName ,CONVERT(Varchar(500), VoucherNo) ParaValue   From Finance.DrCrNoteMain PBM   where PBM.DrCrNoteNo=@PK And Authorizedby Is Not Null And PBM.VoucherNo Is Not Null"
+"121","1218","VoucherNo","Select 'VoucherNo' ParaName ,CONVERT(Varchar(500), VoucherNo) ParaValue   From Finance.DrCrNoteMain PBM   where PBM.DrCrNoteNo=@PK And Authorizedby Is Not Null And PBM.VoucherNo Is Not Null"
+"124","1128","VoucherNo","Select 'VoucherNo' ParaName ,CONVERT(Varchar(500), VoucherNo) ParaValue   From Finance.DrCrNoteMain PBM   where PBM.DrCrNoteNo=@PK And Authorizedby Is Not Null And PBM.VoucherNo Is Not Null"
+"125","1130","VoucherNo","Select 'VoucherNo' ParaName ,CONVERT(Varchar(500), VoucherNo) ParaValue   From Finance.DrCrNoteMain PBM   where PBM.DrCrNoteNo=@PK And Authorizedby Is Not Null And PBM.VoucherNo Is Not Null"
+"129","1421","POAmendmentNo","Select 'POAmendmentNo' ParaName,POAmendmentNo ParaValue    from Purchase.POAmendmentMain AM   Where PONo = @PK  and (  AM.AmendmentNo = 0          OR ( AM.AmendmentNo > 0            And AM.AmendmentNo in (Select MAX(AmendmentNo) from Purchase.POAmendmentMain Where PONo = @PK and AuthorizedBy is Not Null)            )          )"
+"130","1596","MaintenanceOrderNo","Select 'MaintenanceOrderNo' ParaName,MaintenanceOrderNo ParaValue  from EAM.MOCLosing where MOClosingNo=@PK and MaintenanceOrderNo is not null"
+"131","1606","VoucherNo","Select 'VoucherNo' ParaName,VoucherNo ParaValue  from Sales.SalesReturnMain where SalesReturnNo=@PK and VoucherNo is not null"

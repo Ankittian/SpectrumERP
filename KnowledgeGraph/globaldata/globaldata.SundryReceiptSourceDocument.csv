@@ -1,0 +1,7 @@
+﻿"SourceDocumentNo","DocumentName","IsDefault","Inactive"
+"1","Advance Receipt","0","0"
+"2","Receipt Request","0","0"
+"3","Direct","0","0"
+"4","Proforma Invoice","0","0"
+"5","EMD Return","1","0"
+"6","Security Deposit Return","0","0"

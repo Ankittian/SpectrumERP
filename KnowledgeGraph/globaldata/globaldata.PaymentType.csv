@@ -1,0 +1,4 @@
+﻿"PaymentTypeNo","PaymentType","InActive","IsDefault"
+"1","Down Payment","0","0"
+"2","Down Payment - PI","0","0"
+"3","Against Bill","0","0"

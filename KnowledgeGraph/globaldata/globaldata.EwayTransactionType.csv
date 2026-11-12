@@ -1,0 +1,5 @@
+﻿"EwayTransactionTypeNo","EwayTransactionType","Inactive","IsDefault"
+"1","Regular","0","1"
+"2","Bill To Ship To","0","0"
+"3","Bill From Dispatch From","0","0"
+"4","Combination of 2 and 3","0","0"

@@ -19,6 +19,8 @@ def _report(report, show_warnings: bool = True) -> None:
     typer.echo(f"source: {report.source}")
     if report.bundles:
         typer.echo(f"bundles ({len(report.bundles)}): {', '.join(report.bundles)}")
+    if report.enums:
+        typer.echo(f"enums: {report.enums}")
     if show_warnings:
         for w in report.warnings:
             typer.secho(f"  warning: {w}", fg="yellow")

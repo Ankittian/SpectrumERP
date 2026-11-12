@@ -1,0 +1,4 @@
+﻿"SalesPaymentTypeNo","SalesPaymentType","Inactive","IsDefault"
+"1","Against Invoice","0","0"
+"2","Advance","0","0"
+"3","Deposit","0","0"

@@ -1,0 +1,7 @@
+﻿"TransactionTypeNo","TransactionTypeName","Inactive","DisplayAddToBasic","FormCode","IsDefault"
+"1","Payroll","0","1","PAFP","0"
+"2","Sundry Payment","0","0","FISP","0"
+"3","Purchase Bill","0","1","PBPB","0"
+"4","Sundry Receipt","0","0","FISR","0"
+"5","Excise Invoice","0","1","SDEI","0"
+"6","Commercial Invoice","0","1","SDCI","0"

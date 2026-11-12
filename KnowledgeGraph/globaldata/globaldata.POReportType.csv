@@ -1,0 +1,3 @@
+﻿"POReportTypeNo","ReportType","ReportName","Inactive","PrintingFormCode","IsDefault"
+"1","General","rptPurchaseOrder.rpt","0","PMPO","0"
+"2","Annexure Item","POItemAnnexureWise.rpt","0","MPOP","0"

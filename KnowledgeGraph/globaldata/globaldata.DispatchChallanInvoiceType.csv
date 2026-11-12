@@ -1,0 +1,7 @@
+﻿"InvoiceTypeNo","InvoiceType","Inactive","IsDefault"
+"1","Tax Invoice","0","0"
+"2","Commercial","0","0"
+"3","Service/Tax Invoice","0","0"
+"4","None","0","0"
+"5","Debit Note","0","0"
+"6","Job Work(Gate Pass Out + Tax Invoice)","1","0"

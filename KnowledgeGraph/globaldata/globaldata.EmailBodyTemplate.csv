@@ -1,0 +1,1308 @@
+﻿"EmailBodyTemplateNo","EmailBodyTemplateName","DisplayFormat","QueryFormat","NotificationNo","IsSMSTemplate","Inactive"
+"1","Template 1","<p>To,<span style=''float:right'' >Date</span></p><p >[Vendor Name]<span style=''float:right''>[Document Date]</span></p><p >&nbsp;</p><p >Purchase Order No. : [Purchase Order No.] </p><p >Reference No. : [Reference No.] </p><p align=center ><b><span style=''font-size:12.0pt''>LETTER OF INTENT </span></b></p><p align=center ><b><span style=''font-size:12.0pt''>IRREVOCABLE CORPORATE PURCHASE ORDER</span></b></p><p >We, [Company Name]  hereby state and represent that it is our intension to purchase, and we hereby confirm that we are ready, willing and able to purchase the commodity as per the specification and in the quantity and for the price as specified in the terms and conditions as stated in attachment.</p><p >This representation is made with full corporate authority and responsibility of the above.</p><p >&nbsp;</p>","'<p>To,<span style=''float:right'' >Date</span></p><p >' + VC.Name + '<span style=''float:right''>' + convert(varchar(10),POM.DocumentDate,103) + '</span></p><p >&nbsp;</p><p >Purchase Order No. : ' + pom.DocumentNoYearly + '</p><p >Reference No. : ' + isnull(pom.ReferenceNo,'') + '</p><p align=center ><b><span style=''font-size:12.0pt''>LETTER OF INTENT </span></b></p><p align=center ><b><span style=''font-size:12.0pt''>IRREVOCABLE CORPORATE PURCHASE ORDER</span></b></p><p >We, ' + cmm.PrintingName + ' hereby state and represent that it is our intension to purchase, and we hereby confirm that we are ready, willing and able to purchase the commodity as per the specification and in the quantity and for the price as specified in the terms and conditions as stated in attachment.</p><p >This representation is made with full corporate authority and responsibility of the above.</p><p >&nbsp;</p>'","1","0",
+"2","Template 1","<p style=""text-align:center;"">Happy birthday</p>  <p style=""text-align:center;"">[Name]</p>    <p>We wish you another year of accomplishments, opportunity, and personal growth!</p>    <p >We appreciate your service and and want to wish you a very happy birthday. May you have a    scintillating year ahead!</p>","'<p style=""text-align:center;"">Happy birthday</p>  <p style=""text-align:center;"">'+FullName+'</p>    <p>We wish you another year of accomplishments, opportunity, and personal growth!</p>    <p >We appreciate your service and and want to wish you a very happy birthday. May you have a    scintillating year ahead!</p>'","3","0",
+"3","Template 2","<p style=""text-align:center;"">Happy birthday</p>  <p style=""text-align:center;"">[Name]</p>  <p>Wishing you good health and prosperity in all your life on your Birthday.Happy Birthday to you.</p>","'<p style=""text-align:center;"">Happy birthday</p>  <p style=""text-align:center;"">'+FullName+'</p>    <p>Wishing you good health and prosperity in all your life on your Birthday.Happy Birthday to you.</p>'","3","0",
+"4","SO template","<p align=center ><b><span style='font-size:12.0pt'>Sales Order </span></b></p><p align=center ></p><p >We have secured the new job, please generate the BOM for [Sales Order No.] -  [Customer Name] -  [Model] </p><p >&nbsp;</p>","'<p align=center ><b><span style=''font-size:12.0pt''>Sales Order </span></b></p><p align=center ></p><p >We have secured the new job, please generate the BOM for ' + SOM.DocumentNoYearly + '-' +   VCLD.VendorName + '-' + im.ItemName + '</p><p >&nbsp;</p>'","34","0",
+"5","Rolling Plan","<p >&nbsp;</p><p align=center ><b><span style='font-size:12.0pt'> Rolling Plan </span></b></p><p align=center ></p><p >Rolling Plan ([Document No.]) for the period of [start Date & [end date]  </p><p >&nbsp;</p>","'<p>&nbsp;</p><p align=center ><b><span style=''font-size:12.0pt''> Rolling Plan </span></b></p><p align=center ></p><p >Rolling Plan (' + RPM.DocumentNoyearly + ') for the period of ' + convert(varchar(20),RPM.FromDate,106) + ' & ' + convert(varchar(20),RPM.ToDate,106) + '</p><p >&nbsp;</p>'","74","0",
+"6","Dispatch Planning","<p >&nbsp;</p><p align=center ><b><span style='font-size:12.0pt'> Material Plaaning </span></b></p><p align=center ></p><p >MRP ([Document No.]) for the period of [start Date & [end date]  </p><p >&nbsp;</p>","'<p>&nbsp;</p><p align=center ><b><span style=''font-size:12.0pt''> Material Planning</span></b></p><p align=center ></p><p > MRP(' + EMPM.DocumentNoyearly + ') for the period of ' + convert(varchar(20),RPM.FromDate,106) + ' & ' + convert(varchar(20),RPM.ToDate,106) + '</p><p >&nbsp;</p>'","75","0",
+"7","Outstanding","<p>To,<span style=''float:right'' >Date</span></p><p >[Vendor Name]<br><span style=''float:right''>[Address]</span></p><p >&nbsp;</p>","' <span  align=right >' + CONVERT(varchar,getdate() ,103)+ '</span> <p>To,</p><p style =""right:0 !important""  >' + v.AccountName + ' <br></p><p >&nbsp;</p>    <p align=center ><b><span style=''''font-size:12.0pt''''>OutStanding Reminder</span></b>      <p>&nbsp; &nbsp; &nbsp; &nbsp; This is a reminder that your account balance of ' + convert(varchar,(select sum([Balance_x0020_Amount]) from #BillDetail where AccountNo = v.AccountNo)) + ' was overdue as of ' + CONVERT(varchar,getdate() ,103) + '. Enclosed is a statement of account for your reference.    </p>    <p>&nbsp; &nbsp; &nbsp; &nbsp; Please arrange payment of this account today or, if you cannot make full payment at this time, please contact us to make a payment arrangement that is mutually acceptable    </p>    <p>     &nbsp; &nbsp; &nbsp; &nbsp; Your prompt attention to this matter would be greatly appreciated.If payment has recently been made, please accept our   thanks and ignore this reminder.    </p>  <style>  table {      width:100%;  }  table, th, td {      border: 1px solid black ; border-collapse: collapse;  }  th, td {      padding: 5px;      text-align: left;  }  table tr:nth-child(even) {      background-color: #eee;  }  table tr:nth-child(odd) {     background-color:#fff;  }  table th {      background-color: grey;      color: white;  }  </style>     <table style=""width:100% ;border: 1px solid black ; border-collapse: collapse;"">       <tr>         <th style=""border: 1px solid black ; border-collapse: collapse;"" >[Document No.]</th>         <th style=""border: 1px solid black ; border-collapse: collapse;"">[Document Date]</th>          <th style=""border: 1px solid black ; border-collapse: collapse;"">[Reference No] </th>         <th style=""border: 1px solid black ; border-collapse: collapse;""> [Item Description]</th>         <th style=""border: 1px solid black ; border-collapse: collapse;"">[Net Amount] </th>         <th style=""border: 1px solid   black ; border-collapse: collapse;""> [Due Date] </th>         <th style=""border: 1px solid black ; border-collapse: collapse;"">[Balance Amount] </th>       </tr> ' + (select REPLACE (REPLACE((select '<td style=""border: 1px solid black ; border-collapse: collapse;"" >' + [Document_x0020_No.] + '</td><td style=""border: 1px solid black ; border-collapse: collapse;"">' + convert(varchar,[Document_x0020_Date],103) + '</td><td style=""border: 1px solid black ; border-collapse: collapse;"">' + isnull([Reference_x0020_No.],'') + '</td><td style=""border: 1px solid black ; border-collapse: collapse;"">' +    isnull([Item_x0020_Description],'') + '</td><td style=""border: 1px solid black ; border-collapse: collapse;"">' + convert(varchar,[Net_x0020_Amount]) + '</td><td style=""border: 1px solid black ; border-collapse: collapse;"">' + isnull(convert(varchar, [Due_x0020_Date],103) ,'') +  '</td><td style=""border: 1px solid black ; border-collapse: collapse;"">' +     convert(varchar, [Balance_x0020_Amount]) +   '</td>'  from #BillDetail where AccountNo= v.AccountNo and Balance_x0020_Amount<>0  for xml path('tr')) ,'&lt;','<') ,'&gt;','>')) + ' </table>    <span style=''''align=right;font-weight: bold;font-size:12.0pt'''' >Regards, </span><br>     <b><span align=right;font-size:12.0pt> @CompanyName </span></b>'","88","0",
+"8","SO Mail TO Customer"," <span  style=""text-align:right;float:  right;"">06/09/2016</span> <p>To,</p><p style =""text-align:left !important""  > Vendor Name <br></p><p >&nbsp;</p>    <p align=center ><b><span style=''font-size:12.0pt''>Sales Order Confirmation</span></b>            <p>&nbsp; &nbsp; &nbsp; &nbsp; We thank you for your order</p>           <style>  table {      width:100%;  }  table, th, td {      border: 1px solid black ; border-collapse: collapse;  }  th, td {      padding: 5px;      text-align: left;  }       table tr:nth-child(even) {      background-color: #eee;  }  table tr:nth-child(odd) {     background-color:#fff;  }  table th {      background-color: grey;      color: white;  }  </style>                           <table  id=""Detail"" style="" border-collapse: collapse;border-spacing: 0;border: 1px solid #bbb ;padding-left: 200px"" >                      <thead><tr><th  >SR No</th >                             <th  >Description</th>                             <th  >Qty.</th>                                 </tr>                           </thead>                              <tbody id =""tbody"">                               <tr>                                 <td>1</td>                                  <td>Item Name1</td>                                 <td>Qty1</td>                                 </tr>                                  <tr>                                 <td>2</td>                                  <td>Item Name2</td>                                 <td>Qty2</td>                                 </tr>                            </tbody>                    </table>     <p>We are taking this order for manufacturing</p>        <p>We will update the dispatch status shortly</p>      <div >      <p  >Thanks </p>      <p  >Sales Team</p>         <p ><b> @CompanyName </b> </p>         </div>         ","' <span  style=""text-align:right;float:  right;"">' + CONVERT(varchar,getdate() ,103)+ '</span> <p>To,</p><p style =""text-align:left !important""  >'       + vld.VendorName + ' <br></p><p >&nbsp;</p>    <p align=center ><b><span style=''''font-size:12.0pt''''>Sales Order Confirmation</span></b>            <p>&nbsp; &nbsp; &nbsp; &nbsp; We thank you for your order</p>      <style>  table {      width:100%;  }  table, th, td {      border: 1px solid black ; border-collapse: collapse;  }  th, td {      padding: 5px;      text-align: left;  }  table tr:nth-child(even) {      background-color: #eee;  }  table tr:nth-child(odd) {     background-color:#fff;  }  table th {      background-color: grey;      color: white;  }  </style>                <table style=""width:100% ;border: 1px solid black ; border-collapse: collapse;"" >                      <thead><tr><th  style=""width:20px;border: 1px solid black ; border-collapse: collapse;""  >SR No</th >                              <th style=""border: 1px solid black ; border-collapse: collapse;"">Description</th>                              <th style=""border: 1px solid black ; border-collapse: collapse;"">Qty.</th>                             </tr>                           </thead>                              <tbody>'                           +            ( select '<tr><td style=""width:20px;border: 1px solid black ; border-collapse: collapse;"">' +  convert(varchar(20),ROW_NUMBER () over (order by Sid.SalesOrderItemDetailNo)) +'</td>' +         '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + ItemDescription + '</td>' +         '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + CONVERT(varchar(15), sid.Quantity)  + '</td></tr>'          from                  Sales.Salesorderitemdetail sid                   inner join masterdata.mItemMaster im on im.ItemNo = sid.ItemNo                   where sid.SalesOrderNo = sam.SalesOrderNo for xml path(''), root('MyString'), type) .value('/MyString[1]','varchar(max)')                    + '</tbody></table>      <p>We are taking this order for manufacturing</p>        <p>We will update the dispatch status shortly</p>      <div >      <p  >Thanks </p>      <p  >Sales Team</p>         <p ><b> @CompanyName </b> </p>  <p><b>Note:  This is a system generated Email.</b></p>       </div>         '","89","0",
+"9","Invoice Mail","<span  style=""text-align:right;float:  right;"">06/09/2016</span> <p>To,</p><p style =""text-align:left !important""  > Vendor Name <br></p><p >&nbsp;</p>    <p align=center ><b><span style='font-size:12.0pt'>Invoice Confirmation</span></b>            <p>We would like to inform you that your order is ready for Dispatch.</p>               <style>  table {      width:100%;  }  table, th, td {      border: 1px solid black ; border-collapse: collapse;  }  th, td {      padding: 5px;      text-align: left;  }       table tr:nth-child(even) {      background-color: #eee;  }  table tr:nth-child(odd) {     background-color:#fff;  }      table th {      background-color: grey;      color: white;  }  </style>                           <table  id=""Detail"" style="" border-collapse: collapse;border-spacing: 0;border: 1px solid #bbb ;padding-left: 200px"" >                          <thead><tr><th>SR No</th ><th>Description</th><th>Qty.</th><th>Amount</th></tr></thead><tbody id =""tbody"">    <tr><td>1</td><td>Item Name1</td><td>Qty1</td><td>Amount1</td></tr>    <tr><td>2</td><td>Item Name2</td><td>Qty2</td><td>Amount2</td></tr></tbody> </table>     <p>Please send us the Road Permit if required</p>             <p>We will send you the Transportation details shortly</p>      <div >      <p  >Thanks </p>      <p  >Sales Team</p>         <p ><b> @CompanyName </b> </p>         </div>","'<span  style=""text-align:right;float:  right;"">' + CONVERT(varchar,getdate() ,103)+ '</span> <p>To,</p><p style =""text-align:left !important""  >'       + vld.VendorName + ' <br></p><p >&nbsp;</p>    <p align=center ><b><span style=''''font-size:12.0pt''''>Invoice Confirmation</span></b>            <p>&nbsp; &nbsp; &nbsp; &nbsp; We would like to inform you that your order is ready for Dispatch.</p>      <style>  table {      width:100%;  }  table, th, td {      border: 1px solid black ; border-collapse: collapse;  }  th, td {      padding: 5px;      text-align: left;  }  table tr:nth-child(even) {      background-color: #eee;  }  table tr:nth-child(odd) {     background-color:#fff;  }  table th {      background-color: grey;      color: white;  }  </style>                <table style=""width:100% ;border: 1px solid black ; border-collapse: collapse;"" >                      <thead><tr><th  style=""border: 1px solid black ; border-collapse: collapse;""  >SR No</th >                                <th style=""border: 1px solid black ; border-collapse: collapse;"">Description</th>  <th style=""border: 1px solid black ; border-collapse: collapse;"">Qty.</th><th style=""border: 1px solid black ; border-collapse: collapse;"">Net Amount</th></tr></thead><tbody>' +   ( select '<tr><td style=""width :20px; border: 1px solid black ; border-collapse: collapse;"">' +  convert(varchar(20),ROW_NUMBER () over (order by ItemDescription)) +'</td>' +         '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + ItemDescription + '</td>' +  '<td style=""border: 1px solid black ; border-collapse: collapse;"">' +  CONVERT(varchar(15), sum(sid.Quantity)) + '</td>' +  '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + CONVERT(varchar(15), sum(sid.Netamount))  + '</td></tr>'          from                  Sales.InvoiceItemDetails  sid                   inner join masterdata.mItemMaster im on im.ItemNo = sid.ItemNo                   where sid.InvoiceNo = sam.InvoiceNo Group By ItemDescription for xml path(''), root('MyString'), type) .value('/MyString[1]','varchar(max)')                    + '</tbody></table>      <p>Please send us the Road Permit if required</p>        <p>We will send you the Transportation details shortly</p>      <div >      <p  >Thanks </p>      <p  >Sales Team</p>         <p ><b> @CompanyName </b> </p>  <p><b>Note:  This is a system generated Email.</b></p>  </div>         '","90","0",
+"10","Comerical Invoice Mail TO Customer","    <span  style=""text-align:right;float:  right;"">06/09/2016</span> <p>To,</p><p style =""text-align:left !important""  > Vendor Name <br></p><p >&nbsp;</p>    <p align=center ><b><span style='font-size:12.0pt'>Invoice Confirmation</span></b>            <p>We would like to inform you that your order is ready for Dispatch.</p>           <style>  table {      width:100%;  }  table, th, td {      border: 1px solid black ; border-collapse: collapse;  }  th, td {      padding: 5px;      text-align: left;  }       table tr:nth-child(even) {      background-color: #eee;  }  table tr:nth-child(odd) {     background-color:#fff;  }  table th {      background-color: grey;      color: white;  }  </style>                           <table  id=""Detail"" style="" border-collapse: collapse;border-spacing: 0;border: 1px solid #bbb ;padding-left: 200px"" >                      <thead><tr><th  >SR No</th >                             <th  >Description</th>                             <th  >Qty.</th>                                 </tr>                           </thead>                              <tbody id =""tbody"">                               <tr>                                 <td>1</td>                                  <td>Item Name1</td>                                 <td>Qty1</td>                                 </tr>                                  <tr>                                 <td>2</td>                                  <td>Item Name2</td>                                 <td>Qty2</td>                                 </tr>                            </tbody>                    </table>     <p>Please send us the Road Permit if required</p>             <p>We will send you the Transportation details shortly</p>      <div >      <p  >Thanks </p>      <p  >Sales Team</p>         <p ><b> @CompanyName </b> </p>         </div>               ","' <span  style=""text-align:right;float:  right;"">' + CONVERT(varchar,getdate() ,103)+ '</span> <p>To,</p><p style =""text-align:left !important""  >'       + vld.VendorName + ' <br></p><p >&nbsp;</p>    <p align=center ><b><span style=''''font-size:12.0pt''''>Invoice Confirmation</span></b>            <p>We would like to inform you that your order is ready for Dispatch.</p>      <style>  table {      width:100%;  }  table, th, td {      border: 1px solid black ; border-collapse: collapse;  }  th, td {      padding: 5px;      text-align: left;  }  table tr:nth-child(even) {      background-color: #eee;  }  table tr:nth-child(odd) {     background-color:#fff;  }  table th {      background-color: grey;      color: white;  }  </style>                <table style=""width:100% ;border: 1px solid black ; border-collapse: collapse;"" >                      <thead><tr><th  style=""border: 1px solid black ; border-collapse: collapse;""  >SR No</th >                              <th style=""border: 1px solid black ; border-collapse: collapse;"">Description</th>                              <th style=""border: 1px solid black ; border-collapse: collapse;"">Qty.</th>                             </tr>                           </thead>                              <tbody>'                           +            ( select '<tr><td style=""width:20px;border: 1px solid black ; border-collapse: collapse;"">' +  convert(varchar(20),ROW_NUMBER () over (order by ItemDescription)) +'</td>' +         '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + ItemDescription + '</td>' +         '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + CONVERT(varchar(15), sum(sid.Quantity))  + '</td></tr>'          from                  Sales.CommercialInvoiceItemDetails sid                   inner join masterdata.mItemMaster im on im.ItemNo = sid.ItemNo                   where sid.CommercialInvoiceNo = sam.CommercialInvoiceNo                  group by ItemDescription                   for xml path(''), root('MyString'), type) .value('/MyString[1]','varchar(max)')                    + '</tbody></table>      <p>Please send us the Road Permit if required</p>        <p>We will send you the Transportation details shortly</p>      <div >      <p  >Thanks </p>      <p  >Sales Team</p>         <p ><b> @CompanyName </b> </p>  <p><b>Note:  This is a system generated Email.</br></p>       </div>         '","91","0",
+"11","PO FollowUp"," <span  style=""text-align:right;float:  right;"">Dated</span> <p>To,</p><p style =""text-align:left !important""  >Vendor Name <br></p><p >&nbsp;</p>    <p align=center ><b><span style=''font-size:12.0pt''>PO FollowUp </span></b> </p>           <p>&nbsp; &nbsp; &nbsp; &nbsp; Following are Detail which are not received by us as per schedule</p>      <style>  table {      width:100%;  }  table, th, td {      border: 1px solid black ; border-collapse: collapse;  }  th, td {      padding: 5px;      text-align: left;  }  table tr:nth-child(even) {      background-color: #eee;  }  table tr:nth-child(odd) {     background-color:#fff;  }  table th {      background-color: grey;      color: white;  }  </style>                <table style=""width:100% ;border: 1px solid black ; border-collapse: collapse;"" >                      <thead><tr><th  style=""border: 1px solid black ; border-collapse: collapse; width:10px""  >SR No</th >            <th style=""border: 1px solid black ; border-collapse: collapse;"">PO No./ Date</th>                              <th style=""border: 1px solid black ; border-collapse: collapse;"">Item Description</th>                              <th style=""border: 1px solid black ; border-collapse: collapse;"">Qty.</th>                              <th style=""border: 1px solid black ; border-collapse: collapse;"">Schedule Date</th>                              <th style=""border: 1px solid black ; border-collapse: collapse;"">Balance Qty.</th>                             </tr>                           </thead>                              <tbody><tr><td style=""border: 1px solid black ; border-collapse: collapse;"">1</td><td style=""border: 1px solid black ; border-collapse: collapse;"">PONO/Dated</td><td style=""border: 1px solid black ; border-collapse: collapse;"">Item Name</td><td style=""border: 1px solid black ; border-collapse: collapse;"">Schedule Qty</td><td style=""border: 1px solid black ; border-collapse: collapse;"">Schedule Date</td><td style=""border: 1px solid black ; border-collapse: collapse;"">Balance Qty</td>         </tr></tbody></table>      <p>This is system generated Follow Up</p>        <div >      <p  >Thanks </p>      <p  >Purchase Team</p>         <p ><b> CompanyName </b> </p>         </div>         ","' <span  style=""text-align:right;float:  right;"">' + CONVERT(varchar,getdate() ,103)+ '</span> <p>To,</p><p style =""text-align:left !important""  >'       + vld.VendorName + ' <br></p><p >&nbsp;</p>    <p align=center ><b><span style=''''font-size:12.0pt''''>PO FollowUp </span></b> </p>           <p>&nbsp; &nbsp; &nbsp; &nbsp; Following are Detail which are not received by us as per schedule</p>      <style>  table {      width:100%;  }  table, th, td {      border: 1px solid black ; border-collapse: collapse;  }  th, td {      padding: 5px;      text-align: left;  }  table tr:nth-child(even) {      background-color: #eee;  }  table tr:nth-child(odd) {     background-color:#fff;  }  table th {      background-color: grey;      color: white;  }  </style>                <table style=""width:100% ;border: 1px solid black ; border-collapse: collapse;"" >                      <thead><tr><th  style=""border: 1px solid black ; border-collapse: collapse; width:10px""  >SR No</th >            <th style=""border: 1px solid black ; border-collapse: collapse;"">PO No./ Date</th>                              <th style=""border: 1px solid black ; border-collapse: collapse;"">Item Description</th>                              <th style=""border: 1px solid black ; border-collapse: collapse;"">Qty.</th>                              <th style=""border: 1px solid black ; border-collapse: collapse;"">Schedule Date</th>                              <th style=""border: 1px solid black ; border-collapse: collapse;"">Balance Qty.</th>                             </tr>                           </thead>                              <tbody>'                           +            ( select '<tr><td style=""border: 1px solid black ; border-collapse: collapse;"">' +  convert(varchar(20),ROW_NUMBER () over (order by pom.DocumentNoYearly, ItemDescription)) +'</td>' +         '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + pom.DocumentNoYearly  + ' Dt. ' + convert(varchar,pom.DocumentDate,103) + '</td>' +         '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + ItemDescription + '</td>' +         '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + CONVERT(varchar(15), SUM(POISD.ScheduleQty ))  + '</td>' +         '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + convert(varchar, max(POISD.ScheduleDate),103) + '</td>' +         '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + CONVERT(varchar(15), SUM(POISD.ScheduleQty ) - isnull(SUM(tt.AcceptedQty),0) )  + '</td>         </tr>'              from  Purchase.POItemScheduleDetail POISD         inner join Purchase.POMain pom on pom.PONo = POISD.PONo        inner join masterdata.mItemMaster im on im.ItemNo = POISD.ItemNo          cross apply(select SUM(AcceptedQty)AcceptedQty from               Inventory.GRNItemDetail GRNID               inner join Purchase.POAmendmentMain pm on pm.POAmendmentNo = GRNID.POAmendmentNo               where  GRNID.ItemNo=POISD.ItemNo  And ISNULL( GRNID.MakeNo,0)=isnull(POISD.MakeNo,0)               and pm.POAmendmentNo = GRNID.POAmendmentNo                and pm.PONo = POISD.PONo                ) tt          where POISD.PONo=POM.PONo and pom.VendorLocationNo = vld.VendorLocationNo          group by pom.DocumentNoYearly,pom.DocumentDate, POISD.PONo , POISD.ItemNo , POISD.MakeNo , im.ItemDescription           having max(POISD.ScheduleDate) < GETDATE ()          and SUM(POISD.ScheduleQty ) > isnull(SUM(tt.AcceptedQty),0)                                                       for xml path(''), root('MyString'), type) .value('/MyString[1]','varchar(max)')                    + '</tbody></table>      <p>This is system generated Follow Up</p>        <div >      <p  >Thanks </p>      <p  >Purchase Team</p>         <p ><b> @CompanyName </b> </p>         </div>         '","92","0",
+"12","C Form Receivable"," <span  style=""text-align:right;float:  right;"">Dated</span> <p>To,</p><p style =""text-align:left !important""  >Vendor Name <br></p><p >&nbsp;</p>    <p align=center ><b><span style=''font-size:12.0pt''>Pending Sales ""C Form""</span></b> </p>           <p>&nbsp; &nbsp;Given below is the details of Invoices issued in your Name for which Sales Tax Forms were notreceived by us.We request you to take immediate steps to issue the same and oblige.</p>      <style>  table {      width:100%;  }  table, th, td {      border: 1px solid black ; border-collapse: collapse;  }  th, td {      padding: 5px;      text-align: left;  }  table tr:nth-child(even) {      background-color: #eee;  }  table tr:nth-child(odd) {     background-color:#fff;  }  table th {      background-color: grey;      color: white;  }  </style>                <table style=""width:100% ;border: 1px solid black ; border-collapse: collapse;"" >                      <thead><tr><th  style=""border: 1px solid black ; border-collapse: collapse; width:10px""  >SR No</th >            <th style=""border: 1px solid black ; border-collapse: collapse;"">Dated</th>                              <th style=""border: 1px solid black ; border-collapse: collapse;"">Invoice No.</th>                              <th style=""border: 1px solid black ; border-collapse: collapse;"">Net Amount</th>                              <th style=""border: 1px solid black ; border-collapse: collapse;"">CST Amount</th>                              <th style=""border: 1px solid black ; border-collapse: collapse;"">Form Type</th>                             </tr>                           </thead>                              <tbody><tr><td style=""border: 1px solid black ; border-collapse: collapse;"">1</td><td style=""border: 1px solid black ; border-collapse: collapse;"">04/01/2016</td><td style=""border: 1px solid black ; border-collapse: collapse;"">00001</td><td style=""border: 1px solid black ; border-collapse: collapse;"">25000</td><td style=""border: 1px solid black ; border-collapse: collapse;"">100</td><td style=""border: 1px solid black ; border-collapse: collapse;"">C Form</td>         </tr></tbody></table>                  <p>As per Central Sales Tax (Registration & Turnover), third Amendment Rules 2005, We arerequired to submit ""C"" Forms within three months from the last date of Expiry of Quarter inwhich the despatches has been made.So,Kindly ensure that the ""C"" Forms is send to us, so thatwe can receive the same during the above period</p>       <p>This is system generated Follow Up</p>        <div >      <p  >Thanks </p>         <p ><b> CompanyName </b> </p>         </div>         ","' <span  style=""text-align:right;float:  right;"">' + CONVERT(varchar,getdate() ,103)+ '</span> <p>To,</p><p style =""text-align:left !important""  >'       + vld.VendorName + ' <br></p><p >&nbsp;</p>    <p align=center ><b><span style=''''font-size:12.0pt''''>Pending Sales ""C Form""</span></b> </p>           <p>&nbsp; &nbsp;Given below is the details of Invoices issued in your Name for which Sales Tax Forms were notreceived by us.We request you to take immediate steps to issue the same and oblige.</p>      <style>  table {      width:100%;  }  table, th, td {      border: 1px solid black ; border-collapse: collapse;  }  th, td {      padding: 5px;      text-align: left;  }  table tr:nth-child(even) {      background-color: #eee;  }  table tr:nth-child(odd) {     background-color:#fff;  }  table th {      background-color: grey;      color: white;  }  </style>                <table style=""width:100% ;border: 1px solid black ; border-collapse: collapse;"" >                      <thead><tr><th  style=""border: 1px solid black ; border-collapse: collapse; width:10px""  >SR No</th >            <th style=""border: 1px solid black ; border-collapse: collapse;"">Dated</th>                              <th style=""border: 1px solid black ; border-collapse: collapse;"">Invoice No.</th>                              <th style=""border: 1px solid black ; border-collapse: collapse;"">Net Amount</th>                              <th style=""border: 1px solid black ; border-collapse: collapse;"">CST Amount</th>                              <th style=""border: 1px solid black ; border-collapse: collapse;"">Form Type</th>                             </tr>                           </thead>                              <tbody>'                           +            ( select '<tr><td style=""border: 1px solid black ; border-collapse: collapse;"">' +  convert(varchar(20),ROW_NUMBER () over (order by DocumentDate)) +'</td>' +         '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + convert(varchar,DocumentDate,103) + '</td>' +         '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + DocumentNoYearly + '</td>' +         '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + CONVERT(varchar(15), NetAmount)  + '</td>' +         '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + convert(varchar(20), CSTAmount) + '</td>' +         '<td style=""border: 1px solid black ; border-collapse: collapse;"">C Form</td>         </tr>'        from ( select inv.DocumentDate,inv.DocumentNoYearly , inv.NetAmount,CSTAmount        from Sales.InvoiceMain inv        inner join Sales.InvoiceTaxConcessionFormDetail fd on fd.InvoiceNo = inv.InvoiceNo         inner join @CompanyTable c on c.CompanyNo=inv.CompanyNo        outer apply(select sum(TotalValue) CSTAmount from Sales.InvoiceTaxDetail td           inner join masterdata.mMiscCharges mc on mc.MiscChargeNo = td.MiscChargeNo            where TaxGroupNo = 11 and td.InvoiceNo = inv.InvoiceNo) cst        where          inv.AuthorizedBy is not null and fd.TaxConcessionFormNo = 1 and          VLD.VendorLocationNo=fd.PartyLocationNo and         DATEDIFF (dd,inv.DocumentDate , @CurrentDateTime) >= @NoOfDays and         not exists(select 1 from [Finance].[ConcessionFormEntryInvoiceDetail] cd where cd.SourceDocumentNo = inv.InvoiceNo             and cd.SourceDocumentFormNo = 173)         union         select inv.DocumentDate,inv.DocumentNoYearly , inv.NetAmount,CSTAmount         from Sales.CommercialInvoiceMain  inv         inner join Sales.CommercialInvoiceTaxConcessionFormDetail fd on fd.CommercialInvoiceNo = inv.CommercialInvoiceNo         inner join @CompanyTable c on c.CompanyNo=inv.CompanyNo         outer apply(select sum(TotalValue) CSTAmount from Sales.CommercialInvoiceTaxDetail td           inner join masterdata.mMiscCharges mc on mc.MiscChargeNo = td.MiscChargeNo            where TaxGroupNo = 11 and td.CommercialInvoiceNo = inv.CommercialInvoiceNo) cst         where          inv.AuthorizedBy is not null and fd.TaxConcessionFormNo = 1 and          VLD.VendorLocationNo=fd.PartyLocationNo and         DATEDIFF (dd,inv.DocumentDate , @CurrentDateTime) >= @NoOfDays and         not exists(select 1 from [Finance].[ConcessionFormEntryInvoiceDetail] cd where cd.SourceDocumentNo = inv.CommercialInvoiceNo  and cd.SourceDocumentFormNo = 370)         ) tt        for xml path(''), root('MyString'), type) .value('/MyString[1]','varchar(max)')                    + '</tbody></table>                  <p>As per Central Sales Tax (Registration & Turnover), third Amendment Rules 2005, We arerequired to submit ""C"" Forms within three months from the last date of Expiry of Quarter inwhich the despatches has been made.So,Kindly ensure that the ""C"" Forms is send to us, so thatwe can receive the same during the above period</p>       <p>This is system generated Follow Up</p>        <div >      <p  >Thanks </p>         <p ><b> @CompanyName </b> </p>         </div>         '","93","0",
+"13","C Form Submission"," <span  style=""text-align:right;float:  right;"">Dated</span> <p>To,</p><p style =""text-align:left !important""  >Dear Sir/Madam <br></p>      <p >&nbsp;</p>    <p align=center ><b><span style=''font-size:12.0pt''>Reminder To submit ""C Form""</span></b> </p>           <p>&nbsp; &nbsp;Given below is the details of Invoices for which Sales Tax Forms were not send by us to Buyer.         We request you to take immediate steps to submit the same and oblige.</p>      <style>  table {      width:100%;  }  table, th, td {      border: 1px solid black ; border-collapse: collapse;  }  th, td {      padding: 5px;      text-align: left;  }  table tr:nth-child(even) {      background-color: #eee;  }  table tr:nth-child(odd) {     background-color:#fff;  }  table th {      background-color: grey;      color: white;  }  </style>                <table style=""width:100% ;border: 1px solid black ; border-collapse: collapse;"" >                      <thead><tr><th  style=""border: 1px solid black ; border-collapse: collapse; width:10px""  >SR No</th >            <th style=""border: 1px solid black ; border-collapse: collapse;"">Dated</th>                              <th style=""border: 1px solid black ; border-collapse: collapse;"">Invoice No.</th>                              <th style=""border: 1px solid black ; border-collapse: collapse;"">Net Amount</th>                              <th style=""border: 1px solid black ; border-collapse: collapse;"">CST Amount</th>                              <th style=""border: 1px solid black ; border-collapse: collapse;"">Form Type</th>                             </tr>                           </thead>                              <tbody><tr><td style=""border: 1px solid black ; border-collapse: collapse;"">1</td><td style=""border: 1px solid black ; border-collapse: collapse;"">04/01/2016</td><td style=""border: 1px solid black ; border-collapse: collapse;"">001</td><td style=""border: 1px solid black ; border-collapse: collapse;"">25000</td><td style=""border: 1px solid black ; border-collapse: collapse;"">2500</td><td style=""border: 1px solid black ; border-collapse: collapse;"">C Form</td>         </tr></tbody></table>                        <p>This is system generated Mail</p>        <div >      <p  >Thanks </p>         <p ><b> @CompanyName </b> </p>         </div>         ","' <span  style=""text-align:right;float:  right;"">' + CONVERT(varchar,getdate() ,103)+ '</span> <p>To,</p><p style =""text-align:left !important""  >Dear Sir/Madam <br></p>      <p >&nbsp;</p>    <p align=center ><b><span style=''''font-size:12.0pt''''>Reminder To submit ""C Form""</span></b> </p>           <p>&nbsp; &nbsp;Given below is the details of Invoices for which Sales Tax Forms were not send by us to Buyer.         We request you to take immediate steps to submit the same and oblige.</p>      <style>  table {      width:100%;  }  table, th, td {      border: 1px solid black ; border-collapse: collapse;  }  th, td {      padding: 5px;      text-align: left;  }  table tr:nth-child(even) {      background-color: #eee;  }  table tr:nth-child(odd) {     background-color:#fff;  }  table th {      background-color: grey;      color: white;  }  </style>                <table style=""width:100% ;border: 1px solid black ; border-collapse: collapse;"" >                      <thead><tr><th  style=""border: 1px solid black ; border-collapse: collapse; width:10px""  >SR No</th >            <th style=""border: 1px solid black ; border-collapse: collapse;"">Dated</th>                              <th style=""border: 1px solid black ; border-collapse: collapse;"">Invoice No.</th>                              <th style=""border: 1px solid black ; border-collapse: collapse;"">Net Amount</th>                              <th style=""border: 1px solid black ; border-collapse: collapse;"">CST Amount</th>                              <th style=""border: 1px solid black ; border-collapse: collapse;"">Form Type</th>                             </tr>                           </thead>                              <tbody>'                           +            ( union all Select  '<tr><td style=""border: 1px solid black ; border-collapse: collapse;"">' +  convert(varchar(20),ROW_NUMBER () over (order by DocumentDate)) +'</td>' +         '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + convert(varchar,DocumentDate,103) + '</td>' +         '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + DocumentNoYearly + '</td>' +         '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + CONVERT(varchar(15), NetAmount)  + '</td>' +         '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + convert(varchar(20), CSTAmount) + '</td>' +         '<td style=""border: 1px solid black ; border-collapse: collapse;"">C Form</td>         </tr>'        from ( union all Select  pb.DocumentDate,pb.DocumentNoYearly , pb.NetAmount,CSTAmount        from Finance.PurchaseBillMain pb        inner join Finance.PurchaseBillTaxConcessionFormDetail fd on fd.PurchasebillNo = pb.PurchasebillNo        inner join @CompanyTable c on c.CompanyNo=pb.CompanyNo        outer apply(union all Select  sum(BaseAmount) CSTAmount from Finance.PurchaseBillSummary td           inner join masterdata.mMiscCharges mc on mc.MiscChargeNo = td.MiscChargeNo            where TaxGroupNo = 11 and td.PurchasebillNo = pb.PurchasebillNo) cst        where          pb.AuthorizedBy is not null and fd.TaxConcessionFormNo = 1         and DATEDIFF (dd,pb.DocumentDate , @CurrentDateTime) >= @NoOfDays and         not exists(union all Select  1 from [Finance].[ConcessionFormEntryInvoiceDetail] cd where cd.SourceDocumentNo = pb.PurchasebillNo           and cd.SourceDocumentFormNo = 202)          ) tt        for xml path(''), root('MyString'), type) .value('/MyString[1]','varchar(max)')                    + '</tbody></table>                        <p>This is system generated Mail</p>        <div >      <p  >Thanks </p>         <p ><b> @CompanyName </b> </p>         </div>         '","94","0",
+"14","Auto Procurement Mailing","<span  style=""text-align:right;float:  right;"">06/09/2016</span> <p>Dear Sir,</p><p >&nbsp;</p>          <p align=center ><b><span style='font-size:12.0pt'>Auto Procurement</span></b>                  <p>We would like to inform you that Following Purchase Request are generated through system</p>                 <style>  table {      width:100%;  }  table, th, td {      border: 1px solid black ; border-collapse: collapse;  }  th,       td {      padding: 5px;      text-align: left;  }       table tr:nth-child(even) {      background-color: #eee;  }        table tr:nth-child(odd) {     background-color:#fff;  }  table th {      background-color: grey;      color: white;  }        </style>                                 <table  id=""Detail"" style="" border-collapse: collapse;border-spacing: 0;border: 1px solid #bbb ;padding-left: 200px"" >       <thead><tr><th  >SR No</th >       <th>Indent No.</th>       <th>Indent Date</th>       <th>Items</th>       </tr>      </thead><tbody id =""tbody"">       <tr><td>1</td><td>Indent No 1</td><td>12-12-2016</td><td>Item Name (10 MT)</td></tr>       <tr><td>1</td><td>Indent No 2</td><td>21-12-2016</td><td>Item Name2 (100 MT)</td></tr>      </tbody>      </table>      <div >      <p  >Thanks </p>  <p ><b> @CompanyName </b> </p>         </div>  ","'<span  style=""text-align:right;float:  right;"">' + CONVERT(varchar,getdate() ,103)+      '</span> <p>Dear Sir,</p><p >&nbsp;</p>         <p align=center ><b><span style=''''font-size:12.0pt''''>Auto Procurement</span></b>     <p>&nbsp; &nbsp; &nbsp; &nbsp; We would like to inform you that Following Purchase Request are generated through system.</p>      <style>  table {      width:100%;  }  table, th, td {      border: 1px solid black ; border-collapse: collapse;  }  th, td {      padding: 5px;      text-align: left;  }  table tr:nth-child(even) {      background-color: #eee;  }  table tr:nth-child(odd) {     background-color:#fff;  }  table th {      background-color: grey;      color: white;  }  </style>                <table style=""width:100% ;border: 1px solid black ; border-collapse: collapse;"" >                           <thead>      <tr><th  style=""border: 1px solid black ; border-collapse: collapse;""  >SR No</th >      <th style=""border: 1px solid black ; border-collapse: collapse;"">Indent No.</th>      <th style=""border: 1px solid black ; border-collapse: collapse;"">Indent Date</th>      <th style=""border: 1px solid black ; border-collapse: collapse;"">Items</th>      </tr>     </thead>      <tbody>' + ( union all Select  '<tr>      <td style=""width :20px; border: 1px solid black ; border-collapse: collapse;"">' +  convert(varchar(20),ROW_NUMBER () over (order by IM.IndentNo)) +'</td>' +                 '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + IM.DocumentNoYearly + '</td>' +         '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + CONVERT(varchar(15), im.DOcumentDate,103)  + '</td>' +        '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + (stuff( (union all Select  ',' + ItemDescription + ' (' + convert(varchar,b.IndentQty ) + ' ' + c.Alias + ')'           from masterdata.mItemMaster a , Inventory.IndentItemDetail b,masterdata.mUnitMaster c          where c.UnitNo = b.UnitNo and a.ItemNo = b.ItemNo and b.IndentNo = im.IndentNo for xml path('')  ) ,1,1,''))        + '</td>         </tr>'         from         Inventory.IndentMain im        where im.IndentAgainstNo=13 and im.CompanyNo = cm.COmpanyNo and  im.CreatedDate >= convert(smalldatetime,@DateTime)         for xml path(''), root('MyString'), type) .value('/MyString[1]','varchar(max)')                    + '</tbody></table>           <div >   <p  >Thanks </p>   <p ><b> @CompanyName </b> </p>  <p><b>Note:  This is a system generated Email.</b></p>  </div>         '","95","0",
+"15","Indent Pending FOr RO","<span  style=""text-align:right;float:  right;"">06/09/2016</span> <p>Dear Sir,</p><p >&nbsp;</p>          <p align=center ><b><span style='font-size:12.0pt'>Pending Indent For RO</span></b>                  <p>We would like to inform you that Following are Purchase Request which are pending for Release Order</p>                 <style>  table {      width:100%;  }  table, th, td {      border: 1px solid black ; border-collapse: collapse;  }  th,       td {      padding: 5px;      text-align: left;  }       table tr:nth-child(even) {      background-color: #eee;  }        table tr:nth-child(odd) {     background-color:#fff;  }  table th {      background-color: grey;      color: white;  }        </style>                                 <table  id=""Detail"" style="" border-collapse: collapse;border-spacing: 0;border: 1px solid #bbb ;padding-left: 200px"" >       <thead><tr><th  >SR No</th >       <th>Indent No.</th>       <th>Indent Date</th>       <th>Item</th>       <th>Qty</th>       </tr>      </thead><tbody id =""tbody"">       <tr><td>1</td><td>Indent No 1</td><td>12-12-2016</td><td>Coal/Coke</td><td>12 MT</td></tr>       <tr><td>1</td><td>Indent No 2</td><td>21-12-2016</td><td>Diesel</td><td>1200 ltr</td></tr>      </tbody>      </table>      <div >      <p  >Thanks </p>  <p ><b> @CompanyName </b> </p>         </div>  ","'<span  style=""text-align:right;float:  right;"">' + CONVERT(varchar,getdate() ,103)+      '</span> <p>Dear Sir,</p><p >&nbsp;</p>         <p align=center ><b><span style=''''font-size:12.0pt''''>Pending Indent For RO</span></b>     <p>&nbsp; &nbsp; &nbsp; &nbsp; We would like to inform you that Following are Purchase Request which are pending for Release Order.</p>      <style>  table {      width:100%;  }  table, th, td {      border: 1px solid black ; border-collapse: collapse;  }  th, td {      padding: 5px;      text-align: left;  }  table tr:nth-child(even) {      background-color: #eee;  }  table tr:nth-child(odd) {     background-color:#fff;  }  table th {      background-color: grey;      color: white;  }  </style>                <table style=""width:100% ;border: 1px solid black ; border-collapse: collapse;"" >                           <thead>      <tr><th  style=""border: 1px solid black ; border-collapse: collapse;""  >SR No</th >      <th style=""border: 1px solid black ; border-collapse: collapse;"">Indent No.</th>      <th style=""border: 1px solid black ; border-collapse: collapse;"">Indent Date</th>      <th style=""border: 1px solid black ; border-collapse: collapse;"">Item</th>      <th style=""border: 1px solid black ; border-collapse: collapse;"">Qty</th>      </tr>     </thead>      <tbody>' + ( union all Select  '<tr>      <td style=""width :20px; border: 1px solid black ; border-collapse: collapse;"">' +  convert(varchar(20),ROW_NUMBER () over (order by IM.IndentNo)) +'</td>' +                 '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + IM.DocumentNoYearly + '</td>' +         '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + CONVERT(varchar(15), im.DOcumentDate,103)  + '</td>' +        '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + ItemDescription + '</td>' +        '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + CONVERT(varchar(15), iid.IndentQty - isnull(POQty,0)) + um.Alias  + '</td></tr>'         from         Inventory.IndentMain im        inner join Inventory.IndentItemdetail iid on iid.Indentno = im.Indentno         inner join masterdata.mItemMaster mm on mm.ItemNo = iid.ItemNO         inner join masterdata.mUnitMaster um on um.UnitNo = iid.UnitNo        where im.IndentAgainstNo = 13 and iid.IndentQty - isnull(POQty,0) >0         and  im.CompanyNo = cm.COmpanyNo         for xml path(''), root('MyString'), type) .value('/MyString[1]','varchar(max)')                    + '</tbody></table>           <div >   <p  >Thanks </p>   <p ><b> @CompanyName </b> </p>  <p><b>Note:  This is a system generated Email.</b></p>  </div>         '","96","0",
+"16","Release Order","<p>To,<span style=''float:right'' >Date</span></p><p >[Vendor Name]<span style=''float:right''>[Document Date]</span></p><p >&nbsp;</p><p >Purchase Order No. : [Release Order No.] </p><p >Reference No. : [Reference No.] </p>  <p align=center ><b><span style=''font-size:12.0pt''>LETTER OF INTENT </span></b></p><p align=center ><b><span style=''font-size:12.0pt''>RELEASE ORDER</span></b>  </p><p >On behalf of  [Company Name]  , I would like to place an order for the following products from your company. Please refer to the attachment for the order list.    We are also enclosing the terms and conditions as stated in attachment for your consideration. If you need any clarifications regarding the same, please feel free to contact us.</p>    <p >This representation is made with full corporate authority and responsibility of the above.</p><p >&nbsp;</p>","'<p>To,<span style=''float:right'' >Date</span></p><p >' + VC.Name + '<span style=''float:right''>' + convert(varchar(10),POM.DocumentDate,103) + '</span></p><p >&nbsp;</p><p >Purchase Order No. : ' + pom.DocumentNoYearly + '</p><p >Reference No. : ' + isnull(pom.ReferenceNo,'') + '    </p><p align=center ><b><span style=''font-size:12.0pt''>LETTER OF INTENT </span></b></p><p align=center ><b>    <span style=''font-size:12.0pt''>RELEASE ORDER</span></b></p><p >On behalf of ' + cm.PrintingName + '     , I would like to place an order for the following products from your company. Please refer to the attachment for the order list.    We are also enclosing the terms and conditions as stated in attachment for your consideration. If you need any clarifications regarding the same, please feel free to contact us.    </p><p >This representation is made with full corporate authority and responsibility of the above.</p><p >&nbsp;</p>'","97","0",
+"17","UnAuthorized RO","<span  style=""text-align:right;float:  right;"">06/09/2016</span> <p>Dear Sir,</p><p >&nbsp;</p>          <p align=center ><b><span style='font-size:12.0pt'>Unauthorized Release Order</span></b>        <p>&nbsp; &nbsp; &nbsp; &nbsp; We would like to inform you that Following Release Order are pending for Authorization.</p>       <p>&nbsp; Please take necessary step to authorize this as it will effect automatic procurement cycle.</p> &nbsp      <style>  table {      width:100%;  }  table, th, td {      border: 1px solid black ; border-collapse: collapse;  }  th,       td {      padding: 5px;      text-align: left;  }       table tr:nth-child(even) {      background-color: #eee;  }        table tr:nth-child(odd) {     background-color:#fff;  }  table th {      background-color: grey;      color: white;  }        </style>                                 <table  id=""Detail"" style="" border-collapse: collapse;border-spacing: 0;border: 1px solid #bbb ;padding-left: 200px"" >       <thead><tr><th  >SR No</th >       <th>Release Order No.</th>       <th>Date</th>       <th>Supplier</th>       <th>Item</th>       <th>Amount</th>       <th>Created Date</th>       </tr>      </thead><tbody id =""tbody"">       <tr><td>1</td><td>RO/14-15/0001</td><td>12-12-2016</td><td>ABC Groups OF Company</td><td>Item Name (10 MT)</td><td>25100.00</td><td>12-12-2016</td></tr>       <tr><td>1</td><td>RO/14-15/0012</td><td>22-12-2016</td><td>XYZ Groups OF Company</td><td>Coal (10 MT)</td><td>52100.00</td><td>22-12-2016</td></tr>      </tbody>      </table>      <div >      <p  >Thanks </p>  <p ><b> @CompanyName </b> </p>         </div>  ","'<span  style=""text-align:right;float:  right;"">' + CONVERT(varchar,getdate() ,103)+      '</span> <p>Dear Sir,</p><p >&nbsp;</p>         <p align=center ><b><span style=''''font-size:12.0pt''''>Unauthorized Release Order</span></b>     <p>&nbsp; &nbsp; &nbsp; &nbsp; We would like to inform you that Following Release Order are pending for Authorization.</p>      <p>&nbsp; Please take necessary step to authorize this as it will effect automatic procurement cycle.</p> &nbsp          <style>  table {      width:100%;  }  table, th, td {      border: 1px solid black ; border-collapse: collapse;  }  th, td {      padding: 5px;      text-align: left;  }  table tr:nth-child(even) {      background-color: #eee;  }  table tr:nth-child(odd) {     background-color:#fff;  }  table th {      background-color: grey;      color: white;  }  </style>                <table style=""width:100% ;border: 1px solid black ; border-collapse: collapse;"" >                           <thead>      <tr><th  style=""border: 1px solid black ; border-collapse: collapse;""  >SR No</th >      <th style=""border: 1px solid black ; border-collapse: collapse;"">Release Order No.</th>      <th style=""border: 1px solid black ; border-collapse: collapse;"">Date</th>      <th style=""border: 1px solid black ; border-collapse: collapse;"">Supplier</th>      <th style=""border: 1px solid black ; border-collapse: collapse;"">Item</th>      <th style=""border: 1px solid black ; border-collapse: collapse;"">Amount</th>      <th style=""border: 1px solid black ; border-collapse: collapse;"">Created Date</th>      </tr>     </thead>      <tbody>' + ( union all Select  '<tr>      <td style=""width :20px; border: 1px solid black ; border-collapse: collapse;"">' +  convert(varchar(20),ROW_NUMBER () over (order by pm.PONo)) +'</td>' +                 '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + PM.DocumentNoYearly + '</td>' +         '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + CONVERT(varchar(15), PM.DOcumentDate,103)  + '</td>' +        '<td style=""border: 1px solid black ; border-collapse: collapse;"">' +  Name  + '</td>' +        '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + (stuff( (union all Select  ',' + ItemDescription + ' (' + convert(varchar,b.Quantity ) + ' ' + c.Alias + ')'           from masterdata.mItemMaster a , Purchase.poItemDetail b,masterdata.mUnitMaster c          where c.UnitNo = b.UnitNo and a.ItemNo = b.ItemNo and b.PONO = pm.PONo for xml path('')  ) ,1,1,''))        + '</td>' +        '<td style=""border: 1px solid black ; border-collapse: collapse;"">' +  convert(varchar,NetAmount) + '</td>' +        '<td style=""border: 1px solid black ; border-collapse: collapse;"">' +  CONVERT(varchar(15), pm.CreatedDate,103)   + '</td></tr>'         from         Purchase.POMain pm        inner join masterdata.mVendorCard vc on vc.vendorno = pm.vendorno         where PODocumentTypeNo = 3 and pm.CompanyNo = cm.COmpanyNo and  pm.AuthorizedBy is null         for xml path(''), root('MyString'), type) .value('/MyString[1]','varchar(max)')                    + '</tbody></table>           <div >   <p  >Thanks </p>   <p ><b> @CompanyName </b> </p>  <p><b>Note:  This is a system generated Email.</b></p>  </div>         '","98","0",
+"18","RC Expiry","<span  style=""text-align:right;float:  right;"">06/09/2016</span> <p>Dear Sir,</p><p >&nbsp;</p>          <p align=center ><b><span style='font-size:12.0pt'>EXPIRATION OF RATE CONTRACT</span></b>                  <p>We would like to inform you that Following Rate Contract with Supplier will expire soon</p>       <p>Please take appropriate action for uninterrupted auto procurement cycle.</p>                <style>  table {      width:100%;  }  table, th, td {      border: 1px solid black ; border-collapse: collapse;  }  th,       td {      padding: 5px;      text-align: left;  }       table tr:nth-child(even) {      background-color: #eee;  }        table tr:nth-child(odd) {     background-color:#fff;  }  table th {      background-color: grey;      color: white;  }        </style>                                 <table  id=""Detail"" style="" border-collapse: collapse;border-spacing: 0;border: 1px solid #bbb ;padding-left: 200px"" >       <thead><tr><th  >SR No</th >       <th>RC No.</th>       <th>Date</th>       <th>Supplier</th>       <th>Item</th>       <th>Expire On</th>       </tr>      </thead><tbody id =""tbody"">       <tr><td>1</td><td>RC/16-17/0001</td><td>12-12-2016</td><td>ABC Enterprise</td><td>bearing 1605 mm(25000 pcs)</td><td>31-12-2016</td></tr>       <tr><td>1</td><td>RC/16-17/0043</td><td>02-12-2016</td><td>XYZ Enterprise</td><td>Oygen Cylender(5000 pcs)</td><td>31-12-2016</td></tr>       <tr><td>1</td><td>RC/16-17/0023</td><td>22-12-2016</td><td>A2Z Enterprise</td><td>bearing 124 X 145 mm(25000 pcs)</td><td>31-12-2016</td></tr>      </tbody>      </table>      <div >      <p  >Thanks </p>  <p ><b> @CompanyName </b> </p>         </div>  ","'<span  style=""text-align:right;float:  right;"">' + CONVERT(varchar,getdate() ,103)+      '</span> <p>Dear Sir,</p><p >&nbsp;</p>         <p align=center ><b><span style=''''font-size:12.0pt''''>EXPIRATION OF RATE CONTRACT</span></b>     <p>&nbsp; &nbsp; &nbsp; &nbsp; We would like to inform you that Following Rate Contract with Supplier will expire within ' + convert(varchar,@BeforeDays) + ' days.</p>      <p>&nbsp; Please take appropriate action for uninterrupted auto procurement cycle.</p>      <style>  table {      width:100%;  }  table, th, td {      border: 1px solid black ; border-collapse: collapse;  }  th, td {      padding: 5px;      text-align: left;  }  table tr:nth-child(even) {      background-color: #eee;  }  table tr:nth-child(odd) {     background-color:#fff;  }  table th {      background-color: grey;      color: white;  }  </style>                <table style=""width:100% ;border: 1px solid black ; border-collapse: collapse;"" >                           <thead>      <tr><th  style=""border: 1px solid black ; border-collapse: collapse;""  >SR No</th >      <th style=""border: 1px solid black ; border-collapse: collapse;"">RC No.</th>      <th style=""border: 1px solid black ; border-collapse: collapse;"">Date</th>      <th style=""border: 1px solid black ; border-collapse: collapse;"">Supplier</th>      <th style=""border: 1px solid black ; border-collapse: collapse;"">Item</th>      <th style=""border: 1px solid black ; border-collapse: collapse;"">Expire On</th>      </tr>     </thead>      <tbody>' + ( union all Select  '<tr>      <td style=""width :20px; border: 1px solid black ; border-collapse: collapse;"">' +  convert(varchar(20),ROW_NUMBER () over (order by AM.AgreementNo)) +'</td>' +                 '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + AM.DocumentNoYearly + '</td>' +         '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + CONVERT(varchar(15), AM.DOcumentDate,103)  + '</td>' +        '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + Name + '</td>' +        '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + (stuff( (union all Select  ',' + ItemDescription + ' (' + convert(varchar,isnull(b.Quantity,0)) + ' ' + c.Alias + ')'           from masterdata.mItemMaster a , Purchase.AgreementItemDetail b,masterdata.mUnitMaster c          where c.UnitNo = b.UnitNo and a.ItemNo = b.ItemNo and b.AgreementNo = am.AgreementNo for xml path('')  ) ,1,1,''))        + '</td>' +       '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + CONVERT(varchar(15), AgreementTo,103)   + '</td>        </tr>'         from         Purchase.AgreementMain am        inner join masterdata.mVendorLocationDetail vld on vld.VendorLocationNo = am.VendorLocationNo        inner join masterdata.mVendorCard vc on vc.VendorNo = vld.VendorNo        where am.CompanyNo = cm.CompanyNo and  DATEDIFF(dd,@CurrentDateTime,AgreementTo) <= @BeforeDays        and AgreementTo >= @CurrentDateTime         for xml path(''), root('MyString'), type) .value('/MyString[1]','varchar(max)')                    + '</tbody></table>           <div >   <p  >Thanks </p>   <p ><b> @CompanyName </b> </p>  <p><b>Note:  This is a system generated Email.</b></p>  </div>         '","99","0",
+"19","Document Expiry Pending Notice: Spectrum ERP","<span  style=""text-align:right;float:  right;"">06/09/2016</span> <p>Dear Sir,</p><p >&nbsp;</p>          <p align=center ><b><span style='font-size:12.0pt'>Document Expiry Pending Notice</span></b>                  <p>Our records indicate that the following Document owned by your organization, is nearing its expiry date.</p>                 <style>  table {      width:100%;  }  table, th, td {      border: 1px solid black ; border-collapse: collapse;  }  th,       td {      padding: 5px;      text-align: left;  }       table tr:nth-child(even) {      background-color: #eee;  }        table tr:nth-child(odd) {     background-color:#fff;  }  table th {      background-color: grey;      color: white;  }        </style>                                 <table  id=""Detail"" style="" border-collapse: collapse;border-spacing: 0;border: 1px solid #bbb ;padding-left: 200px"" >       <thead><tr><th  >SR No</th >       <th>Equipment Name</th>       <th>Document No.</th>       <th>Document Date</th>       <th>Document Type</th>       <th>Issued By</th>       <th>Issued By Address</th>       <th>Expiry Date</th>       <th>Amount</th>       <th>Day Remaining To Expire</th>       </tr>      </thead><tbody id =""tbody"">       <tr><td>1</td><td>JCB Hywa</td><td>insurance</td><td>01/04/2017</td><td>Insurance</td><td>HDFC ERGO</td><td>Raipur</td><td>14/04/2017</td><td>2500000.00</td><td>10</td></tr>       <tr><td>1</td><td>Moter Bike</td><td>insurance</td><td>01/05/2017</td><td>Insurance</td><td>SBI Insurance</td><td>Durg</td><td>25/05/2017</td><td>2500.00</td><td>5</td></tr>      </tbody>      </table>      <div >      <p  >Thanks </p>  <p ><b> @CompanyName </b> </p>         </div>  ","'<span  style=""text-align:right;float:  right;"">' + CONVERT(varchar,getdate() ,103)+      '</span> <p>Dear Sir,</p><p >&nbsp;</p>         <p align=center ><b><span style=''''font-size:12.0pt''''>Document Expiry Pending Notice</span></b>     <p>&nbsp; &nbsp; &nbsp; &nbsp; Our records indicate that the following Document owned by your organization, is nearing its expiry date.</p> &nbsp;          <style>  table {      width:100%;  }  table, th, td {      border: 1px solid black ; border-collapse: collapse;  }  th, td {      padding: 5px;      text-align: left;  }  table tr:nth-child(even) {      background-color: #eee;  }  table tr:nth-child(odd) {     background-color:#fff;  }  table th {      background-color: grey;      color: white;  }  </style>                <table style=""width:100% ;border: 1px solid black ; border-collapse: collapse;"" >                           <thead>      <tr><th  style=""border: 1px solid black ; border-collapse: collapse;""  >SR No</th >      <th style=""border: 1px solid black ; border-collapse: collapse;"">Equipment Name.</th>      <th style=""border: 1px solid black ; border-collapse: collapse;"">Document No.</th>      <th style=""border: 1px solid black ; border-collapse: collapse;"">Document Date</th>      <th style=""border: 1px solid black ; border-collapse: collapse;"">Document Type</th>      <th style=""border: 1px solid black ; border-collapse: collapse;"">Issued By</th>      <th style=""border: 1px solid black ; border-collapse: collapse;"">Issued By Address</th>      <th style=""border: 1px solid black ; border-collapse: collapse;"">Expiry Date</th>      <th style=""border: 1px solid black ; border-collapse: collapse;"">Amount</th>      <th style=""border: 1px solid black ; border-collapse: collapse;"">Day Remaining To Expire</th>      </tr>     </thead>      <tbody>' + (  Select  '<tr>      <td style=""width :20px; border: 1px solid black ; border-collapse: collapse;"">' +  convert(varchar(20),ROW_NUMBER () over (order by em.EquipmentName)) +'</td>' +                 '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + em.EquipmentName + '</td>' +         '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + eem.DocumentNo+ '</td>' +         '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + CONVERT(varchar(15), eem.DocumentDate ,103)  + '</td>' +        '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + dt.DocumentType + '</td>' +         '<td style=""border: 1px solid black ; border-collapse: collapse;"">' +  eem.IssuedByName  + '</td>' +        '<td style=""border: 1px solid black ; border-collapse: collapse;"">' +  eem.IssuedByAddress  + '</td>' +        '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + CONVERT(varchar(15), eem.ValidityDate ,103)  + '</td>' +        '<td style=""border: 1px solid black ; border-collapse: collapse;"">' +  convert(varchar,eem.Amount) + '</td>' +        '<td style=""border: 1px solid black ; border-collapse: collapse;"">' +  CONVERT(varchar(15), datediff(dd,@CurrentDateTime,eem.ValidityDate) )   + '</td></tr>'         from         EAM.EquipmentDocumentEntryMain eem        inner join EAM.EquipmentMaster em on em.EquipmentNo  = eem.EquipmentNo       inner join [masterdata].[mEAMDocumentType] dt on dt.DocumentTypeNo = eem.DocumentTypeNo         where em.CompanyNo = cm.COmpanyNo and  eem.ValidityDate is not null       and RenewalAlertDays >= datediff(dd,@CurrentDateTime,eem.ValidityDate)          and eem.ValidityDate = ( Select  max(a.ValidityDate) from EAM.EquipmentDocumentEntryMain  a          where a.EquipmentNo = eem.EquipmentNo and a.DocumentTypeNo = eem.DocumentTypeNo )         for xml path(''), root('MyString'), type) .value('/MyString[1]','varchar(max)')                    + '</tbody></table>           <div >   <p  >Thanks </p>   <p ><b> @CompanyName </b> </p>  <p><b>Note:  This is a system generated Email.</b></p>  </div>         '","100","0",
+"20","RFQ Mail TO Vendor","<p>To,<span style='float:right' >Date</span></p><p >[Vendor Name]<span style='float:right'>[Document Date]</span></p><p >&nbsp;</p><p >Enquriy No. : [RFQ No.] </p><p align=center ><b><span style='font-size:12.0pt'>Enquiry</span></b></p><p align=center ><b></p>    <p><b>Greetings from CompanyName! </b></p>  <p>We would like to inform you that new enquiry has been submitted in our portal.Kindly provide quotation for mention item.</p><p>Last date of quotation submission is ValidateDate.</p>   <p>Please click on the below link to View Details:</p>  <a href="""">Enquiry No.</a>  <p>Warm Regards,</p>  <p>Company Name</p>","'<p>To,<span style=''float:right'' >Date</span></p><p >' + VC.Name +  '<span style=''float:right''>' + convert(varchar(10),RM.DocumentDate,103) + '</span>  </p><p >&nbsp;</p><p >Enquriy No. : ' + RM.DOcumentNoYearly + ' </p><p align=center ><b><span style=''font-size:12.0pt''>Enquiry</span></b>  </p><p align=center ><b></p>    <p><b>Greetings from ' + cmm.CompanyName + '! </b></p>    <p>We would like to inform you that new enquiry has been submitted in our portal.Kindly provide quotation for mention item.</p>  <p>Last date of quotation submission is ValidateDate.</p>     <p>Please click on the below link to View Details:</p>    <a href=""' + @PortalURL +  CAST(N'' AS XML).value('xs:base64Binary(xs:hexBinary(sql:column(""param"")))','VARCHAR(MAX)') + '"">Enquiry No. : '  + RM.DOcumentNoYearly + ' </a>  <p>Warm Regards,</p>  <p>' + cmm.CompanyName + '</p>'","101","0",
+"21","GST Advance Receipt Mail TO Customer","<p>Please Find Attachment </p>","'<p>Please Find Attachment </p>'","102","0",
+"22","Voucher Confirmation","<p>Please Find Attachment </p>","'<p>Please Find Attachment </p>'","103","0",
+"23","Invoice Mail (Simple)","<p>To,</p>  <p style =""text-align:left !important""  > Dear Sir, <br></p>  <p>Please find the attachment of Invoice for your reference.</p>         <p>Your material has been dispatched from @CompanyName.</p>    <div>        <p  >Thanks </p>        <p  >Sales Team</p>           <p ><b> @CompanyName </b> </p>           </div>","'<p>To,</p>  <p style =""text-align:left !important""  > Dear Sir, <br></p>  <p>Please find the attachment of Invoice for your reference.</p>         <p>Your material has been dispatched from @CompanyName.</p>    <div>        <p  >Thanks </p>        <p  >Sales Team</p>           <p ><b> @CompanyName </b> </p>           </div>'","90","0",
+"24","Material Receiving Information","<span  style=""text-align:right;float:  right;"">29/04/2022</span> <p>To,</p><p style =""text-align:left !important""  >himanshu</p><p>We would like to inform you that GRN has been created for below mentioned material request done by you.</p><br>   <p align=center ><b><span style=""font-size:12.0pt"">Material Receiving Information</span></b>   <style>  table {      width:100%;  }  table, th, td {      border: 1px solid black ; border-collapse: collapse;  }  th, td {      padding: 5px;      text-align: left;  }  table tr:nth-child(even) {      background-color: #eee;  }  table tr:nth-child(odd) {     background-color:#fff;  }  table th {      background-color: grey;      color: white;  }  </style>                <table style=""width:100% ;border: 1px solid black ; border-collapse: collapse;"" ><thead><tr><th  style=""width:20px;border: 1px solid black ; border-collapse: collapse;""  >SR No</th > <th style=""border: 1px solid black ; border-collapse: collapse;"">Item Desc.</th> <th style=""border: 1px solid black ; border-collapse: collapse;"">GRN No.</th>   <th style=""border: 1px solid black ; border-collapse: collapse;"">GRN Date</th><th style=""border: 1px solid black ; border-collapse: collapse;"">PR No.</th>   <th style=""border: 1px solid black ; border-collapse: collapse;"">PR Date</th>   <th style=""border: 1px solid black ; border-collapse: collapse;"">Required Qty.</th>   <th style=""border: 1px solid black ; border-collapse: collapse;"">GRN Qty.</th></tr></thead><tbody><tr><td style=""width:20px;border: 1px solid black ; border-collapse: collapse;"">1</td><td style=""border: 1px solid black ; border-collapse: collapse;"">1 LTR CAN for training</td><td style=""border: 1px solid black ; border-collapse: collapse;"">GRN\Process\0003\29.04.22</td><td style=""border: 1px solid black ; border-collapse: collapse;"">29/04/2022</td><td style=""border: 1px solid black ; border-collapse: collapse;"">MMPR/0028/22-23</td><td style=""border: 1px solid black ; border-collapse: collapse;"">29/04/2022</td><td style=""border: 1px solid black ; border-collapse: collapse;"">15.000</td><td style=""border: 1px solid black ; border-collapse: collapse;"">15.000</td></tr></tbody></table>             <p><b>Note:  This is a system generated Email.</b>         </p>              </div>","'<span  style=""text-align:right;float:  right;"">'+ CONVERT(varchar,getdate() ,103)+'</span> <p>To,</p><p style =""text-align:left !important""  >'+ IsNull(EM.EmpName,ICD.ContactPersonName)   +'</p><p>We would like to inform you that GRN is prepared.</p><p>For more detail please find the below table in order. </p> <br>   <p align=center ><b><span style=""font-size:12.0pt"">Material Receiving Information</span></b>   <style>  table {      width:100%;  }  table, th, td {      border: 1px solid black ; border-collapse: collapse;  }  th, td {      padding: 5px;      text-align: left;  }  table tr:nth-child(even) {      background-color: #eee;  }  table tr:nth-child(odd) {     background-color:#fff;  }  table th {      background-color: grey;      color: white;  }  </style>                <table style=""width:100% ;border: 1px solid black ; border-collapse: collapse;"" ><thead><tr><th  style=""width:20px;border: 1px solid black ; border-collapse: collapse;""  >SR No</th > <th style=""border: 1px solid black ; border-collapse: collapse;"">Item Desc.</th> <th style=""border: 1px solid black ; border-collapse: collapse;"">GRN No.</th>   <th style=""border: 1px solid black ; border-collapse: collapse;"">GRN Date</th><th style=""border: 1px solid black ; border-collapse: collapse;"">PR No.</th>   <th style=""border: 1px solid black ; border-collapse: collapse;"">PR Date</th>   <th style=""border: 1px solid black ; border-collapse: collapse;"">Required Qty.</th>   <th style=""border: 1px solid black ; border-collapse: collapse;"">GRN Qty.</th></tr></thead><tbody>'+ ( union all Select  '<tr><td style=""width:20px;border: 1px solid black ; border-collapse: collapse;"">'  +  convert(varchar(20),ROW_NUMBER () over (order by GID.GRNItemDetailNo))     +'</td>'     +             '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + IM.ItemDescription + '</td>' +  '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + GRN1.DocumentNoYearly + '</td>'+       '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + CONVERT(varchar,GRN1.DocumentDate,103)  + '</td>' +     '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + IIM1.DocumentNoYearly  + '</td>' +     '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + CONVERT(varchar,IIM1.DocumentDate,103)  + '</td>' +     '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + CONVERT(varchar(20),IID.RequiredQty)  + '</td>' +     '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + CONVERT(varchar(20),GID.AcceptedQty)  + '</td></tr>'   From Inventory.GRNMain GRN1   Inner Join Masterdata.mCompanyMaster CM on CM.CompanyNo = GRN1.CompanyNo   Inner Join Inventory.GRNItemDetail GID on GID.GRNNo = GRN1.GRNNo   Inner Join Inventory.GRNItemIndentDetail GIID on GIID.GRNNo = GID.GRNNo and GIID.GRNItemDetailNo = GID.GRNItemDetailNo   Inner Join Inventory.IndentItemDetail IID on IID.IndentNo = GIID.IndentNo               and IID.ItemNo = GID.ItemNo                and isnull(IID.MakeNo,0) = isnull(GID.MakeNo,0)               and isnull(IID.Unitno,0) = isnull(GID.unitno,0)   Inner Join Inventory.IndentMain IIM1 on IIM1.IndentNo = IID.IndentNo   Inner Join masterdata.mItemMaster IM ON IM.ItemNo = IID.ItemNo   Where GRN1.GRNNo = GRN.GRNNo and IIM1.IndentNo = IIM.IndentNo   FOR XML PATH(''), root('MyString'), type).value('/MyString[1]','varchar(max)')       + '</tbody></table>             <p><b>Note:  This is a system generated Email.</b>         </p>              </div>'","105","0",
+"25","Salary Slip Mail To Employee","<span  style=""text-align:right;float:  right;"">17 May 2022</span><p>To,</p><p style =""text-align:left !important""  >RAJENDRA KUMAR TAILOR</p><p>Please find the attached salary slip for    March-2022</p><br><p><b>Note:  This is a system generated Email.</b></p></div>","'<span  style=""text-align:right;float:  right;"">'+CONVERT(varchar,TSD.CreatedDate,106)+'</span><p>To,</p><p style =""text-align:left !important""  >'+ISNULL(EMP.EmpName,'Sir/Madam')+'</p><p>Please find the attached salary slip for   '+DATENAME(month, SalMonth)+'-'+CONVERT(varchar(4),YEAR(SalMonth)) +'</p><br></div> '","106","0",
+"26","Maintenance Request as per document status","<p style =""text-align:left !important""  >User</p>
+		  <p> One breakdown M.R. (No. Testing FIPL 1234 Dt. 13/10/2022) has been created, for Equipment - ""MANGANESE ORE ABB   SD002"".</p>
+		  <p> Details are - </p>
+		  <p> Division : PLANT </p>
+		  <p> Request Type : Corrective Maintenance </p>
+		  <p> Maintenance Category : Building Preservation </p>
+		  <p> Fault : TYRE PROBLEM - testing 1,STARTING PROBLEM - testing 2 </p>
+		  <br><p><b><p>Kindly take appropriate action for it.</p> Note:  This is a system generated Email.</b></p></div>","'<p style =""text-align:left !important""  >Dear '+Isnull(Team.PersonName,'User')+', </p>
+		  <p> One breakdown M.R. (No. '+MRM.DocumentNoYearly+' Dt. '+ Convert(varchar,MRM.DocumentDate,103) +') has been created, for '+RefObj.ReferenceObject+' - ""'+Isnull(EM.EquipmentDescription,FL.LocationName)+'"".</p>
+		  <p> Details are - </p>
+		  <p> Division : '+TDM.DivisionName+' </p>
+		  <p> Request Type : '+MT.MaintenanceType+' </p>
+		  <p> Maintenance Category : '+MMC.MaintenanceCategory+' </p>
+		  <p> Fault : '+[Faults]+' </p>
+		  <br><p><b><p>Kindly take appropriate action for it.</p> Note:  This is a system generated Email.</b></p></div> '","107","0",
+"27","MO Against Maintenance Schedule (PM)"," <p style =""text-align:left !important""  >User</p><p> One Maintenance Order (No. 22-23-0047 Dt. 13/10/2022) has been created, for Equipment - ""ACB FIXED PART ADDISON45"".</p><p> Details are - </p>  <p> Maintenance Schedule : No.,Dt.,OccurrenceNo. </p>  <p> Division : PLANT </p><p> Request Type : Corrective Maintenance </p><p> Maintenance Category : Building Preservation </p>  <p> Fault : Machine not working </p> <br><p><b><p>Kindly take appropriate action for it.</p> Note:  This is a system generated Email.</b></p></div> ","'<p style =""text-align:left !important""  >User</p>      <p> One Maintenance Order (No. '+ MOM.DocumentNoYearly +' Dt. '+ Convert(varchar,MOM.DocumentDate,103) +') has been created, for '+RefObj.ReferenceObject+' - ""'+Isnull(EM.EquipmentDescription,FL.LocationName)+'"".</p>      <p> Details are - </p>     <p> Maintenance Schedule : No.'+isnull(ISNULL(RD.DocumentNoyearly,MASM.DocumentNoyearly),'')+',Dt.'+ isnull(Convert(varchar,ISNULL(RD.Documentdate,MASM.Documentdate),103),'') +',OccurrenceNo.'+ isnull(Convert(varchar,ISNULL(RD.OccurrenceNo,MSOD.OccurrenceNo)),'') +' </p>  <p> Division : '+TDM.DivisionName+' </p>      <p> Request Type : '+MT.MaintenanceType+' </p>      <p> Maintenance Category : '+MMC.MaintenanceCategory+' </p>  <p> Fault : '+isnull([Faults],'')+' </p>    <br><p><b><p>Kindly take appropriate action for it.</p> Note:  This is a system generated Email.</b></p></div> '","108","0",
+"28","Maintenance Schedule Occurrence Information"," <p style =""text-align:left !important""  >User</p>      <p> Maintenance Schedule has been generated, for ""Demo Equipment"" </p>    <br><p><b><p>Kindly take appropriate action for it.</p> Note:  This is a system generated Email.</b></p></div> ","'<p style =""text-align:left !important""  >Dear '+ISNULL(Team.PersonName,'User')
+			+',</p> <p>New Occurrence of Maintenance Schedule No. '+ISNULL(MSM.DocumentNoYearly,'')+' ('+ISNULL(MCT.MaintenanceCategory,'')+') has been generated on '+Convert(varchar,MSOD.OccurrenceDate,106)+', for ""'+Isnull(EM.EquipmentDescription,FL.LocationName) +'""' + (CASE WHEN TDM.DivisionName is null then '' else ' of ""' + TDM.DivisionName + '""' end) +' .</p>'
+			+' <p> Due  Date for preventive maintenance is '+CONVERT(varchar,DateAdd(DD,ISNULL(MSTD.TimeThresholdDays,0),MSOD.OccurrenceDate),106)+'. </p> <br><p><b><p>Kindly take appropriate action for it.</p> Note:  This is a system generated Email.</b></p></div>'","109","0",
+"29","MO Closing as per document status","<p style =""text-align:left !important"" >User</p> <p> Maintenance Order (No. 22-23-0011 Dt. 03/05/2022) has been closed for Equipment - ""Daily Maintenance Equipment"" of ""PLANT"".</p> <p> Details are - </p> <p> Maintenance Order Closing No. : 030522,+ </p> <p> Maintenance Order Closing Date : 03/05/2022 </p> <p> Maintenance Type : Preventive Maintenance </p> <p> Maintenance Category : MECHANICAL </p> <br><p><b> Note: This is a system generated Email.</b></p></div>","'<p style =""text-align:left !important""  > Dear '+Isnull(Team.PersonName,'User')+', </p>      <p> Maintenance Order (No. '+ MOM.DocumentNoYearly +' Dt. '+ Convert(varchar,MOM.DocumentDate,103) +') has been closed for '+RefObj.ReferenceObject+' - ""'+Isnull(EM.EquipmentDescription,FL.LocationName)+'""' +(CASE WHEN TDM.DivisionName is null then '' else ' of ""' + TDM.DivisionName + '""' end)+'.</p>      <p> Details are - </p>     <p> Maintenance Order Closing No. : '+ISNULL(MOC.DocumentNoyearly,'')+' </p>  <p> Maintenance Order Closing Date : '+ISNULL(Convert(varchar,MOC.DocumentDate,103),'')+' </p>      <p> Maintenance Type : '+MT.MaintenanceType+' </p>      <p> Maintenance Category : '+MMC.MaintenanceCategory+' </p>  <br><p><b> Note:  This is a system generated Email.</b></p></div> '","110","0",
+"30","Sales Agreement Mail TO Customer"," <span  style=""text-align:right;float:  right;"">06/09/2016</span> <p>To,</p><p style =""text-align:left !important""  > Vendor Name <br></p><p >&nbsp;</p>    <p align=center ><b><span style='font-size:12.0pt'>Sales Agreement Confirmation</span></b>            <p>&nbsp; &nbsp; &nbsp; &nbsp; We thank you for your order</p>           <style>  table {      width:100%;  }  table, th, td {      border: 1px solid black ; border-collapse: collapse;  }  th, td {      padding: 5px;      text-align: left;  }       table tr:nth-child(even) {      background-color: #eee;  }  table tr:nth-child(odd) {     background-color:#fff;  }  table th {      background-color: grey;      color: white;  }  </style>                           <table  id=""Detail"" style="" border-collapse: collapse;border-spacing: 0;border: 1px solid #bbb ;padding-left: 200px"" >                      <thead><tr><th  >SR No</th >                             <th  >Description</th>                             <th  >Qty.</th>                                 </tr>                           </thead>                              <tbody id =""tbody"">                               <tr>                                 <td>1</td>                                  <td>Item Name1</td>                                 <td>Qty1</td>                                 </tr>                                  <tr>                                 <td>2</td>                                  <td>Item Name2</td>                                 <td>Qty2</td>                                 </tr>                            </tbody>                    </table>     <p>We are taking this order for manufacturing</p>        <p>We will update the dispatch status shortly</p>      <div >      <p  >Thanks </p>      <p  >Sales Team</p>         <p ><b> @CompanyName </b> </p>         </div>         ","' <span  style=""text-align:right;float:  right;"">' + CONVERT(varchar,getdate() ,103)+ '</span> <p>To,</p><p style =""text-align:left !important""  >'       + vld.VendorName + ' <br></p><p >&nbsp;</p>    <p align=center ><b><span style=''''font-size:12.0pt''''>Sales Agreement Confirmation</span></b>            <p>&nbsp; &nbsp; &nbsp; &nbsp; We thank you for your order</p>      <style>  table {      width:100%;  }  table, th, td {      border: 1px solid black ; border-collapse: collapse;  }  th, td {      padding: 5px;      text-align: left;  }  table tr:nth-child(even) {      background-color: #eee;  }  table tr:nth-child(odd) {     background-color:#fff;  }  table th {      background-color: grey;      color: white;  }  </style>                <table style=""width:100% ;border: 1px solid black ; border-collapse: collapse;"" >                      <thead><tr><th  style=""width:20px;border: 1px solid black ; border-collapse: collapse;""  >SR No</th >                              <th style=""border: 1px solid black ; border-collapse: collapse;"">Description</th>                              <th style=""border: 1px solid black ; border-collapse: collapse;"">Qty.</th>                             </tr>                           </thead>                              <tbody>'                           +            ( select '<tr><td style=""width:20px;border: 1px solid black ; border-collapse: collapse;"">' +  convert(varchar(20),ROW_NUMBER () over (order by Sid.SalesOrderItemDetailNo)) +'</td>' +         '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + ItemDescription + '</td>' +         '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + CONVERT(varchar(15), sid.Quantity)  + '</td></tr>'          from                  Sales.Salesorderitemdetail sid                   inner join masterdata.mItemMaster im on im.ItemNo = sid.ItemNo                   where sid.SalesOrderNo = sam.SalesOrderNo for xml path(''), root('MyString'), type) .value('/MyString[1]','varchar(max)')                    + '</tbody></table>      <p>We are taking this order for manufacturing</p>        <p>We will update the dispatch status shortly</p>      <div >      <p  >Thanks </p>      <p  >Sales Team</p>         <p ><b> @CompanyName </b> </p>  <p><b>Note:  This is a system generated Email.</b></p>       </div>         '","111","0",
+"31","Employee Probation Period Completion","<p style=""text-align:left!important"">Dear Team,</p><p>Ankit (AST/120) of Department has completed his/her probation period Today.</p><p>Reporting Manager Name:- Himanshu Vaishnav</p><p>Date of Joining:-</p><p>Date of Completion:-</p><p align=""center""><b><span style=""font-size:12pt""></span></b><style>table{width:100%}table,td,th{border:1px solid #000;border-collapse:collapse}td,th{padding:5px;text-align:left}table tr:nth-child(even){background-color:#eee}table tr:nth-child(odd){background-color:#fff}table th{background-color:grey;color:#fff}</style><table style=""width:100%;border:1px solid #000;border-collapse:collapse""><thead><tr><th style=""border:1px solid #000;border-collapse:collapse"">Leave Name</th><th style=""border:1px solid #000;border-collapse:collapse"">No. of leave</th></tr></thead><tbody><tr><td style=""border:1px solid #000;border-collapse:collapse"">SL</td><td style=""border:1px solid #000;border-collapse:collapse"">5</td></tr><tr><td style=""border:1px solid #000;border-collapse:collapse"">EL</td><td style=""border:1px solid #000;border-collapse:collapse"">10</td></tr></tbody></table><p><b>Note: This is a system generated Email.</b></p>","'<p style=""text-align:left!important"">Dear Team,</p><p>'+ IsNull(EMP.EMPName,'') + '/' + IsNull(EMP.EMPCode,'') + '/' + ISNULL(Dept.DeptName,'') +' has completed '+IJ.value+' probation period today.</p><p>Reporting Manager Name:- '+ISNULL(OA.ReportingManagerName,'')+'</p><p>Date of Joining:- '+ISNULL(CONVERT(varchar,EMP.JoiningDate,103),'')+'</p><p>Date of Completion:- '+ISNULL(CONVERT(varchar,isnull(emp.PermanentDate,DateAdd(DD,emp.PermanentDays,emp.JoiningDate)),103),'')+'</p><style>  table {      width:100%;  }  table, th, td {      border: 1px solid black ; border-collapse: collapse;  }  th, td {      padding: 5px;      text-align: left;  }  table tr:nth-child(even) {      background-color: #eee;  }  table tr:nth-child(odd) {     background-color:#fff;  }  table th {      background-color: grey;      color: white;  }  </style> '+Case when OA2.leavetblcount > 0 then @leavedetail else '' end+'  <p><b>Note:  This is a system generated Email.</b>         </p>              </div>'","112","0",
+"32","Salary slip with leave leader to Employee","<span  style=""text-align:right;float:  right;"">17 May 2022</span><p>To,</p><p style =""text-align:left !important""  >RAJENDRA KUMAR TAILOR</p><p>Please find the attached salary slip for    March-2022</p><br><p><b>Note:  This is a system generated Email.</b></p></div>","'<span  style=""text-align:right;float:  right;"">'+CONVERT(varchar,TSD.CreatedDate,106)+'</span><p>To,</p><p style =""text-align:left !important""  >'+ISNULL(EMP.EmpName,'Sir/Madam')+'</p><p>Please find the attached salary slip for   '+DATENAME(month, SalMonth)+'-'+CONVERT(varchar(4),YEAR(SalMonth)) +'</p><br></div> '","113","0",
+"33","Sales Order SMS To Client","Dear #CustomerName, We have received your order. Dte:#OrderDate,Item:#Item,Size:#Size,Grade: #Grade, Qty:#Qty, Rate:#Rate, PaymentTerms:#PaymentTerms Thanks #CompanyName","'Dear '+VCLD.VendorName + ', we have received your order.' +' Dte: ' + convert(varchar(10),SOM.DocumentDate,103) + ', ' +  Stuff((	
+							Select ',Item:'+MIM.ItemDescription  +isnull(', Size:' + MAC.CombinationName,'')  + coalesce(+ ', Grade:'+MIM.Grade,+ ', Grade:'+MGM.GradeName,'')
+								+',Qty:'+ CONVERT(varchar(20),SOID.Quantity) + ',Rate:' + CONVERT(varchar(20),SOID.Rate) 
+							From Sales.SalesOrderItemDetail SOID
+							Inner Join masterdata.mItemMaster MIM on MIM.ItemNo = SOID.ItemNo
+							Left Join masterdata.mAttributeCombination MAC on MAC.CombinationNo = SOID.CombinationNo
+							Left Join masterdata.mGradeMaster MGM on MGM.GradeNo = MIM.GradeNo
+							Where SOID.SalesOrderNo = SOM.SalesOrderNo
+							FOR XML PATH('')
+				),1,1,'') +  ' Thanks ' + MCM.CompanyName","34","1",
+"34","Sales Order SMS To Customer","Thank you for placing your order with us. Your SO No is {#var#}. Please save it for your future reference. PGSAIL","'Thank you for placing your order with us. Your SO No is '+SOM.DocumentNoYearly+'. Please save it for your future reference. PGSAIL'","34","1",
+"35","Tax Invoice SMS As Per Document Status","Tax Invoice: Shipment corresponding to SO No. {#var#} is out for delivery. Vehicle No. {#var#} Driver Contact No. {#var#}  PGSAIL","'Shipment corresponding to SO No. '+ (STUFF((
+		Select ','+SAM.DocumentNoYearly 
+		From  Sales.InvoiceItemDetails IID
+		Inner Join Sales.SalesOrderAmendmentMain SAM on SAM.SalesorderAmendmentNo = IID.SalesOrderAmendmentNo
+		Where IID.InvoiceNo =IM.InvoiceNo
+		Group by SAM.DocumentNoYearly
+		FOR XML PATH('')),1,1,''))
+		+' is out for delivery. Vehicle No. '+IM.VehicleNo+' Driver Contact No. '+IM.ContactNo+'  PGSAIL'","21","1",
+"36","Gate In Outward SMS To Customer","The vehicle has arrived against SO No. {#var#} will provide the vehicle number and the driver's contact details once dispatched. PGSAIL","'The vehicle has arrived against SO No. '+Isnull(SGPI.Description,'')+' will provide the vehicle number and the driver''s contact details once dispatched. PGSAIL'","114","1",
+"37","Sales Order Line Item Wise SMS To Customer","Dear Sir     We have received your order      Item:TMT BAR WITH ATTRIBUTE EN8D;Qty:10.000MT,Rate:28600.00      Regards    T.K STEELS","Dear Sir'+CHAR(10)+'We have received your order' + CHAR(10)+ CHAR(10) +'Item:'+LEFT(IM.ItemDescription +' ' + Isnull(ACOM.CombinationName,''),30) +';Qty:'+CONVERT(varchar(20),SID.Quantity)+'MT,Rate:'+CONVERT(varchar(20),SID.[Rate])+ CHAR(10) + CHAR(10)  +'Regards '+CHAR(10)+' T.K STEELS","115","1",
+"38","Sales Order Line Item Wise SMS To Customer (Email)","Dear Sir     We have received your order      Item:TMT BAR WITH ATTRIBUTE EN8D;Qty:10.000MT,Rate:28600.00      Regards    T.K STEELS","Dear Sir     We have received your order      Item:##;Qty:##,Rate:##    Regards    T.K STEELS","115","0",
+"39","Sales Order Whatsapp for TK","&wid=21019&1={#var#}&2=#OrderDate&3=@FilePath","'&wid=21019&1='+SOM.DocumentNoYearly+'&2='+convert(varchar(10),SOM.DocumentDate,103)+'&3=@FilePath'","34","1",
+"40","Sales Order Whatsapp for TK","&wid=21019&1={#var#}&2=#OrderDate&3=file","'&country_code=91&wid=21019&1='+SAM.DocumentNoYearly+'&2='+convert(varchar(10),SAM.DocumentDate,103)+'&3=file'","34","0",
+"41","Sales Order Whatsapp for TK","&country_code=91&wid=21019&1={#var#}&2=#OrderDate&3=file","'&country_code=91&wid=21019&1='+SAM.DocumentNoYearly+'&2='+convert(varchar(10),SAM.DocumentDate,103)+'&3=@file'","89","1",
+"42","Document Expiry Alert for Sainik","<span  style=""text-align:right;float:  right;""></span>
+<p>Dear Sir/Ma'am,</p>
+<p >&nbsp;</p>
+<p>This is to inform you that the following document validity date will expire shortly as per ERP records:</p>  &nbsp;  
+
+<p>Document Expiry Status:-</p>
+<style>  table {      width:100%;  }  table, th, td {      border: 1px solid black ; border-collapse: collapse;  }  th,       td {      padding: 5px;      text-align: left;  }       table tr:nth-child(even) {      background-color: #eee;  }        table tr:nth-child(odd) {     background-color:#fff;  }  table th {      background-color: grey;      color: white;  }        </style>
+<table  id=""Detail"" style="" border-collapse: collapse;border-spacing: 0;border: 1px solid #bbb ;padding-left: 200px"" >
+	<thead>
+		<tr>
+			<th  >SR No</th >
+			<th>Division Code</th>
+			<th>Division Name</th>
+			<th>Equipment Name</th>
+			<th>Document No.</th>
+			<th>Document Date</th>
+			<th>Document Type</th>
+			<th>Issued By</th>
+			<th>Issued By Address</th>
+			<th>Expiry Date</th>
+			<th>Amount</th>
+			<th>Day Remaining To Expire</th>
+		</tr>
+	</thead>
+	<tbody id =""tbody"">
+		<tr>
+			<td>1</td>
+			<td>Div001</td>
+			<td>Plant</td>
+			<td>JCB Hywa</td>
+			<td>insurance</td>
+			<td>01/04/2017</td>
+			<td>Insurance</td>
+			<td>HDFC ERGO</td>
+			<td>Raipur</td>
+			<td>14/04/2017</td>
+			<td>2500000.00</td>
+			<td>10</td>
+		</tr>
+		<tr>
+			<td>1</td>
+			<td>Div002</td>
+			<td>Foundry</td>
+			<td>Moter Bike</td>
+			<td>insurance</td>
+			<td>01/05/2017</td>
+			<td>Insurance</td>
+			<td>SBI Insurance</td>
+			<td>Durg</td>
+			<td>25/05/2017</td>
+			<td>2500.00</td>
+			<td>5</td>
+		</tr>
+	</tbody>
+</table>
+<div >
+	<p  >You are requested to take necessary action for renewal or update of the document at the earliest to ensure compliance.  </p>
+	<p>Note:  This is a system generated Email.</p>
+	<p >Regards, @CompanyName </p>
+</div>","
+'
+
+<span  style=""text-align:right;float:  right;""></span>
+<p>Dear Sir/Ma''am,</p>
+<p >&nbsp;</p>
+<p>&nbsp; &nbsp; &nbsp; &nbsp; This is to inform you that the following document validity date will expire shortly as per ERP records:</p>  &nbsp;            
+
+<p>Document Expiry Status:-</p>
+<style>  table {      width:100%;  }  table, th, td {      border: 1px solid black ; border-collapse: collapse;  }  th, td {      padding: 5px;      text-align: left;  }  table tr:nth-child(even) {      background-color: #eee;  }  table tr:nth-child(odd) {     background-color:#fff;  }  table th {      background-color: grey;      color: white;  }  </style>
+<table style=""width:100% ;border: 1px solid black ; border-collapse: collapse;"" >
+	<thead>
+		<tr>
+			<th  style=""border: 1px solid black ; border-collapse: collapse;""  >SR No</th >
+			<th style=""border: 1px solid black ; border-collapse: collapse;"">Division Code</th>
+			<th style=""border: 1px solid black ; border-collapse: collapse;"">Division Name</th>
+			<th style=""border: 1px solid black ; border-collapse: collapse;"">Equipment Name.</th>
+			<th style=""border: 1px solid black ; border-collapse: collapse;"">Document No.</th>
+			<th style=""border: 1px solid black ; border-collapse: collapse;"">Document Date</th>
+			<th style=""border: 1px solid black ; border-collapse: collapse;"">Document Type</th>
+			<th style=""border: 1px solid black ; border-collapse: collapse;"">Issued By</th>
+			<th style=""border: 1px solid black ; border-collapse: collapse;"">Issued By Address</th>
+			<th style=""border: 1px solid black ; border-collapse: collapse;"">Expiry Date</th>
+			<th style=""border: 1px solid black ; border-collapse: collapse;"">Amount</th>
+			<th style=""border: 1px solid black ; border-collapse: collapse;"">Day Remaining To Expire</th>
+		</tr>
+	</thead>
+	<tbody>        ' + (  Select  '        
+		
+		<tr>
+			<td style=""width :20px; border: 1px solid black ; border-collapse: collapse;"">' +  convert(varchar(20),ROW_NUMBER () over (order by Div.DivisionCode, Div.DivisionName, em.EquipmentName)) 
+			+'</td>           ' 
+			+ '           
+			
+			<td style=""border: 1px solid black ; border-collapse: collapse;"">' +
+			IsNULL(Div.DivisionCode,'') + '</td>           '
+			+ '           
+			
+			<td style=""border: 1px solid black ; border-collapse: collapse;"">' +
+			IsNULL(Div.DivisionName,'') + '</td>           '
+			+ '           
+			
+			<td style=""border: 1px solid black ; border-collapse: collapse;"">' + em.EquipmentName + '</td>           ' +         '           
+			
+			<td style=""border: 1px solid black ; border-collapse: collapse;"">' + eem.DocumentNo+ '</td>           ' +         '           
+			
+			<td style=""border: 1px solid black ; border-collapse: collapse;"">' + CONVERT(varchar(15), eem.DocumentDate ,103)  + '</td>           ' +        '           
+			
+			<td style=""border: 1px solid black ; border-collapse: collapse;"">' + dt.DocumentType + '</td>           ' +         '           
+			
+			<td style=""border: 1px solid black ; border-collapse: collapse;"">' +  eem.IssuedByName  + '</td>           ' +        '           
+			
+			<td style=""border: 1px solid black ; border-collapse: collapse;"">' +  eem.IssuedByAddress  + '</td>           ' +        '           
+			
+			<td style=""border: 1px solid black ; border-collapse: collapse;"">' + CONVERT(varchar(15), eem.ValidityDate ,103)  + '</td>           ' +        '           
+			
+			<td style=""border: 1px solid black ; border-collapse: collapse;"">' +  convert(varchar,eem.Amount) + '</td>           ' +        '           
+			
+			<td style=""border: 1px solid black ; border-collapse: collapse;"">' +  CONVERT(varchar(15), datediff(dd,@CurrentDateTime,eem.ValidityDate) )   + '</td>
+		</tr>        '         from         EAM.EquipmentDocumentEntryMain eem        inner join EAM.EquipmentMaster em on em.EquipmentNo  = eem.EquipmentNo       inner join [masterdata].[mEAMDocumentType] dt on dt.DocumentTypeNo = eem.DocumentTypeNo
+		Inner Join payroll.tblDivisionMaster Div on Div.DivisionNo = em.DivisionNo and Div.DivisionNo in (@DivisionList)
+		where em.CompanyNo = cm.COmpanyNo and  eem.ValidityDate is not null       and RenewalAlertDays >= datediff(dd,@CurrentDateTime,eem.ValidityDate)          and eem.ValidityDate = ( Select  max(a.ValidityDate) from EAM.EquipmentDocumentEntryMain  a          where a.EquipmentNo = eem.EquipmentNo and a.DocumentTypeNo = eem.DocumentTypeNo )         for xml path(''), root('MyString'), type) .value('/MyString[1]','varchar(max)')                    + '     
+	
+	</tbody>
+</table>
+<div >
+	<p  >You are requested to take necessary action for renewal or update of the document at the earliest to ensure compliance.  </p>
+	<p>Note:  This is a system generated Email.</p>
+	<p >Regards, @CompanyName </p>
+</div>  '
+","116","0",
+"43","Maintenance Order Creation for Sainik","<p style =""text-align:left !important""  >Dear sir/Ma'am</p>
+&nbsp;
+<p>This is to inform you that a Maintenance Order has been created in the ERP system with the following details: </p>
+<p> One Maintenance Order (No. 22-23-0047 Dt. 13/10/2022) has been created, for Equipment - ""ACB FIXED PART ADDISON45"".</p>
+<p> Details are - </p>
+<p> Maintenance Schedule : No.,Dt.,OccurrenceNo. </p>
+<p> Division : PLANT </p>
+<p> Request Type : Corrective Maintenance </p>
+<p> Maintenance Category : Building Preservation </p>
+<p> Fault : Machine not working </p>
+<br>
+<p>
+   <b>
+   Note:  This is a system generated Email.</b>
+</p>
+<p>Regards, @CompanyName</p>
+</div>","'
+<p style =""text-align:left !important""  >Dear Sir/Ma''am,</p>
+&nbsp;
+<p>This is to inform you that a Maintenance Order has been created in the ERP system with the following details: </p>
+<p> One Maintenance Order (No. '+ MOM.DocumentNoYearly +' Dt. '+ Convert(varchar,MOM.DocumentDate,103) +') has been created, for '+RefObj.ReferenceObject+' - ""'+Isnull(EM.EquipmentDescription,FL.LocationName)+'"".</p>
+<p> Details are - </p>
+<p> Maintenance Schedule : No.'+isnull(ISNULL(RD.DocumentNoyearly,MASM.DocumentNoyearly),'')+',Dt.'+ isnull(Convert(varchar,ISNULL(RD.Documentdate,MASM.Documentdate),103),'') +',OccurrenceNo.'+ isnull(Convert(varchar,ISNULL(RD.OccurrenceNo,MSOD.OccurrenceNo)),'') +' </p>
+<p> Division : '+TDM.DivisionName+' </p>
+<p> Request Type : '+MT.MaintenanceType+' </p>
+<p> Maintenance Category : '+MMC.MaintenanceCategory+' </p>
+<p> Fault : '+isnull([Faults],'')+' </p>
+<br>
+<p>
+   <b>
+Note:  This is a system generated Email.</b></p>
+<p>Regards, @CompanyName</p>
+</div> '","117","0",
+"44","Maintenance Order Closing for Sainik","<p style =""text-align:left !important"" >Dir Sir/Ma'am</p>
+<p>&nbsp;</p>
+<p>This is to inform you that the below-mentioned Maintenance Order has been successfully completed and closed in the ERP system.</p>
+<p> Maintenance Order (No. 22-23-0011 Dt. 03/05/2022) has been closed for Equipment - ""Daily Maintenance Equipment"" of ""PLANT"".</p>
+<p> Details are - </p>
+<p> Maintenance Order Closing No. : 030522,+ </p>
+<p> Maintenance Order Closing Date : 03/05/2022 </p>
+<p> Maintenance Type : Preventive Maintenance </p>
+<p> Maintenance Category : MECHANICAL </p>
+<br>
+<p><b> Note: This is a system generated Email.</b></p>
+<p> Regards, @CompanyName</p>
+</div>","'
+<p style =""text-align:left !important""  > Dear Sir/Ma''am, </p>
+<p>&nbsp;</p>
+<p>This is to inform you that the below-mentioned Maintenance Order has been successfully completed and closed in the ERP system.</p>
+<p> Maintenance Order (No. '+ MOM.DocumentNoYearly +' Dt. '+ Convert(varchar,MOM.DocumentDate,103) +') has been closed for '+RefObj.ReferenceObject+' - ""'+Isnull(EM.EquipmentDescription,FL.LocationName)+'""' +(CASE WHEN TDM.DivisionName is null then '' else ' of ""' + TDM.DivisionName + '""' end)+'.</p>
+<p> Details are - </p>
+<p> Maintenance Order Closing No. : '+ISNULL(MOC.DocumentNoyearly,'')+' </p>
+<p> Maintenance Order Closing Date : '+ISNULL(Convert(varchar,MOC.DocumentDate,103),'')+' </p>
+<p> Maintenance Type : '+MT.MaintenanceType+' </p>
+<p> Maintenance Category : '+MMC.MaintenanceCategory+' </p>
+<br>
+<p><b> Note:  This is a system generated Email.</b></p>
+<p> Regards, @CompanyName</p>
+</div> '","118","0",
+"45","Service Order as per Document Status","<p style =""text-align:left !important"" >Jai Hind !!</p>  <p>&nbsp;</p>  <p>We are pleased to inform you that Service Order No. SCSO-001 has been released and is attached for your reference.</p>  <p> Kindly review the Service Order and acknowledge receipt by return email.</p> <p> Please ensure timely execution of the order in accordance with the agreed specifications, quantities, and delivery schedule. In case of any clarification or assistance required, please revert to this email.</p>  <p> We look forward to your prompt confirmation and successful execution of the order.</p>  <p> Regards,<br/> Procurement Department<br/> Company Name<br/> Address1 Address2 Addres3<br/> City - State (Country) - PinCode</p></div>","'  <p style =""text-align:left !important""  >Jai Hind !!</p>  <p>&nbsp;</p>  <p>We are pleased to inform you that Service Order No. ' + SCOM.DocumentNoYearly + ' has been released and is attached for your reference.</p>  <p> Kindly review the Service Order and acknowledge receipt by return email.</p>  <p> Please ensure timely execution of the order in accordance with the agreed specifications, quantities, and delivery schedule. In case of any clarification or assistance required, please revert to this email.</p> <p> We look forward to your prompt confirmation and successful execution of the order.</p>  <p> Regards,<br/> Procurement Department<br/> ' + vwcm.CompanyName + '<br/> ' + vwcm.Address1 + IsNULL(',' + vwcm.Address2,'') + IsNULL(',' + vwcm.Address3,'') + ' <br/> ' + vwcm.CityName + ' - ' + vwcm.stateName + ' (' + vwcm.CountryName + ') -' + vwcm.PINCodeCompany + '</p> </div> '
+","30","0","1"
+"46","Purchase Order as per Document Status","<p style =""text-align:left !important"" >Jai Hind !!</p>  <p>&nbsp;</p>  <p>We are pleased to inform you that Purchase Order No. PMPO-001 has been released and is attached for your reference.</p>  <p> Kindly review the Purchase Order and acknowledge receipt by return email.</p> <p> Please ensure timely execution of the order in accordance with the agreed specifications, quantities, and delivery schedule. In case of any clarification or assistance required, please revert to this email.</p>  <p> We look forward to your prompt confirmation and successful execution of the order.</p>  <p> Regards,<br/> Procurement Department<br/> Company Name<br/> Address1 Address2 Addres3<br/> City - State  (Country) - PinCode</p></div>","'  <p style =""text-align:left !important""  >Jai Hind !!</p>  <p>&nbsp;</p>  <p>We are pleased to inform you that Purchase Order No. ' + POM.DocumentNoYearly + ' has been released and is attached for your reference.</p>  <p> Kindly review the Purchase Order and acknowledge receipt by return email.</p>  <p> Please ensure timely execution of the order in accordance with the agreed specifications, quantities, and delivery schedule. In case of any clarification or assistance required, please revert to this email.</p> <p> We look forward to your prompt confirmation and successful execution of the order.</p>  <p> Regards,<br/> Procurement Department<br/> ' + vwcm.CompanyName + '<br/> ' + vwcm.Address1 + IsNULL (',' + vwcm.Address2,'') + IsNULL (',' + vwcm.Address3,'') + ' <br/> ' + vwcm.CityName + ' - ' + vwcm.stateName + ' (' + vwcm.CountryName + ') -' + vwcm.PINCodeCompany + '</p> </div> '","1","0","1"
+"47","Task Creation Alert for Task Management Portal","<!DOCTYPE html>
+<html lang=""en"">
+
+<head>
+    <meta charset=""UTF-8"">
+    <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
+
+    <title>Task Assigned</title>
+</head>
+
+<body style=""
+    margin: 0;
+    padding: 0;
+    background-color: #f4f6f8;
+    font-family: Arial, Helvetica, sans-serif;
+    color: #1f2937;
+"">
+
+    <table width=""100%""
+           cellpadding=""0""
+           cellspacing=""0""
+           border=""0""
+           style=""
+               width: 100%;
+               background-color: #f4f6f8;
+               padding: 35px 15px;
+           "">
+
+        <tr>
+            <td align=""center"">
+
+                <table width=""650""
+                       cellpadding=""0""
+                       cellspacing=""0""
+                       border=""0""
+                       style=""
+                           width: 100%;
+                           max-width: 650px;
+                           background-color: #ffffff;
+                           border: 1px solid #e5e7eb;
+                           border-radius: 10px;
+                           overflow: hidden;
+                       "">
+
+                    <tr>
+                        <td style=""
+                            background-color: #1f2937;
+                            padding: 24px 30px;
+                        "">
+
+                            <div style=""
+                                font-size: 22px;
+                                line-height: 28px;
+                                font-weight: bold;
+                                color: #ffffff;
+                            "">
+                                Steel Mont Group
+                            </div>
+
+                            <div style=""
+                                margin-top: 4px;
+                                font-size: 13px;
+                                line-height: 18px;
+                                color: #d1d5db;
+                            "">
+                                ERP Task Management System
+                            </div>
+
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td style=""
+                            padding: 35px 30px 30px 30px;
+                        "">
+
+                            <p style=""
+                                margin: 0 0 18px 0;
+                                font-size: 16px;
+                                line-height: 24px;
+                                color: #111827;
+                            "">
+                                Dear <strong>Rahul Sharma</strong>,
+                            </p>
+
+                            <p style=""
+                                margin: 0 0 25px 0;
+                                font-size: 15px;
+                                line-height: 24px;
+                                color: #4b5563;
+                            "">
+
+                                A
+                                <strong style=""color: #111827;"">
+                                    Task
+                                </strong>
+
+                                <strong style=""color: #2563eb;"">
+                                    TSK-2026-001245
+                                </strong>
+
+                                has been assigned to you through the
+                                <strong style=""color: #111827;"">
+                                    ERP Task Management System
+                                </strong>.
+
+                            </p>
+
+                            <table width=""100%""
+                                   cellpadding=""0""
+                                   cellspacing=""0""
+                                   border=""0""
+                                   style=""
+                                       margin-bottom: 25px;
+                                       border: 1px solid #e5e7eb;
+                                       border-radius: 8px;
+                                       overflow: hidden;
+                                   "">
+
+                                <tr>
+
+                                    <td colspan=""2""
+                                        style=""
+                                            padding: 15px 20px;
+                                            background-color: #f9fafb;
+                                            border-bottom: 1px solid #e5e7eb;
+                                            font-size: 14px;
+                                            line-height: 20px;
+                                            font-weight: bold;
+                                            color: #111827;
+                                        "">
+
+                                        Task Details
+
+                                    </td>
+
+                                </tr>
+
+    <tr>
+        <td width=""35%""
+            style=""
+                padding: 12px 20px;
+                border-bottom: 1px solid #e5efff;
+                font-size: 13px;
+                color: #6b7280;
+            "">
+            Parent Task Code
+        </td>
+
+        <td style=""
+            padding: 12px 20px;
+            border-bottom: 1px solid #e5efff;
+            font-size: 14px;
+            font-weight: 600;
+            color: #2563eb;
+        "">
+            PTSK-2026-000100
+        </td>
+    </tr>
+
+    <tr>
+        <td width=""35%""
+            style=""
+                padding: 12px 20px;
+                font-size: 13px;
+                color: #6b7280;
+            "">
+            Parent Task Title
+        </td>
+
+        <td style=""
+            padding: 12px 20px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #111827;
+        "">
+             Parent Task Title Example
+        </td>
+    </tr>
+
+                                <tr>
+
+                                    <td width=""35%""
+                                        valign=""top""
+                                        style=""
+                                            padding: 13px 20px;
+                                            border-bottom: 1px solid #f3f4f6;
+                                            font-size: 13px;
+                                            line-height: 20px;
+                                            color: #6b7280;
+                                        "">
+
+                                        Task Title
+
+                                    </td>
+
+                                    <td valign=""top""
+                                        style=""
+                                            padding: 13px 20px;
+                                            border-bottom: 1px solid #f3f4f6;
+                                            font-size: 14px;
+                                            line-height: 20px;
+                                            font-weight: 600;
+                                            color: #111827;
+                                        "">
+
+                                        Implement ERP Purchase Order Integration
+
+                                    </td>
+
+                                </tr>
+
+                                <tr>
+
+                                    <td valign=""top""
+                                        style=""
+                                            padding: 13px 20px;
+                                            border-bottom: 1px solid #f3f4f6;
+                                            font-size: 13px;
+                                            line-height: 20px;
+                                            color: #6b7280;
+                                        "">
+
+                                        Task Description
+
+                                    </td>
+
+                                    <td valign=""top""
+                                        style=""
+                                            padding: 13px 20px;
+                                            border-bottom: 1px solid #f3f4f6;
+                                            font-size: 14px;
+                                            line-height: 20px;
+                                            color: #374151;
+                                        "">
+
+                                            Detailed description of the assigned task.
+
+                                    </td>
+
+                                </tr>
+
+                                <tr>
+
+                                    <td valign=""top""
+                                        style=""
+                                            padding: 13px 20px;
+                                            border-bottom: 1px solid #f3f4f6;
+                                            font-size: 13px;
+                                            line-height: 20px;
+                                            color: #6b7280;
+                                        "">
+
+                                        Task Company
+
+                                    </td>
+
+                                    <td valign=""top""
+                                        style=""
+                                            padding: 13px 20px;
+                                            border-bottom: 1px solid #f3f4f6;
+                                            font-size: 14px;
+                                            line-height: 20px;
+                                            color: #374151;
+                                        "">
+
+                                        Steel Mont Group
+
+                                    </td>
+
+                                </tr>
+
+                                <tr>
+
+                                    <td valign=""top""
+                                        style=""
+                                            padding: 13px 20px;
+                                            border-bottom: 1px solid #f3f4f6;
+                                            font-size: 13px;
+                                            line-height: 20px;
+                                            color: #6b7280;
+                                        "">
+
+                                        Assigned By
+
+                                    </td>
+
+                                    <td valign=""top""
+                                        style=""
+                                            padding: 13px 20px;
+                                            border-bottom: 1px solid #f3f4f6;
+                                            font-size: 14px;
+                                            line-height: 20px;
+                                            color: #374151;
+                                        "">
+
+                                        Admin User
+
+                                    </td>
+
+                                </tr>
+
+                                <tr>
+
+                                    <td valign=""top""
+                                        style=""
+                                            padding: 13px 20px;
+                                            font-size: 13px;
+                                            line-height: 20px;
+                                            color: #6b7280;
+                                        "">
+
+                                        Priority
+
+                                    </td>
+
+                                    <td valign=""top""
+                                        style=""
+                                            padding: 13px 20px;
+                                            font-size: 14px;
+                                            line-height: 20px;
+                                            font-weight: 600;
+                                            color: #c2410c;
+                                        "">
+
+                                        High
+
+                                    </td>
+
+                                </tr>
+
+                            </table>
+
+                            <table width=""100%""
+                                   cellpadding=""0""
+                                   cellspacing=""0""
+                                   border=""0""
+                                   style=""
+                                       margin-bottom: 25px;
+                                   "">
+
+                                <tr>
+
+                                    <td align=""center"">
+
+                                        <a href=""#""
+                                           target=""_blank""
+                                           style=""
+                                               display: inline-block;
+                                               padding: 13px 28px;
+                                               background-color: #2563eb;
+                                               color: #ffffff;
+                                               text-decoration: none;
+                                               border-radius: 6px;
+                                               font-size: 14px;
+                                               line-height: 20px;
+                                               font-weight: bold;
+                                           "">
+
+                                            View Task Details
+
+                                        </a>
+
+                                    </td>
+
+                                </tr>
+
+                            </table>
+
+                            <table width=""100%""
+                                   cellpadding=""0""
+                                   cellspacing=""0""
+                                   border=""0""
+                                   style=""
+                                       margin-bottom: 25px;
+                                       background-color: #eff6ff;
+                                       border-left: 4px solid #2563eb;
+                                   "">
+
+                                <tr>
+
+                                    <td style=""
+                                        padding: 15px 18px;
+                                    "">
+
+                                        <div style=""
+                                            margin-bottom: 5px;
+                                            font-size: 13px;
+                                            line-height: 18px;
+                                            font-weight: bold;
+                                            color: #1e3a8a;
+                                        "">
+                                            Important
+                                        </div>
+
+                                        <div style=""
+                                            font-size: 13px;
+                                            line-height: 21px;
+                                            color: #374151;
+                                        "">
+                                            Kindly update the task status in the
+                                            ERP system when you commence or complete
+                                            your assigned work.
+                                        </div>
+
+                                    </td>
+
+                                </tr>
+
+                            </table>
+
+                            <p style=""
+                                margin: 0 0 25px 0;
+                                font-size: 14px;
+                                line-height: 22px;
+                                color: #4b5563;
+                            "">
+
+                                Please log in to the Task Management Portal to
+                                review the task details and take the necessary action.
+
+                            </p>
+
+                            <p style=""
+                                margin: 0 0 20px 0;
+                                font-size: 14px;
+                                line-height: 19px;
+                            "">
+
+                               <strong>Note:</strong> This is an automated notification from the
+                                ERP Task Management System.
+
+                                Please do not reply to this email.
+
+                            </p>
+
+                            <p style=""
+                                margin: 0;
+                                font-size: 14px;
+                                line-height: 22px;
+                                color: #374151;
+                            "">
+
+                                Warm Regards,<br>
+
+                                <strong style=""color: #111827;"">
+                                    Steel Mont Group
+                                </strong>
+
+                                <br>
+
+                                <span style=""
+                                    font-size: 13px;
+                                    color: #6b7280;
+                                "">
+                                    Task Management System
+                                </span>
+
+                            </p>
+
+                        </td>
+                    </tr>
+
+                    <tr>
+
+                        <td style=""
+                            padding: 15px 30px;
+                            background-color: #f9fafb;
+                            border-top: 1px solid #e5e7eb;
+                            text-align: center;
+                        "">
+
+                            <p style=""
+                                margin: 0;
+                                font-size: 10px;
+                                line-height: 16px;
+                                color: #b0b7c3;
+                            "">
+                                ERP Task Management System
+                            </p>
+
+                        </td>
+
+                    </tr>
+
+                </table>
+
+            </td>
+        </tr>
+
+    </table>
+
+</body>
+</html>","'<!DOCTYPE html> <html lang=""en""> <head> <meta charset=""UTF-8""> <meta name=""viewport"" content=""width=device-width, initial-scale=1.0""> <title>' + ISNULL(TTL.TaskTypeLabel, '') + ' Assigned</title> </head> <body style="" margin: 0; padding: 0; background-color: #f4f6f8; font-family: Arial, Helvetica, sans-serif; color: #1f2937; ""> <table width=""100%"" cellpadding=""0"" cellspacing=""0"" border=""0"" style="" width: 100%; background-color: #f4f6f8; padding: 35px 15px; ""> <tr> <td align=""center""> <table width=""650"" cellpadding=""0"" cellspacing=""0"" border=""0"" style="" width: 100%; max-width: 650px; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; ""> <tr> <td style="" background-color: #1f2937; padding: 24px 30px; ""> <div style="" font-size: 22px; line-height: 28px; font-weight: bold; color: #ffffff; ""> Steel Mont Group </div> <div style="" margin-top: 4px; font-size: 13px; line-height: 18px; color: #d1d5db; ""> ERP Task Management System </div> </td> </tr> <tr> <td style="" padding: 35px 30px 30px 30px; ""> <p style="" margin: 0 0 18px 0; font-size: 16px; line-height: 24px; color: #111827; ""> Dear <strong>' + ISNULL(AL.PrintingName, '') + '</strong>, </p> <p style="" margin: 0 0 25px 0; font-size: 15px; line-height: 24px; color: #4b5563; ""> A <strong style=""color: #111827;""> ' + ISNULL(TTL.TaskTypeLabel, '') + ' </strong> <strong style=""color: #2563eb;""> ' + ISNULL(TM.Code, '') + ' </strong> has been assigned to you through the <strong style=""color: #111827;""> ERP Task Management System </strong>. </p> <table width=""100%"" cellpadding=""0"" cellspacing=""0"" border=""0"" style="" margin-bottom: 25px; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; ""> <tr> <td colspan=""2"" style="" padding: 15px 20px; background-color: #f9fafb; border-bottom: 1px solid #e5e7eb; font-size: 14px; line-height: 20px; font-weight: bold; color: #111827; ""> Task Details </td> </tr> ' + CASE WHEN TM.ParentTaskNo IS NOT NULL THEN '<tr> <td width=""35%"" style="" padding: 12px 20px; border-bottom: 1px solid #e5efff; font-size: 13px; color: #6b7280; ""> Parent Task Code </td> <td style="" padding: 12px 20px; border-bottom: 1px solid #e5efff; font-size: 14px; font-weight: 600; color: #2563eb; ""> ' + ISNULL(PTM.Code,'') + ' </td> </tr> <tr> <td width=""35%"" style="" padding: 12px 20px; font-size: 13px; color: #6b7280; ""> Parent Task Title </td> <td style="" padding: 12px 20px; font-size: 14px; font-weight: 600; color: #111827; ""> ' + ISNULL(PTM.Title,'') + ' </td> </tr>' ELSE '' END + ' <tr> <td width=""35%"" valign=""top"" style="" padding: 13px 20px; border-bottom: 1px solid #f3f4f6; font-size: 13px; line-height: 20px; color: #6b7280; ""> Task Title </td> <td valign=""top"" style="" padding: 13px 20px; border-bottom: 1px solid #f3f4f6; font-size: 14px; line-height: 20px; font-weight: 600; color: #111827; ""> ' + ISNULL(TM.Title, '') + ' </td> </tr> <tr> <td valign=""top"" style="" padding: 13px 20px; border-bottom: 1px solid #f3f4f6; font-size: 13px; line-height: 20px; color: #6b7280; ""> Task Description </td> <td valign=""top"" style="" padding: 13px 20px; border-bottom: 1px solid #f3f4f6; font-size: 14px; line-height: 20px; color: #374151; ""> ' + ISNULL(TM.Description,'') + ' </td> </tr> <tr> <td valign=""top"" style="" padding: 13px 20px; border-bottom: 1px solid #f3f4f6; font-size: 13px; line-height: 20px; color: #6b7280; ""> Task Company </td> <td valign=""top"" style="" padding: 13px 20px; border-bottom: 1px solid #f3f4f6; font-size: 14px; line-height: 20px; color: #374151; ""> ' + ISNULL(OTCM.CompanyName, '') + ' </td> </tr><tr> <td valign=""top"" style="" padding: 13px 20px; border-bottom: 1px solid #f3f4f6; font-size: 13px; line-height: 20px; color: #6b7280; ""> Assigned To </td> <td valign=""top"" style="" padding: 13px 20px; border-bottom: 1px solid #f3f4f6; font-size: 14px; line-height: 20px; color: #374151; "">' + ISNULL(AL.PrintingName, '') + ' (' + ISNULL(ACD.MobileNos, '') + ')</td> </tr> <tr> <td valign=""top"" style="" padding: 13px 20px; border-bottom: 1px solid #f3f4f6; font-size: 13px; line-height: 20px; color: #6b7280; ""> Assigned By </td> <td valign=""top"" style="" padding: 13px 20px; border-bottom: 1px solid #f3f4f6; font-size: 14px; line-height: 20px; color: #374151; ""> ' + ISNULL(OL.PrintingName, '') + ' (' + ISNULL(CD.MobileNos, '') + ') </td> </tr><tr><td valign=""top"" style=""padding: 13px 20px;border-bottom: 1px solid #f3f4f6;font-size: 13px;line-height: 20px;color: #6b7280;"">Collaborators</td><td valign=""top"" style=""padding: 13px 20px;border-bottom: 1px solid #f3f4f6;font-size: 14px;line-height: 20px;color: #374151;"">' + ISNULL(CLS.Collaborators, '') + '</td></tr><tr><td valign=""top"" style=""padding: 13px 20px;border-bottom: 1px solid #f3f4f6;font-size: 13px;line-height: 20px;color: #6b7280;"">Report To</td><td valign=""top"" style=""padding: 13px 20px;border-bottom: 1px solid #f3f4f6;font-size: 14px;line-height: 20px;color: #374151;"">' + ISNULL(RTS.ReportTos, '') + '</td></tr> <tr> <td valign=""top"" style="" padding: 13px 20px; font-size: 13px; line-height: 20px; color: #6b7280; ""> Priority </td> <td valign=""top"" style="" padding: 13px 20px; font-size: 14px; line-height: 20px; font-weight: 600; color: #c2410c; ""> ' + ISNULL(TPM.TaskPriorityName,'') + ISNULL(' (' + DD.DueDate + ')', '') + ' </td> </tr> </table> <table width=""100%"" cellpadding=""0"" cellspacing=""0"" border=""0"" style="" margin-bottom: 25px; ""> <tr> <td align=""center""> <a href=""' + ISNULL(TL.TaskLink, '') + '"" target=""_blank"" style="" display: inline-block; padding: 13px 28px; background-color: #2563eb; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 14px; line-height: 20px; font-weight: bold; ""> View ' + ISNULL(TTL.TaskTypeLabel, '') + ' Details </a> </td> </tr> </table> <table width=""100%"" cellpadding=""0"" cellspacing=""0"" border=""0"" style="" margin-bottom: 25px; background-color: #eff6ff; border-left: 4px solid #2563eb; ""> <tr> <td style="" padding: 15px 18px; ""> <div style="" margin-bottom: 5px; font-size: 13px; line-height: 18px; font-weight: bold; color: #1e3a8a; ""> Important </div> <div style="" font-size: 13px; line-height: 21px; color: #374151; ""> Kindly update the task status in the ERP system when you commence or complete your assigned work. </div> </td> </tr> </table> <p style="" margin: 0 0 25px 0; font-size: 14px; line-height: 22px; color: #4b5563; ""> Please log in to the Task Management Portal to review the task details and take the necessary action. </p> <p style="" margin: 0 0 20px 0; font-size: 14px; line-height: 19px; ""> <strong>Note:</strong> This is an automated notification from the ERP Task Management System. Please do not reply to this email. </p> </td> </tr> <tr> <td style="" padding: 15px 30px; background-color: #f9fafb; border-top: 1px solid #e5e7eb; text-align: center; ""> <p style="" margin: 0; font-size: 10px; line-height: 16px; color: #b0b7c3; ""> ERP Task Management System </p> </td> </tr> </table> </td> </tr> </table> </body> </html>'","119","0","0"
+"48","Pending Task Remainder Task Management Portal","<div style=""font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto;""><p style=""text-align:left !important"">Dear <b>Rahul Sharma</b>,</p><p>&nbsp;</p><p>This is a periodic reminder to inform you that you have pending tasks which are due within the next <b>3 days</b>.</p><p>Please review the tasks listed below and take the necessary actions to ensure timely completion.</p><p>&nbsp;</p><table style=""width: 100%; border-collapse: collapse; font-size: 13px; text-align: left;""><thead><tr style=""background-color: #f4f4f4; border-bottom: 2px solid #ddd;""><th style=""padding: 10px; border: 1px solid #ddd;"">Task No.</th><th style=""padding: 10px; border: 1px solid #ddd;"">Task Title</th><th style=""padding: 10px; border: 1px solid #ddd;"">Folder / Category</th><th style=""padding: 10px; border: 1px solid #ddd;"">Priority</th><th style=""padding: 10px; border: 1px solid #ddd;"">Due Date</th><th style=""padding: 10px; border: 1px solid #ddd; text-align: center;"">Action</th></tr></thead><tbody><tr style=""border-bottom: 1px solid #ddd;""><td style=""padding: 10px; border: 1px solid #ddd;"">1245</td><td style=""padding: 10px; border: 1px solid #ddd;""><b>Implement ERP Purchase Order Integration</b></td><td style=""padding: 10px; border: 1px solid #ddd;"">eProcurement <span style=""font-size: 11px; color: #666;"">Development</span></td><td style=""padding: 10px; border: 1px solid #ddd;"">High</td><td style=""padding: 10px; border: 1px solid #ddd; color: #d9534f; font-weight: bold;"">16/07/2026 06:30 PM</td><td style=""padding: 10px; border: 1px solid #ddd; text-align: center;""><a href=""https://spectrumtasknplanner.steelmont.co.in/task/1245"" style=""display: inline-block; padding: 6px 12px; background-color: #0056b3; color: #ffffff; text-decoration: none; border-radius: 4px; font-size: 12px; font-weight: bold;"">Open Task</a></td></tr><tr style=""border-bottom: 1px solid #ddd;""><td style=""padding: 10px; border: 1px solid #ddd;"">1246</td><td style=""padding: 10px; border: 1px solid #ddd;""><b>Create User Manual and Technical Documentation</b></td><td style=""padding: 10px; border: 1px solid #ddd;"">eProcurement <span style=""font-size: 11px; color: #666;"">Documentation</span></td><td style=""padding: 10px; border: 1px solid #ddd;"">Medium</td><td style=""padding: 10px; border: 1px solid #ddd; color: #d9534f; font-weight: bold;"">17/07/2026 11:00 AM</td><td style=""padding: 10px; border: 1px solid #ddd; text-align: center;""><a href=""https://spectrumtasknplanner.steelmont.co.in/task/1246"" style=""display: inline-block; padding: 6px 12px; background-color: #0056b3; color: #ffffff; text-decoration: none; border-radius: 4px; font-size: 12px; font-weight: bold;"">Open Task</a></td></tr></tbody></table><p>&nbsp;</p><p>To view your complete task dashboard, please <a href=""https://spectrumtasknplanner.steelmont.co.in/task"" style=""color: #0056b3; font-weight: bold;"">click here</a>.</p><p>&nbsp;</p><p><b>Note: This is a system generated Email. Please do not reply directly to this email.</b></p><p>Regards,<br><b>ABC Technologies Pvt. Ltd.</b></p></div>","'<div style=""font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto;""><p style=""text-align:left !important"">Dear <b>' + ISNULL(L.PrintingName, '') + '</b>,</p><p>This is a reminder to inform you that you have tasks due within the next <b>' + CAST(@ReminderDays AS VARCHAR(10)) + ' days</b>.</p><p>You currently have a total of <b>' + CAST(UTH.TotalPendingTasks AS VARCHAR(10)) + ' pending tasks</b>.</p><p>' + CASE WHEN UTH.TotalPendingTasks > 10 THEN 'Showing the top 10 most urgent tasks below. <i>(And ' + CAST(UTH.TotalPendingTasks - 10 AS VARCHAR(10)) + ' more pending tasks)</i>' ELSE 'Please review the tasks listed below and take the necessary actions to ensure timely completion.' END + '</p><p>&nbsp;</p><table style=""width: 100%; border-collapse: collapse; font-size: 13px; text-align: left;""><thead><tr style=""background-color: #f4f4f4; border-bottom: 2px solid #ddd;""><th style=""padding: 10px; border: 1px solid #ddd;"">Task No.</th><th style=""padding: 10px; border: 1px solid #ddd;"">Task Title</th><th style=""padding: 10px; border: 1px solid #ddd;"">Folder / Category</th><th style=""padding: 10px; border: 1px solid #ddd;"">Priority</th><th style=""padding: 10px; border: 1px solid #ddd;"">Due Date</th><th style=""padding: 10px; border: 1px solid #ddd; text-align: center;"">Action</th></tr></thead><tbody>' + ISNULL(UTH.PendingTaskRows, '') + '</tbody></table><p>&nbsp;</p><p>To view your complete task list, please <a href=""https://spectrumtasknplanner.steelmont.co.in/task?status=open,inprogress"" style=""display: inline-block; padding: 8px 15px; margin-top: 5px; background-color: #0056b3; color: #ffffff; text-decoration: none; border-radius: 4px; font-weight: bold;"">View All Pending Tasks</a></p><p>&nbsp;</p><p><b>Note: This is a system generated Email. Please do not reply directly to this email.</b></p></div>'","120","0","0"
+"49","Task Creation(Collaborator)-Task Management Portal","<!DOCTYPE html>
+<html lang=""en"">
+
+<head>
+    <meta charset=""UTF-8"">
+    <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
+
+    <title>Collaborator Assignment</title>
+</head>
+
+<body style=""
+    margin: 0;
+    padding: 0;
+    background-color: #f4f6f8;
+    font-family: Arial, Helvetica, sans-serif;
+    color: #1f2937;
+"">
+
+    <!-- ========================================================= -->
+    <!-- OUTER CONTAINER -->
+    <!-- ========================================================= -->
+
+    <table width=""100%"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""
+               width: 100%;
+               background-color: #f4f6f8;
+               padding: 35px 15px;
+           "">
+
+        <tr>
+            <td align=""center"">
+
+                <!-- ================================================= -->
+                <!-- EMAIL CONTAINER -->
+                <!-- ================================================= -->
+
+                <table width=""650"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""
+                           width: 100%;
+                           max-width: 650px;
+                           background-color: #ffffff;
+                           border: 1px solid #e5e7eb;
+                           border-radius: 10px;
+                           overflow: hidden;
+                       "">
+
+                    <!-- ================================================= -->
+                    <!-- HEADER -->
+                    <!-- ================================================= -->
+
+                    <tr>
+                        <td style=""
+                            background-color: #1f2937;
+                            padding: 24px 30px;
+                        "">
+
+                            <div style=""
+                                font-size: 22px;
+                                line-height: 28px;
+                                font-weight: bold;
+                                color: #ffffff;
+                            "">
+                                Steel Mont Group
+                            </div>
+
+                            <div style=""
+                                margin-top: 4px;
+                                font-size: 13px;
+                                line-height: 18px;
+                                color: #d1d5db;
+                            "">
+                                ERP Task Management System
+                            </div>
+
+                        </td>
+                    </tr>
+
+
+                    <!-- ================================================= -->
+                    <!-- MAIN CONTENT -->
+                    <!-- ================================================= -->
+
+                    <tr>
+                        <td style=""
+                            padding: 35px 30px 30px 30px;
+                        "">
+
+                            <!-- Greeting -->
+
+                            <p style=""
+                                margin: 0 0 18px 0;
+                                font-size: 16px;
+                                line-height: 24px;
+                                color: #111827;
+                            "">
+                                Dear <strong>Rahul Sharma</strong>,
+                            </p>
+
+
+                            <!-- ================================================= -->
+                            <!-- NOTIFICATION MESSAGE -->
+                            <!-- ================================================= -->
+
+                            <p style=""
+                                margin: 0 0 25px 0;
+                                font-size: 15px;
+                                line-height: 24px;
+                                color: #4b5563;
+                            "">
+
+                                You have been added as a
+                                <strong style=""color: #111827;"">
+                                    Collaborator/Supporter
+                                </strong>
+                                for the following task in the
+                                <strong style=""color: #111827;"">
+                                    ERP Task Management System
+                                </strong>.
+
+                            </p>
+
+
+                            <!-- ================================================= -->
+                            <!-- TASK DETAILS -->
+                            <!-- ================================================= -->
+
+                            <table width=""100%"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""
+                                       margin-bottom: 25px;
+                                       border: 1px solid #e5e7eb;
+                                       border-radius: 8px;
+                                       overflow: hidden;
+                                   "">
+
+                                <!-- Section Header -->
+
+                                <tr>
+
+                                    <td colspan=""2"" style=""
+                                            padding: 15px 20px;
+                                            background-color: #f9fafb;
+                                            border-bottom: 1px solid #e5e7eb;
+                                            font-size: 14px;
+                                            line-height: 20px;
+                                            font-weight: bold;
+                                            color: #111827;
+                                        "">
+
+                                        Task Details
+
+                                    </td>
+
+                                </tr>
+
+
+                                <!-- ================================================= -->
+                                <!-- TASK CODE -->
+                                <!-- ================================================= -->
+
+                                <tr>
+
+                                    <td width=""35%"" valign=""top"" style=""
+                                            padding: 13px 20px;
+                                            border-bottom: 1px solid #f3f4f6;
+                                            font-size: 13px;
+                                            line-height: 20px;
+                                            color: #6b7280;
+                                        "">
+
+                                        Task Code
+
+                                    </td>
+
+                                    <td valign=""top"" style=""
+                                            padding: 13px 20px;
+                                            border-bottom: 1px solid #f3f4f6;
+                                            font-size: 14px;
+                                            line-height: 20px;
+                                            font-weight: 600;
+                                            color: #2563eb;
+                                        "">
+
+                                        TSK-2026-001245
+
+                                    </td>
+
+                                </tr>
+
+
+                                <!-- ================================================= -->
+                                <!-- TASK TITLE -->
+                                <!-- ================================================= -->
+
+                                <tr>
+
+                                    <td width=""35%"" valign=""top"" style=""
+                                            padding: 13px 20px;
+                                            border-bottom: 1px solid #f3f4f6;
+                                            font-size: 13px;
+                                            line-height: 20px;
+                                            color: #6b7280;
+                                        "">
+
+                                        Task Title
+
+                                    </td>
+
+                                    <td valign=""top"" style=""
+                                            padding: 13px 20px;
+                                            border-bottom: 1px solid #f3f4f6;
+                                            font-size: 14px;
+                                            line-height: 20px;
+                                            font-weight: 600;
+                                            color: #111827;
+                                        "">
+
+                                        Implement ERP Purchase Order Integration
+
+                                    </td>
+
+                                </tr>
+
+
+                                <!-- ================================================= -->
+                                <!-- TASK DESCRIPTION -->
+                                <!-- ================================================= -->
+
+                                <tr>
+
+                                    <td valign=""top"" style=""
+                                            padding: 13px 20px;
+                                            border-bottom: 1px solid #f3f4f6;
+                                            font-size: 13px;
+                                            line-height: 20px;
+                                            color: #6b7280;
+                                        "">
+
+                                        Task Description
+
+                                    </td>
+
+                                    <td valign=""top"" style=""
+                                            padding: 13px 20px;
+                                            border-bottom: 1px solid #f3f4f6;
+                                            font-size: 14px;
+                                            line-height: 20px;
+                                            color: #374151;
+                                        "">
+
+                                        Detailed description of the assigned task.
+
+                                    </td>
+
+                                </tr>
+
+
+                                <!-- ================================================= -->
+                                <!-- TASK COMPANY -->
+                                <!-- ================================================= -->
+
+                                <tr>
+
+                                    <td valign=""top"" style=""
+                                            padding: 13px 20px;
+                                            border-bottom: 1px solid #f3f4f6;
+                                            font-size: 13px;
+                                            line-height: 20px;
+                                            color: #6b7280;
+                                        "">
+
+                                        Task Company
+
+                                    </td>
+
+                                    <td valign=""top"" style=""
+                                            padding: 13px 20px;
+                                            border-bottom: 1px solid #f3f4f6;
+                                            font-size: 14px;
+                                            line-height: 20px;
+                                            color: #374151;
+                                        "">
+
+                                            Steel Mont Group
+
+                                    </td>
+
+                                </tr>
+
+
+                                <!-- ================================================= -->
+                                <!-- ASSIGNED BY -->
+                                <!-- ================================================= -->
+
+                                <tr>
+
+                                    <td valign=""top"" style=""
+                                            padding: 13px 20px;
+                                            border-bottom: 1px solid #f3f4f6;
+                                            font-size: 13px;
+                                            line-height: 20px;
+                                            color: #6b7280;
+                                        "">
+
+                                        Assigned By
+
+                                    </td>
+
+                                    <td valign=""top"" style=""
+                                            padding: 13px 20px;
+                                            border-bottom: 1px solid #f3f4f6;
+                                            font-size: 14px;
+                                            line-height: 20px;
+                                            color: #374151;
+                                        "">
+
+                                            Admin User
+
+                                    </td>
+
+                                </tr>
+
+
+                                <!-- ================================================= -->
+                                <!-- PRIORITY -->
+                                <!-- ================================================= -->
+
+                                <tr>
+
+                                    <td valign=""top"" style=""
+                                            padding: 13px 20px;
+                                            font-size: 13px;
+                                            line-height: 20px;
+                                            color: #6b7280;
+                                        "">
+
+                                        Priority
+
+                                    </td>
+
+                                    <td valign=""top"" style=""
+                                            padding: 13px 20px;
+                                            font-size: 14px;
+                                            line-height: 20px;
+                                            font-weight: 600;
+                                            color: #c2410c;
+                                        "">
+
+                                            High
+
+                                    </td>
+
+                                </tr>
+
+                            </table>
+
+
+                            <!-- ================================================= -->
+                            <!-- COLLABORATOR MESSAGE -->
+                            <!-- ================================================= -->
+
+                            <table width=""100%"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""
+                                       margin-bottom: 25px;
+                                       background-color: #f0fdf4;
+                                       border-left: 4px solid #16a34a;
+                                   "">
+
+                                <tr>
+
+                                    <td style=""
+                                        padding: 15px 18px;
+                                    "">
+
+                                        <div style=""
+                                            margin-bottom: 5px;
+                                            font-size: 13px;
+                                            line-height: 18px;
+                                            font-weight: bold;
+                                            color: #166534;
+                                        "">
+                                            Your Support Matters
+                                        </div>
+
+                                        <div style=""
+                                            font-size: 13px;
+                                            line-height: 21px;
+                                            color: #374151;
+                                        "">
+
+                                            Your support and inputs may be required
+                                            to facilitate the successful completion
+                                            of this task.
+
+                                        </div>
+
+                                    </td>
+
+                                </tr>
+
+                            </table>
+
+
+                            <!-- ================================================= -->
+                            <!-- VIEW TASK BUTTON -->
+                            <!-- ================================================= -->
+
+                            <table width=""100%"" cellpadding=""0"" cellspacing=""0"" border=""0"" style=""
+                                       margin-bottom: 25px;
+                                   "">
+
+                                <tr>
+
+                                    <td align=""center"">
+
+                                        <a href=""#"" target=""_blank"" style=""
+                                               display: inline-block;
+                                               padding: 13px 28px;
+                                               background-color: #2563eb;
+                                               color: #ffffff;
+                                               text-decoration: none;
+                                               border-radius: 6px;
+                                               font-size: 14px;
+                                               line-height: 20px;
+                                               font-weight: bold;
+                                           "">
+
+                                            View Task Details
+
+                                        </a>
+
+                                    </td>
+
+                                </tr>
+
+                            </table>
+
+
+                            <!-- ================================================= -->
+                            <!-- ACTION MESSAGE -->
+                            <!-- ================================================= -->
+
+                            <p style=""
+                                margin: 0 0 25px 0;
+                                font-size: 14px;
+                                line-height: 22px;
+                                color: #4b5563;
+                            "">
+
+                                Please review the task details and provide the
+                                necessary assistance as required.
+
+                                <br><br>
+
+                                <strong style=""color: #111827;"">
+                                    Kindly update the task status in the ERP system
+                                    when you commence or complete your assigned work.
+                                </strong>
+
+                            </p>
+
+
+                            <!-- ================================================= -->
+                            <!-- AUTOMATED EMAIL NOTICE -->
+                            <!-- ================================================= -->
+
+                            <p style=""
+                                margin: 0 0 20px 0;
+                                font-size: 14px;
+                                line-height: 19px;
+                            "">
+
+                                <strong>Note: </strong>This is an automated notification from the
+                                ERP Task Management System.
+
+                                <br>
+
+                                Please do not reply to this email.
+
+                            </p>
+
+
+                            <!-- ================================================= -->
+                            <!-- CLOSING -->
+                            <!-- ================================================= -->
+
+                            <p style=""
+                                margin: 0;
+                                font-size: 14px;
+                                line-height: 22px;
+                                color: #374151;
+                            "">
+
+                                Warm Regards,<br>
+
+                                <strong style=""color: #111827;"">
+                                    Steel Mont Group
+                                </strong>
+
+                                <br>
+
+                                <span style=""
+                                    font-size: 13px;
+                                    color: #6b7280;
+                                "">
+                                    Task Management System
+                                </span>
+
+                            </p>
+
+                        </td>
+                    </tr>
+
+
+                    <!-- ================================================= -->
+                    <!-- FOOTER -->
+                    <!-- ================================================= -->
+
+                    <tr>
+
+                        <td style=""
+                            padding: 15px 30px;
+                            background-color: #f9fafb;
+                            border-top: 1px solid #e5e7eb;
+                            text-align: center;
+                        "">
+
+                            <p style=""
+                                margin: 0;
+                                font-size: 10px;
+                                line-height: 16px;
+                                color: #b0b7c3;
+                            "">
+                                ERP Task Management System
+                            </p>
+
+                        </td>
+
+                    </tr>
+
+                </table>
+
+            </td>
+        </tr>
+
+    </table>
+
+</body>
+
+</html>","'<!DOCTYPE html> <html lang=""en""> <head> <meta charset=""UTF-8""> <meta name=""viewport"" content=""width=device-width, initial-scale=1.0""> <title>Collaborator Assignment</title> </head> <body style="" margin: 0; padding: 0; background-color: #f4f6f8; font-family: Arial, Helvetica, sans-serif; color: #1f2937; ""> <table width=""100%"" cellpadding=""0"" cellspacing=""0"" border=""0"" style="" width: 100%; background-color: #f4f6f8; padding: 35px 15px; ""> <tr> <td align=""center""> <table width=""650"" cellpadding=""0"" cellspacing=""0"" border=""0"" style="" width: 100%; max-width: 650px; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; ""> <tr> <td style="" background-color: #1f2937; padding: 24px 30px; ""> <div style="" font-size: 22px; line-height: 28px; font-weight: bold; color: #ffffff; ""> Steel Mont Group </div> <div style="" margin-top: 4px; font-size: 13px; line-height: 18px; color: #d1d5db; ""> ERP Task Management System </div> </td> </tr> <tr> <td style="" padding: 35px 30px 30px 30px; ""> <p style="" margin: 0 0 18px 0; font-size: 16px; line-height: 24px; color: #111827; ""> Dear <strong>' + ISNULL(MDL.PrintingName, '') + '</strong>, </p> <p style="" margin: 0 0 25px 0; font-size: 15px; line-height: 24px; color: #4b5563; ""> ' + ISNULL(HL.HeaderLabel, '') + ' </p> <table width=""100%"" cellpadding=""0"" cellspacing=""0"" border=""0"" style="" margin-bottom: 25px; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; ""> <tr> <td colspan=""2"" style="" padding: 15px 20px; background-color: #f9fafb; border-bottom: 1px solid #e5e7eb; font-size: 14px; line-height: 20px; font-weight: bold; color: #111827; ""> Task Details </td> </tr> <tr> <td width=""35%"" valign=""top"" style="" padding: 13px 20px; border-bottom: 1px solid #f3f4f6; font-size: 13px; line-height: 20px; color: #6b7280; ""> Task Code </td> <td valign=""top"" style="" padding: 13px 20px; border-bottom: 1px solid #f3f4f6; font-size: 14px; line-height: 20px; font-weight: 600; color: #2563eb; "">' + ISNULL(TM.Code, '') + '</td> </tr> <tr> <td width=""35%"" valign=""top"" style="" padding: 13px 20px; border-bottom: 1px solid #f3f4f6; font-size: 13px; line-height: 20px; color: #6b7280; ""> Task Title </td> <td valign=""top"" style="" padding: 13px 20px; border-bottom: 1px solid #f3f4f6; font-size: 14px; line-height: 20px; font-weight: 600; color: #111827; "">' + ISNULL(TM.Title, '') + '</td> </tr> <tr> <td valign=""top"" style="" padding: 13px 20px; border-bottom: 1px solid #f3f4f6; font-size: 13px; line-height: 20px; color: #6b7280; ""> Task Description </td> <td valign=""top"" style="" padding: 13px 20px; border-bottom: 1px solid #f3f4f6; font-size: 14px; line-height: 20px; color: #374151; "">' + ISNULL(TM.Description, '') + '</td> </tr> <tr> <td valign=""top"" style="" padding: 13px 20px; border-bottom: 1px solid #f3f4f6; font-size: 13px; line-height: 20px; color: #6b7280; ""> Task Company </td> <td valign=""top"" style="" padding: 13px 20px; border-bottom: 1px solid #f3f4f6; font-size: 14px; line-height: 20px; color: #374151; "">' + ISNULL(OTCM.CompanyName, '') + '</td> </tr> <tr> <td valign=""top"" style="" padding: 13px 20px; border-bottom: 1px solid #f3f4f6; font-size: 13px; line-height: 20px; color: #6b7280; ""> Assigned To </td> <td valign=""top"" style="" padding: 13px 20px; border-bottom: 1px solid #f3f4f6; font-size: 14px; line-height: 20px; color: #374151; "">' + ISNULL(AL.PrintingName, '') + ' (' + ISNULL(CD.MobileNos, '') + ')</td> </tr> <tr> <td valign=""top"" style="" padding: 13px 20px; border-bottom: 1px solid #f3f4f6; font-size: 13px; line-height: 20px; color: #6b7280; ""> Assigned By </td> <td valign=""top"" style="" padding: 13px 20px; border-bottom: 1px solid #f3f4f6; font-size: 14px; line-height: 20px; color: #374151; "">' + ISNULL(OL.PrintingName, '') + ' (' + ISNULL(CD.MobileNos, '') + ')</td> </tr><tr><td valign=""top"" style=""padding: 13px 20px;border-bottom: 1px solid #f3f4f6;font-size: 13px;line-height: 20px;color: #6b7280;"">Collaborators</td><td valign=""top"" style=""padding: 13px 20px;border-bottom: 1px solid #f3f4f6;font-size: 14px;line-height: 20px;color: #374151;"">' + ISNULL(CLS.Collaborators, '') + '</td></tr><tr><td valign=""top"" style=""padding: 13px 20px;border-bottom: 1px solid #f3f4f6;font-size: 13px;line-height: 20px;color: #6b7280;"">Report To</td><td valign=""top"" style=""padding: 13px 20px;border-bottom: 1px solid #f3f4f6;font-size: 14px;line-height: 20px;color: #374151;"">' + ISNULL(RTS.ReportTos, '') + '</td></tr><tr><td valign=""top"" style="" padding: 13px 20px; font-size: 13px; line-height: 20px; color: #6b7280; ""> Priority </td> <td valign=""top"" style="" padding: 13px 20px; font-size: 14px; line-height: 20px; font-weight: 600; color: #c2410c; "">' + ISNULL(TPM.TaskPriorityName, '') + ISNULL(' (' + DD.DueDate + ')', '') + ' </td> </tr> </table> <table width=""100%"" cellpadding=""0"" cellspacing=""0"" border=""0"" style="" margin-bottom: 25px; background-color: #f0fdf4; border-left: 4px solid #16a34a; ""> <tr> <td style="" padding: 15px 18px; ""> <div style="" margin-bottom: 5px; font-size: 13px; line-height: 18px; font-weight: bold; color: #166534; ""> Your Support Matters </div> <div style="" font-size: 13px; line-height: 21px; color: #374151; ""> Your support and inputs may be required to facilitate the successful completion of this task. </div> </td> </tr> </table> <table width=""100%"" cellpadding=""0"" cellspacing=""0"" border=""0"" style="" margin-bottom: 25px; ""> <tr> <td align=""center""> <a href=""' + ISNULL(TL.TaskLink, '') + '"" target=""_blank"" style="" display: inline-block; padding: 13px 28px; background-color: #2563eb; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 14px; line-height: 20px; font-weight: bold; ""> View Task Details </a> </td> </tr> </table> <p style="" margin: 0 0 25px 0; font-size: 14px; line-height: 22px; color: #4b5563; ""> Please review the task details and provide the necessary assistance as required. <br><br> <strong style=""color: #111827;""> Kindly update the task status in the ERP system when you commence or complete your assigned work. </strong> </p> <p style="" margin: 0 0 20px 0; font-size: 14px; line-height: 19px; ""> <strong>Note: </strong>This is an automated notification from the ERP Task Management System. <br> Please do not reply to this email. </p> </td> </tr> <tr> <td style="" padding: 15px 30px; background-color: #f9fafb; border-top: 1px solid #e5e7eb; text-align: center; ""> <p style="" margin: 0; font-size: 10px; line-height: 16px; color: #b0b7c3; ""> ERP Task Management System </p> </td> </tr> </table> </td> </tr> </table> </body> </html>'","121","0","0"
+"50","Meeting Notes Finalised - Task Management Portal","<!DOCTYPE html> <html lang=""en""> <head> <meta charset=""UTF-8""> <meta name=""viewport"" content=""width=device-width, initial-scale=1.0""> <title>Meeting Notes Published</title> <style> body { font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif; background-color: #f4f5f7; margin: 0; padding: 40px 20px; color: #333333; } .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); } .header { background-color: #242f3d; color: #ffffff; padding: 24px 32px; } .header h1 { margin: 0; font-size: 20px; font-weight: 600; } .header p { margin: 6px 0 0; font-size: 13px; color: #a0aab5; } .content { padding: 32px; } .greeting p { margin: 0 0 16px 0; font-size: 14px; line-height: 1.5; } .details-table { width: 100%; border-collapse: collapse; margin: 24px 0; border: 1px solid #eaedf0; border-radius: 6px; overflow: hidden; } .details-table th { background-color: #fafbfc; padding: 14px 16px; text-align: left; font-size: 14px; font-weight: 600; color: #333333; border-bottom: 1px solid #eaedf0; } .details-table td { padding: 14px 16px; border-bottom: 1px solid #eaedf0; font-size: 13px; vertical-align: top; } .details-table tr:last-child td { border-bottom: none; } .kv-table td:first-child { width: 40%; color: #718096; } .kv-table td:nth-child(2) { font-weight: 500; color: #1a202c; } .text-link { color: #2563eb; text-decoration: underline; } .btn-container { text-align: center; margin: 32px 0; } .btn { display: inline-block; background-color: #2563eb; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 14px; } .important-note { background-color: #f0f7ff; border-left: 4px solid #2563eb; padding: 16px 20px; margin-bottom: 24px; } .important-note strong { display: block; color: #1e40af; font-size: 14px; margin-bottom: 6px; } .important-note p { margin: 0; font-size: 13px; color: #536b94; line-height: 1.5; } .footer { font-size: 13px; color: #718096; line-height: 1.6; } </style> </head> <body> <div class=""container""> <div class=""header""> <h1>Steel Mont Group</h1> <p>Meeting Management System</p> </div> <div class=""content""> <div class=""greeting""> <p>Dear <strong>Rahul Sharma</strong>,</p> <p>The meeting notes have been published through the <strong>Meeting Management System</strong>.</p> </div> <table class=""details-table kv-table""> <thead> <tr> <th colspan=""2"">Meeting Details</th> </tr> </thead> <tbody> <tr> <td>Meeting Title</td> <td>Q3 Strategy & Review Meeting</td> </tr> <tr> <td>Meeting Category</td> <td>Board Meeting</td> </tr> <tr> <td>Meeting Type</td> <td>Quarterly Review</td> </tr> <tr> <td>Company</td> <td>Steel Mont Group</td> </tr> <tr> <td>Location</td> <td>Head Office - Mumbai</td> </tr> <tr> <td>Meeting Mode</td> <td>In-Person</td> </tr> <tr> <td>Meeting Note Link</td> <td><a href=""https://spectrumtasknplanner.steelmont.co.in/meeting-notes/1"" style=""color:#2563eb;text-decoration:underline;"">View Note</a></td> </tr> </tbody> </table> <table class=""details-table""> <thead> <tr> <th>Participants</th> </tr> </thead> <tbody> <tr> <td style=""padding:14px 16px;""> <div style=""display:flex;flex-wrap:wrap;gap:8px;""> <span style=""display:inline-block;padding:6px 10px;background-color:#f1f5f9;border:1px solid #cbd5e1;border-radius:6px;color:#1e293b;font-size:13px;margin-right:6px;margin-bottom:6px;""><strong>Rahul Sharma</strong> <span style=""color:#64748b;"">(Internal User)</span></span> <span style=""display:inline-block;padding:6px 10px;background-color:#f1f5f9;border:1px solid #cbd5e1;border-radius:6px;color:#1e293b;font-size:13px;margin-right:6px;margin-bottom:6px;""><strong>Priya Mehta</strong> <span style=""color:#64748b;"">(Internal Employee)</span></span> </div> </td> </tr> </tbody> </table> <table class=""details-table kv-table""> <thead> <tr> <th colspan=""2"">Meeting Summary</th> </tr> </thead> <tbody> <tr> <td>Agenda</td> <td style="""">Q3 Financial Review, Product Roadmap Discussion, ...</td> </tr> <tr> <td>Discussion Summary</td> <td style="""">The team reviewed Q3 performance metrics and discussed upcoming milestones.</td> </tr> <tr> <td>Decision</td> <td style="""">Approved Q4 budget. Next review scheduled for December.</td> </tr> </tbody> </table> <div class=""btn-container""> <a href=""https://spectrumtasknplanner.steelmont.co.in/meetings/19"" class=""btn"">View Full Meeting Notes</a> </div> <div class=""important-note""> <strong>Important</strong> <p>Please review the meeting notes and ensure any action items assigned to you are completed by their respective deadlines.</p> </div> <div class=""footer""> Please log in to the Meeting Portal to review the full details, action items, and attachments. </div> </div> </div> </body> </html>","'<!DOCTYPE html> <html lang=""en""> <head> <meta charset=""UTF-8""> <meta name=""viewport"" content=""width=device-width, initial-scale=1.0""> <title>Meeting Notes Published</title> <style> body { font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif; background-color: #f4f5f7; margin: 0; padding: 40px 20px; color: #333333; } .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05); } .header { background-color: #242f3d; color: #ffffff; padding: 24px 32px; } .header h1 { margin: 0; font-size: 20px; font-weight: 600; } .header p { margin: 6px 0 0; font-size: 13px; color: #a0aab5; } .content { padding: 32px; } .greeting p { margin: 0 0 16px 0; font-size: 14px; line-height: 1.5; } .details-table { width: 100%; border-collapse: collapse; margin: 24px 0; border: 1px solid #eaedf0; border-radius: 6px; overflow: hidden; } .details-table th { background-color: #fafbfc; padding: 14px 16px; text-align: left; font-size: 14px; font-weight: 600; color: #333333; border-bottom: 1px solid #eaedf0; } .details-table td { padding: 14px 16px; border-bottom: 1px solid #eaedf0; font-size: 13px; vertical-align: top; } .details-table tr:last-child td { border-bottom: none; } .kv-table td:first-child { width: 40%; color: #718096; } .kv-table td:nth-child(2) { font-weight: 500; color: #1a202c; } .text-link { color: #2563eb; text-decoration: underline; } .btn-container { text-align: center; margin: 32px 0; } .btn { display: inline-block; background-color: #2563eb; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 14px; } .important-note { background-color: #f0f7ff; border-left: 4px solid #2563eb; padding: 16px 20px; margin-bottom: 24px; } .important-note strong { display: block; color: #1e40af; font-size: 14px; margin-bottom: 6px; } .important-note p { margin: 0; font-size: 13px; color: #536b94; line-height: 1.5; } .footer { font-size: 13px; color: #718096; line-height: 1.6; } </style> </head> <body> <div class=""container""> <div class=""header""> <h1>Steel Mont Group</h1> <p>Meeting Management System</p> </div> <div class=""content""> <div class=""greeting""> <p>Dear <strong>' + ISNULL(MND.PrintingName, 'Team') + '</strong>,</p> <p>The meeting notes have been published through the <strong>Meeting Management System</strong>.</p> </div> <table class=""details-table kv-table""> <thead><tr><th colspan=""2"">Meeting Details</th></tr></thead> <tbody> <tr><td>Meeting Title</td><td>' + ISNULL(MND.MeetingTitle, '') + '</td></tr> <tr><td>Meeting Category</td><td>' + ISNULL(MND.MeetingCategoryName, '') + '</td></tr> <tr><td>Meeting Type</td><td>' + ISNULL(MND.MeetingTypeName, '') + '</td></tr> <tr><td>Company</td><td>' + ISNULL(MND.CompanyName, '') + '</td></tr> <tr><td>Location</td><td>' + ISNULL(MND.OperLocationName, '') + '</td></tr> <tr><td>Meeting Mode</td><td>' + ISNULL(MND.MeetingModeName, '') + '</td></tr> ' + CASE WHEN MND.MeetingMinutesUrl IS NOT NULL THEN '<tr><td>Meeting Note Link</td><td><a href=""' + MND.MeetingMinutesUrl + '"" style=""color:#2563eb;text-decoration:underline;"">View Note</a></td></tr>' ELSE '' END + ' </tbody> </table> <table class=""details-table""> <thead><tr><th>Participants</th></tr></thead> <tbody> <tr><td style=""padding:14px 16px;""><div style=""display:flex;flex-wrap:wrap;gap:8px;"">' + ISNULL(MND.ParticipantDetail, '') + '</div></td></tr> </tbody> </table> <table class=""details-table kv-table""> <thead><tr><th colspan=""2"">Meeting Summary</th></tr></thead> <tbody> <tr><td>Agenda</td><td style="""">' + ISNULL(MND.Agenda, '') + '</td></tr> <tr><td>Discussion Summary</td><td style="""">' + ISNULL(MND.DiscussionSummary, '') + '</td></tr> <tr><td>Decision</td><td style="""">' + ISNULL(MND.DecisionRemarks, '') + '</td></tr> </tbody> </table> <div class=""btn-container""><a href=""' + ISNULL(MND.MeetingNotesLink, '#') + '"" class=""btn"">View Full Meeting Notes</a></div> <div class=""important-note""><strong>Important</strong><p>Please review the meeting notes and ensure any action items assigned to you are completed by their respective deadlines.</p></div> <div class=""footer"">Please log in to the Meeting Portal to review the full details, action items, and attachments.</div> </div> </div> </body> </html>'","122","0","0"
+"51","Maintenance Order Creation for Item Required","<p style =""text-align:left !important""  >Dear sir/Ma'am</p>  &nbsp;  <p>This is to inform you that a Maintenance Order has been created in the ERP system with the following details: </p>  <p> One Maintenance Order (No. 22-23-0047 Dt. 13/10/2022) has been created, for Equipment - ""ACB FIXED PART ADDISON45"".</p>  <p> Details are - </p>  <p> Maintenance Schedule : No.,Dt.,OccurrenceNo. </p>  <p> Division : PLANT </p>  <p> Request Type : Corrective Maintenance </p>  <p> Maintenance Category : Building Preservation </p>  <p> Fault : Machine not working </p>  <p> Items Required - </p>  <table style=""width:100% ;border: 1px solid black ; border-collapse: collapse;"" >   <thead>    <tr>     <th style=""border: 1px solid black ; border-collapse: collapse;"">Item Description</th>     <th style=""border: 1px solid black ; border-collapse: collapse;"">Make Name</th>     <th style=""border: 1px solid black ; border-collapse: collapse;"">Technical Grade</th>     <th style=""border: 1px solid black ; border-collapse: collapse;"">Quantity</th>    </tr>   </thead>   <tbody>    <tr>     <td style=""border: 1px solid black ; border-collapse: collapse;"">BEARING 6205 ZZ</td>     <td style=""border: 1px solid black ; border-collapse: collapse;"">SKF</td>     <td style=""border: 1px solid black ; border-collapse: collapse;"">Skilled</td>     <td style=""border: 1px solid black ; border-collapse: collapse; text-align:right;"">4.000</td>    </tr>    <tr>     <td style=""border: 1px solid black ; border-collapse: collapse;"">V-BELT B-52</td>     <td style=""border: 1px solid black ; border-collapse: collapse;"">FENNER</td>     <td style=""border: 1px solid black ; border-collapse: collapse;"">Semi-Skilled</td>     <td style=""border: 1px solid black ; border-collapse: collapse; text-align:right;"">2.000</td>    </tr>    <tr>     <td style=""border: 1px solid black ; border-collapse: collapse;"">GREASE EP2</td>     <td style=""border: 1px solid black ; border-collapse: collapse;"">INDIAN OIL</td>     <td style=""border: 1px solid black ; border-collapse: collapse;"">Unskilled</td>     <td style=""border: 1px solid black ; border-collapse: collapse; text-align:right;"">1.500</td>    </tr>   </tbody>  </table>  <br>  <p>     <b>     Note:  This is a system generated Email.</b>  </p>  <p>Regards, @CompanyName</p>  </div>","'  <p style =""text-align:left !important""  >Dear Sir/Ma''am,</p>  &nbsp;  <p>This is to inform you that a Maintenance Order has been created in the ERP system with the following details: </p>  <p> One Maintenance Order (No. '+ MOM.DocumentNoYearly +' Dt. '+ Convert(varchar,MOM.DocumentDate,103) +') has been created, for '+RefObj.ReferenceObject+' - ""'+Isnull(EM.EquipmentDescription,FL.LocationName)+'"".</p>  <p> Details are - </p>  <p> Maintenance Schedule : No.'+isnull(ISNULL(RD.DocumentNoyearly,MASM.DocumentNoyearly),'')+',Dt.'+ isnull(Convert(varchar,ISNULL(RD.Documentdate,MASM.Documentdate),103),'') +',OccurrenceNo.'+ isnull(Convert(varchar,ISNULL(RD.OccurrenceNo,MSOD.OccurrenceNo)),'') +' </p>  <p> Division : '+ IsNULL(TDM.DivisionName,'NA') +' </p>  <p> Request Type : '+MT.MaintenanceType+' </p>  <p> Maintenance Category : '+MMC.MaintenanceCategory+' </p>  <p> Fault : '+isnull([Faults],'')+' </p>  ' + IsNull('<p> Items Required - </p>  <table style=""width:100% ;border: 1px solid black ; border-collapse: collapse;"" >   <thead>    <tr>     <th style=""border: 1px solid black ; border-collapse: collapse;"">Item Description</th>     <th style=""border: 1px solid black ; border-collapse: collapse;"">Make Name</th>     <th style=""border: 1px solid black ; border-collapse: collapse;"">Technical Grade</th>     <th style=""border: 1px solid black ; border-collapse: collapse;"">Quantity</th>    </tr>   </thead>   <tbody>  ' + NullIf((  Select  '    <tr>     <td style=""border: 1px solid black ; border-collapse: collapse;"">' + IM.ItemDescription + '</td>     ' +  '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + IsNull(MK.MakeName,'') + '</td>     ' +  '<td style=""border: 1px solid black ; border-collapse: collapse;"">' + IsNull(TG.TechnicalGradeName,'') + '</td>     ' +  '<td style=""border: 1px solid black ; border-collapse: collapse; text-align:right;"">' + Convert(varchar(20), Sum(MOIR.Quantity)) + '</td>    </tr>  '   From EAM.MaintenanceOrderItemRequired MOIR   Inner Join masterdata.mItemMaster IM on IM.ItemNo = MOIR.ItemNo   Left Join masterdata.mMakeMaster MK on MK.MakeNo = MOIR.MakeNo   Left Join GlobalData.TechnicalGrade TG on TG.TechnicalGradeNo = MOIR.TechGradeNo   Where MOIR.MaintenanceOrderNo = MOM.MaintenanceOrderNo   Group by IM.ItemDescription, MK.MakeName, TG.TechnicalGradeName   Order by IM.ItemDescription, MK.MakeName, TG.TechnicalGradeName   for xml path(''), type).value('.','varchar(max)'),'') + '   </tbody>  </table>  ','') + '  <br>  <p>     <b>  Note:  This is a system generated Email.</b></p>  <p>Regards, @CompanyName</p>  </div> '","125","0","0"

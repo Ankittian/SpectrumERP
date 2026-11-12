@@ -1,0 +1,3 @@
+﻿"ConfigurationNo","ConfigurationName","ConfigurarationDescription","Inactive"
+"1","Default Configuration","This configuration will show GST Category in MMMM","0"
+"2","Pakistan Configuration","This configuration will hide GST Category in MMMM","1"

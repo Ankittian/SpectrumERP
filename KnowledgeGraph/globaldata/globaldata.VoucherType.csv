@@ -1,0 +1,12 @@
+﻿"VoucherTypeNo","VoucherCode","VoucherName","Description"
+"0","ATJV","Journal",
+"1","ATPY","Payment",
+"2","ATCV","Contra",
+"3","ATRV","Receipt",
+"4","ATDN","DebitNote",
+"5","ATCN","CreditNote",
+"6","ATRJ","Reversal",
+"7","ATOT","Other",
+"9","ATPV","Purchase",
+"10","ATSV","Sales",
+"11","ATSJ","StockJournal",

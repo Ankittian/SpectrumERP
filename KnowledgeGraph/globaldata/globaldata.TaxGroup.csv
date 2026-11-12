@@ -1,0 +1,63 @@
+﻿"GroupNo","GroupCode","TaxGroupName","TaxCategoryNo","Formula","Inactive"
+"1","AED001","AED","1","( [Basic Amount] -  [DISC01] +  [FREBEF] ) * 0.01 *  [AED]","0"
+"2","SED001","SED","1","( [Basic Amount] -  [DISC01] +  [FREBEF] ) * 0.01 *   [SED]","0"
+"3","BED001","BED","1","( [Basic Amount] -  [DISC01]+ [LOAD01]  -   [RAMD01]  + [FREBEF] + [VATK01] )  * 0.01 *  [BED]","0"
+"4","EDUCES","EDU CESS ON BED","1","( [BED001]  ) * 0.01 *   [EDU CESS ON BED]","0"
+"5","SHECES","SHE CESS ON BED","1","([BED001]) * 0.01 *   [SHE CESS ON BED]","0"
+"6","CVD001","CVD","1","( [Basic Amount] -  [DISC01] +  [FREBEF] ) * 0.01 *   [CVD]","0"
+"7","SCVD01","SCVD","1","( [Basic Amount] -  [DISC01] +  [FREBEF] ) * 0.01 *   [SCVD]","1"
+"8","SERTAX","SERVICE TAX","2","( [Basic Amount]   -  [DISC01] ) *  [SERVICE TAX] * 0.01","1"
+"9","EDUSER","EDU CESS ON SERVICE TAX","2","([SERTAX]) *  [EDU CESS ON SERVICE TAX] * 0.01","1"
+"10","SHESER","SHE CESS ON SERVICE TAX","2","([SERTAX]) *   [SHE CESS ON SERVICE TAX]  * 0.01","1"
+"11","CST001","CST","3","( [Basic Amount] - [DISC01] + 
+[AED001] +  [BCD001]  + [SED001] + [BED001] + [CVD001] +[SCVD01] +  
+[EDU003] + [EDU004] + [EDUCES] + 
+[SHE003] +  [SHE004] + [SHECES] +   [LOAD01] + 
+[FREBEF]  ) * 0.01 *   [CST]","1"
+"12","VAT001","VAT","4","( [Basic Amount] - [DISC01] + 
+[AED001] +  [BCD001]  + [SED001] + [BED001] + [CVD001] +[SCVD01] +  
+[EDU003] + [EDU004] + [EDUCES] + 
+[SHE003] +  [SHE004] + [SHECES] +  [LOAD01] +  
+[FREBEF]  ) * 0.01 *  [VAT]","0"
+"13","TDS001","TDS","5","( [Basic Amount] -  [DISC01]) *  [TDS]  * 0.01","0"
+"14","TCS001","TCS","6","( [Basic Amount] - [DISC01] +  [CENGST]  +  [INTGST] +  [STAGST]+ [CESGST] ) * 0.01 *  [TCS]","0"
+"15","ENTRYT","ENTRY TAX","7","( [Basic Amount] -  [DISC01]  
++  [AED001] +  [BCD001] +  [BED001] +  [CST001] +  [CVD001] 
++  [EDU003] +  [EDU004] +  [EDUCES] +  [FREAFT] +  [FREBEF] 
++  [PCKFWD] +  [SCVD01] +  [SED001] +   [SHE003] +  [SHE004] +  [SHECES] 
++  [VAT001] ) *  [ENTRY TAX] * 0.01","1"
+"16","FREBEF","FREIGHT ON BASIC VALUE","10","( [Basic Amount] -   [DISC01] ) *   [FREIGHT ON BASIC VALUE]   * 0.01","0"
+"17","FREAFT","FREIGHT ON NET VALUE","10","( [Basic Amount] -   [DISC01] ) *   [FREIGHT ON NET VALUE]  * 0.01","0"
+"18","DISC01","DISCOUNT","11","[Basic Amount] *  [DISCOUNT] * 0.01","0"
+"19","NCCD01","National Calamity Contigent Duty","1","( [Basic Amount] -  [DISC01] +  [FREBEF] ) * 0.01 *  [National Calamity Contigent Duty]","0"
+"22","EDU003","EDU CESS ON CVD","1","([CVD001] ) * 0.01 *  [EDU CESS ON CVD]","0"
+"23","SHE003","SHE CESS ON CVD","1","([CVD001]) *  [SHE CESS ON CVD] * 0.01","0"
+"24","BCD001","BCD","1","( [Basic Amount] -  [DISC01] +  [FREBEF] ) * 0.01 *   [BCD]","0"
+"25","ADOBCD","AD ON BCD","1",,"0"
+"26","EDU004","EDU CESS ON BCD","1","([BCD001]) * 0.01 *  [EDU CESS ON BCD]","0"
+"27","SHE004","SHE CESS ON BCD","1","([BCD001]) *  [SHE CESS ON BCD] * 0.01","0"
+"28","SCD001","Special Custom Duty","1",,"0"
+"29","IROUND","ITEM BASIC ROUNDING","11",,"1"
+"30","ROADST","ROUNDING OFF ADJUSTMENT","12","([Basic Amount] ) * [ROUNDING OFF ADJUSTMENT]  * 0.01","0"
+"31","SBCESS","swachh bharat cess","2","( [Basic Amount]   -  [DISC01] ) *  [swachh bharat cess] * 0.01","0"
+"32","EXTWCT","WCT","13","( [Basic Amount] -  [DISC01]) *  [WCT]  * 0.01","0"
+"33","KKCESS","KRISHI KALYAN CESS","2","( [Basic Amount]   -  [DISC01] ) *  [KRISHI KALYAN CESS] * 0.01","1"
+"34","CENGST","Central GST","14","( [Basic Amount] -  [DULSUR]  +[LOAD01] -[DISC01]+[FREBEF]+[INSURC]+ [OTHRCR]+ [INSAD1]+ [TERCHG]+  [OTH002] + [ROYBFF]+ [OBDADD] -  [OBDDED] )   *  [Central GST]* 0.01","0"
+"35","STAGST","State GST","14","( [Basic Amount] - [DULSUR] +[LOAD01] -[DISC01]+ [FREBEF]+[INSURC]+ [OTHRCR]+ [INSAD1]+  [TERCHG]+  [OTH002] +  [ROYBFF]+  [OBDADD] - [OBDDED]  )   *  [State GST]* 0.01","0"
+"36","INTGST","Integrated GST","14","( [Basic Amount] -[DISC01]+  [FREBEF]+ [FREIGHT ON NET VALUE]+ [PCKFWD] + [ROYBFF]+  [OBDADD] -  [OBDDED]  )   *  [Integrated GST]* 0.01","0"
+"37","UNTGST","UT GST","14","( [Basic Amount] -[DISC01]+ [FREBEF] + [ROYBFF])   *  [UT GST]* 0.01","0"
+"38","CESGST","Cess GST","14","( [Basic Amount] -[DISC01]+ [FREBEF] + [ROYBFF] )   *  [Cess GST]* 0.01","0"
+"39","INSAD1","Insurance","8","( [Basic Amount] - [DISC01] +  [FREBEF]  ) * 0.01 *  [INSURANCE]","0"
+"40","WIH001","With Holding Tax","5","( [Basic Amount] -  [DISC01]) *  0.01 * [With Holding Tax]","1"
+"41","SAT001","Sales Tax","4","( [Basic Amount] -  [DISC01]) *  0.01 * [Sales Tax]","1"
+"42","ADS001","Additional Sales Tax","4","( [Basic Amount] -  [DISC01]) *  0.01 * [Additional Sales Tax]","1"
+"43","CUD001","Custom Duty","4","( [Basic Amount] -  [DISC01]) *  0.01 * [Custom Duty]","1"
+"44","ACD001","Additional Custom Duty","4","( [Basic Amount] -  [DISC01]) *  0.01 * [Additional Custom Duty]","1"
+"45","RED001","RD(Regularity Duty)","4","( [Basic Amount] -  [DISC01]) *  0.01 * [RD(Regularity Duty)]","1"
+"46","CES001","Cess Sales Tax","4","( [Basic Amount] -  [DISC01]) *  0.01 * [Cess Sales Tax]","1"
+"47","OTT001","Other Tax","4","( [Basic Amount] -  [DISC01]) *  0.01 * [Other Tax]","1"
+"48","ROYBFF","Royalty On Basic Value","8","( [Basic Amount] -  [DISC01] )  * 0.01 *   [Royalty On Basic Value]","1"
+"49","ROYAFT","Royalty On Net Value","8","( [Basic Amount] - [DISC01] +  [CENGST]  +  [INTGST] +  [STAGST]+ [CESGST] ) * 0.01 *   [Royalty On Net Value]","1"
+"50","GTDSCG","GST TDS CGST","9","( [Basic Amount] -  [DISC01]) *  [GST TDS CGST]  * 0.01","1"
+"51","GTDSSG","GST TDS SGST","9","( [Basic Amount] -  [DISC01]) *  [GST TDS SGST]  * 0.01","1"
+"52","GTDSIG","GST TDS IGST","9","( [Basic Amount] -  [DISC01]) *  [GST TDS IGST]  * 0.01","1"

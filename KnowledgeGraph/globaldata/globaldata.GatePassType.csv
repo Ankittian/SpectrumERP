@@ -1,0 +1,16 @@
+﻿"GatePassTypeNo","IsApplicableInGPIn","GatePassTypeIn","GPInSourceDocument","IsApplicableInGPOut","GatePassTypeOut","GPOutSourceDocument"
+"1","1","Contractor Material",,"1","Contractor Material","Gate Pass"
+"2","1","Direct (Returnable)",,"1","Dispatch Against Gate Pass","Gate Pass"
+"3","1","Direct (Non-Returnable)",,"0",,
+"4","1","Receipt Against Gate Pass","Gate Pass","1","Direct (Returnable)",
+"5","0",,,"1","Direct (Non-Returnable)",
+"6","1","Loan Taken",,"1","Loan Return Against Taken","Gate Pass"
+"7","1","Loan Receive Against Given","Gate pass","1","Loan Given",
+"8","1","Receipt Replaceable Item","Gate Pass","1","Return Replaceable Item","GRN"
+"9","0",,,"1","Return Rejected Material","GRN"
+"10","0",,,"1","Return Excess Material","GRN"
+"11","1","Receiving Subcontract Material","Gate Pass","1","Subcontract Material",
+"12","1","Maintenance Service Order","Maintenance Service Order","1","Maintenance Service Order","Maintenance Service Order"
+"13","1","Gate Pass Against Service",,"1","Service Request","Service Request"
+"14","1","Service Call","Service Call","1","Service Call",
+"15","0","Delivery Challan","Gate Pass Out","1","Delivery Challan","Gate Pass Out"

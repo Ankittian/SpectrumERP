@@ -1,0 +1,5 @@
+﻿"SalesCategoryNo","SalesCategory","Inactive","IsDefault"
+"1","Domestic","0","1"
+"2","Export","0","0"
+"3","Merchant Export","0","0"
+"4","Consignment","1","0"

@@ -1,0 +1,6 @@
+﻿"IncidentReviewTypeNo","ReviewType","InActive","IsDefault","Name"
+"1","Operation Team Review","0","0","Project Manager"
+"2","Fleet Department Review","0","0","Workshop Manager"
+"3","Technical Review","0","0","Service Engineer Name"
+"4","Management Review","0","0","Management Person"
+"5","HR Review","0","0","HR Name"

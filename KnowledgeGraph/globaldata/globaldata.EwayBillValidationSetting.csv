@@ -1,0 +1,4 @@
+﻿"EwayBillValidationSettingNo","EwayBillSetting","Description","IsDefault","Inactive"
+"1","NA","Use this setting when don't want EwayBill Transaction Type Validation","0","1"
+"2","Old Setting","Use this setting when EwayBill Transaction Type depends on Location","0","1"
+"3","New Setting","Use this setting when EwayBill Transaction Type depends on GSTINNo","0","1"

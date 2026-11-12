@@ -1,0 +1,8 @@
+﻿"LotReserveParameterNo","Particular","InActive"
+"1","Unreserved","0"
+"2","CostCenter","0"
+"3","JobCard","0"
+"4","Sales Order","0"
+"5","Stock Transfer Order","1"
+"6","Project","1"
+"7","WBS Element","1"

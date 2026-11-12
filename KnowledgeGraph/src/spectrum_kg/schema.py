@@ -28,6 +28,10 @@ LABELS: dict[str, dict[str, str]] = {
     "StoredProcedure": {"layer": "data", "means": "T-SQL stored procedure (one node, full code): header author/date/description, parameters list, params_not_passed (never sent by the data layer, SQL default applies).",
                         "key_props": "name, code, description, author, created, parameters, params_not_passed, dynamic_sql, ambiguous_columns"},
     "Table": {"layer": "data", "means": "Database table (schema.name).", "key_props": "name, schema, table"},
+    "EnumType": {"layer": "data", "means": "Lookup list from the GlobalData tables: what the numeric codes of one column mean (e.g. AccountType, ItemType, Status).",
+                 "key_props": "name, key_column, name_column, value_count, summary"},
+    "EnumValue": {"layer": "data", "means": "One code of a lookup list, e.g. AccountType 3 = Bank Account.",
+                  "key_props": "enum, value, label, inactive, is_default"},
     "Column": {"layer": "data", "means": "Table column observed in SP code (no DDL available, so only used columns exist).",
                "key_props": "name, table, column"},
 }
@@ -66,6 +70,10 @@ RELATIONSHIPS: dict[str, dict[str, object]] = {
     "WRITES": {"from": "StoredProcedure", "to": "Table", "means": "SP inserts/updates/deletes; props ops, error_handling (CATCH-block error log)"},
     "USES_COLUMN": {"from": "StoredProcedure", "to": "Column", "means": "SP reads/writes the column; props ops, inferred"},
     "HAS_COLUMN": {"from": "Table", "to": "Column", "means": "column of the table"},
+    "HAS_VALUE": {"from": "EnumType", "to": "EnumValue", "means": "code that belongs to the lookup list"},
+    "BACKED_BY": {"from": "EnumType", "to": "Table", "means": "GlobalData table the lookup list is stored in"},
+    "HAS_ENUM": {"from": "Column", "to": "EnumType", "means": "column holds codes of this lookup list (matched by key column name); ambiguous=true when several lists share the key name"},
+    "USES_ENUM_VALUE": {"from": "StoredProcedure", "to": "EnumValue", "means": "SP compares a column with this raw number; props literal, column, count, confidence (high|low)"},
     "CALLS_SP": {"from": "Form|UserControl|StoredProcedure", "to": "StoredProcedure",
                  "means": "shortcut Form->...->SP (props methods); or SP EXEC of another SP", "derived": True},
     "DYNAMIC_EXEC": {"from": "StoredProcedure", "to": "Table", "means": "SP executes dynamic SQL whose procedure name is looked up in this table"},
@@ -101,6 +109,7 @@ TIPS = [
     "Use get_node(id, detail='code') only for nodes whose code you must read; summaries are usually enough to decide the next hop.",
     "Forms with status=planned are placeholders for screens not built yet; they carry process context but no code.",
     "SQL ids are lowercase: table:masterdata.munitmaster, sp:masterdata.mmumsave, column:masterdata.munitmaster.unitname. SP parameters are a property of the SP, not nodes.",
+    "Raw numbers in SP code (StatusNo = 3) are translated by StoredProcedure -USES_ENUM_VALUE-> EnumValue (label = the name); confidence=low means several lookup lists share the column name, so check all candidates.",
     "WRITES edges with error_handling=true are CATCH-block error logging, not business writes.",
 ]
 

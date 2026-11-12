@@ -1,0 +1,5 @@
+﻿"FreightTypeNo","FreightType","Inactive","IsSalesDefault","IsPurchaseDefault"
+"1","TOPAY","0","1","0"
+"2","FOR","0","0","1"
+"3","FOR As Actual","0","0","0"
+"4","NA","1","0","0"

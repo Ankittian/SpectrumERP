@@ -19,6 +19,7 @@ from .extract.bundle import discover_bundles
 from .extract.code import build_code_graph, collect_types
 from .extract.roslyn import extract_code_facts
 from .extract.tsql import parse_sp_file
+from .enums import add_enums
 from .model import Graph
 
 
@@ -30,6 +31,7 @@ class BuildReport:
     errors: list[str] = field(default_factory=list)
     docs: SyncReport | None = None                              # embedding-text files vs the graph (see embedding_docs.py)
     generated: dict[str, str] = field(default_factory=dict)     # id -> text the builder generated (before hand edits)
+    enums: dict[str, int] | None = None                         # add_enums() stats when kg.yaml sets enums_dir
 
 
 def build_graph(settings: Settings, with_domain: bool = True, docs: str = "apply",
@@ -48,6 +50,9 @@ def build_graph(settings: Settings, with_domain: bool = True, docs: str = "apply
         del g.edges[e.key]
     if not settings.graph_json:
         enrich(g)
+    if settings.raw.get("enums_dir"):
+        enums_dir = (settings.project_dir / settings.raw["enums_dir"]).resolve()
+        report.enums = add_enums(g, enums_dir)
     report.generated = {i: n.props["text"] for i, n in g.nodes.items()}
     if docs != "off":
         store = EmbeddingDocs(settings.docs_dir)

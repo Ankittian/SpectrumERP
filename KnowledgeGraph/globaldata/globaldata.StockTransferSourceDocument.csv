@@ -1,0 +1,5 @@
+﻿"StockTransferSourceNo","SourceDocument","Inactive","IsDefault"
+"1","Direct","0","0"
+"2","Purchase Order","0","0"
+"3","Subcontract Order","0","0"
+"4","Work Order","1","0"

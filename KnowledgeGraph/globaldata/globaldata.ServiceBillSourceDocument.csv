@@ -1,0 +1,4 @@
+﻿"ServiceBillSourceNo","SourceDocument","Inactive","IsDefault"
+"1","Direct","0","0"
+"2","Service Receipt","0","0"
+"3","Production Receipt","1","0"

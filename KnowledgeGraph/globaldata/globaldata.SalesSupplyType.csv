@@ -1,0 +1,8 @@
+﻿"SalesSupplyTypeNo","SalesCategoryNo","SupplyTypeName","Inactive","IsDefault"
+"1","1","Regular","0","1"
+"2","1","SEZ With Payment","0","0"
+"3","1","SEZ Without Payment","0","0"
+"4","1","Deemed Export","0","0"
+"5","2","Export With Payment of GST","0","0"
+"6","2","Export Without Payment of GST","0","0"
+"7","3","Regular","0","0"

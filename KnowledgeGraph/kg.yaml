@@ -18,6 +18,9 @@ exclude: [KnowledgeGraph, .venv, .git, .vs, .claude]
 # your version (see `kg docs --help`).
 embedding_docs_dir: embedding_docs
 
+# GlobalData lookup-table export (SQL Server): numeric codes -> names (EnumType / EnumValue nodes, see enums.py)
+enums_dir: globaldata          # if globaldata/globaldata-fk-enums.json exists it is used (FK-exact); else the CSV export
+
 domain_dir: domain             # curated functional docs (modules, concepts, processes, rules, forms)
 cache_dir: .cache               # Roslyn facts + embedding cache (git-ignored)
 roslyn_extractor: tools/bin/RoslynExtractor/RoslynExtractor.exe

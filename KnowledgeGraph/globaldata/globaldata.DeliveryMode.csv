@@ -1,0 +1,6 @@
+﻿"DeliveryModeNo","DeliveryMode","Inactive","IsDefault","GSTTransportationModeNo"
+"1","By Air","0","0","3"
+"2","By Rail","0","0","2"
+"3","By Road","0","0","1"
+"4","By Ship","0","0","4"
+"5","By Courier","1","0","5"

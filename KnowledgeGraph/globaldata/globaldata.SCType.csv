@@ -1,0 +1,6 @@
+﻿"SCTypeNo","SCTypeName","Inactive","IsDefault"
+"1","Service","0","0"
+"2","Conversion","0","0"
+"3","Activity","0","0"
+"4","Expense (PO)","1","0"
+"5","Expense (Sales)","1","0"

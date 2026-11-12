@@ -1,0 +1,5 @@
+﻿"RoundingNo","RoundingName","IsDefault"
+"0","No Rounding","0"
+"1","Ceiling","0"
+"2","Floor","0"
+"3","Custom","0"

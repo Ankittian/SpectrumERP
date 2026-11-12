@@ -1,0 +1,6 @@
+﻿"LiftStatusNo","LiftStatusName"
+"1","Under AMC"
+"2","LIMBO"
+"3","Close"
+"4","Suspend"
+"5","Reject"

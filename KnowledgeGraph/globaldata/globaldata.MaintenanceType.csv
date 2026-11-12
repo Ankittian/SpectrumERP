@@ -1,0 +1,4 @@
+﻿"MaintenanceTypeNo","MaintenanceType","Inactive","IsDefault"
+"1","Preventive Maintenance","0","0"
+"2","Corrective Maintenance","0","0"
+"3","Inspection","0","0"

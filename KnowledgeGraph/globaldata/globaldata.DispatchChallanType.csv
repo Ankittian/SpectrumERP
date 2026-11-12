@@ -1,0 +1,6 @@
+﻿"DispatchChallanTypeNo","ChallanType","Inactive","IsDefault"
+"1","Dispatch to Customer","0","0"
+"2","External Subcontract","0","0"
+"3","Interunit Subcontract","0","0"
+"4","Interunit Sale","0","0"
+"5","Purchase Return","0","0"
