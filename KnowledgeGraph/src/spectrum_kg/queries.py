@@ -9,12 +9,11 @@ import neo4j
 from neo4j_graphrag.embeddings.base import Embedder
 from neo4j_graphrag.retrievers import HybridRetriever, VectorRetriever
 
-from .comments import guess_language, strip_comments
 from .config import Settings
 from .load import BASE_LABEL, FULLTEXT_INDEX, VECTOR_INDEX
 from .schema import LABELS, RELATIONSHIPS, RESPONSE_RULES, STRATEGIES, TIPS
 
-HIDDEN_PROPS = {"embedding", "embedding_hash", "text", "comments"}
+HIDDEN_PROPS = {"embedding", "embedding_hash", "text"}
 SUMMARY_PROPS = ["id", "kind", "name", "title", "summary", "status", "modules"]
 CODE_META_PROPS = ["id", "kind", "name", "title", "owner", "method", "method_kind", "file", "start_line", "status"]
 LUCENE_SPECIAL = re.compile(r'([+\-&|!(){}\[\]^"~*?:\\/])')
@@ -266,11 +265,6 @@ class KGClient:
             return {"error": f"no node '{id}'", "candidates": candidates}
         rows = self._read(f"MATCH (n:{BASE_LABEL} {{id: $id}}) RETURN properties(n) AS p", id=nid)
         p = {k: v for k, v in rows[0]["p"].items() if k not in HIDDEN_PROPS}
-        # Source-code comments are never served: drop the SP header "Description:" and strip comments from code.
-        if p.get("kind") == "StoredProcedure":
-            p.pop("description", None)
-        if p.get("code"):
-            p["code"] = strip_comments(str(p["code"]), guess_language(p.get("kind"), p))
         if detail == "code":
             # Code only, one bounded page per call. No hop hints: the client already chose this node.
             limit = max(500, min(max_chars or profile(prof)["code_chars"], 60000))
