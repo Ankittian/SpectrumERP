@@ -304,7 +304,9 @@ def load_local_model(model: str, dims: int, max_seq: int | None = None):
     import torch
     from sentence_transformers import SentenceTransformer
     device = _pick_device()
-    kwargs = {"torch_dtype": torch.float16} if device == "cuda" else {}
+    # CPU: force fp32. Newer sentence-transformers load the checkpoint's bf16 dtype, which is ~150x slower on CPUs
+    # without bf16 support (e.g. Graviton2/Neoverse-N1: mkldnn bf16 fails -> BLAS fallback).
+    kwargs = {"torch_dtype": torch.float16} if device == "cuda" else {"dtype": torch.float32}
     m = SentenceTransformer(model, device=device, truncate_dim=dims, model_kwargs=kwargs, tokenizer_kwargs={"padding_side": "left"})
     m.max_seq_length = max_seq or int(os.getenv("LOCAL_EMBEDDING_MAX_TOKENS", "1024"))
     return m
