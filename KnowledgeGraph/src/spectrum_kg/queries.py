@@ -11,19 +11,77 @@ from neo4j_graphrag.retrievers import HybridRetriever, VectorRetriever
 
 from .config import Settings
 from .load import BASE_LABEL, FULLTEXT_INDEX, VECTOR_INDEX
-from .schema import LABELS, RELATIONSHIPS, STRATEGIES, TIPS
+from .schema import LABELS, RELATIONSHIPS, RESPONSE_RULES, STRATEGIES, TIPS
 
 HIDDEN_PROPS = {"embedding", "embedding_hash", "text"}
 SUMMARY_PROPS = ["id", "kind", "name", "title", "summary", "status", "modules"]
+CODE_META_PROPS = ["id", "kind", "name", "title", "owner", "method", "method_kind", "file", "start_line", "status"]
 LUCENE_SPECIAL = re.compile(r'([+\-&|!(){}\[\]^"~*?:\\/])')
 WRITE_RE = re.compile(r"\b(CREATE|MERGE|DELETE|DETACH|SET|REMOVE|DROP|LOAD\s+CSV|FOREACH)\b|\bCALL\s+(apoc\.(create|merge|refactor|periodic)|db\.create|dbms)", re.I)
 RETURN_PROPS = ["id", "kind", "name", "title", "summary", "modules", "status"]
+
+# Response-size profiles. "compact" is the default: it keeps the same fields and hints but uses smaller fan-out,
+# so a client that needs more asks for "standard" or "detailed" explicitly. Pagination (expand cursor, code cursor)
+# keeps smaller defaults from hiding results.
+PROFILES: dict[str, dict[str, int]] = {
+    # compact_hints=1: hop hints use the short [count, labels] shape; labels are trimmed to hint_labels.
+    "compact":  {"search_top_k": 5, "similar_top_k": 3, "expand_limit": 10, "cypher_limit": 50,
+                 "summary_chars": 160, "compact_hints": 1, "hint_labels": 4,
+                 "cypher_str_chars": 500, "cypher_max_chars": 12000, "code_chars": 6000},
+    "standard": {"search_top_k": 8, "similar_top_k": 5, "expand_limit": 25, "cypher_limit": 200,
+                 "summary_chars": 220, "compact_hints": 0, "hint_labels": 99,
+                 "cypher_str_chars": 2000, "cypher_max_chars": 40000, "code_chars": 12000},
+    "detailed": {"search_top_k": 15, "similar_top_k": 10, "expand_limit": 50, "cypher_limit": 500,
+                 "summary_chars": 400, "compact_hints": 0, "hint_labels": 99,
+                 "cypher_str_chars": 4000, "cypher_max_chars": 120000, "code_chars": 30000},
+}
+DEFAULT_PROFILE = "compact"
+
+
+def profile(name: str | None) -> dict[str, int]:
+    return PROFILES.get(name or DEFAULT_PROFILE, PROFILES[DEFAULT_PROFILE])
+
+
+def shape_hints(hints: dict[str, Any] | None, p: dict[str, int]) -> dict[str, Any] | None:
+    """Standard shape {REL: {count, labels}} or, for compact profiles, {REL: [count, labels]}."""
+    if not p["compact_hints"] or not hints:
+        return hints
+    return {d: {rel: [v["count"], v["labels"][: p["hint_labels"]]] for rel, v in hints[d].items()}
+            for d in ("out", "in") if hints.get(d)}
 
 
 def _short(s: Any, n: int = 220) -> Any:
     if isinstance(s, str) and len(s) > n:
         return s[: n - 1] + "…"
     return s
+
+
+def bound_code(code: str, cursor: str | None, max_chars: int) -> dict[str, Any]:
+    """Return one bounded slice of code plus paging metadata (character offsets)."""
+    start = int(cursor) if cursor and cursor.isdigit() else 0
+    chunk = code[start:start + max_chars]
+    end = start + len(chunk)
+    more = end < len(code)
+    return {"code": chunk, "code_chars": len(code), "returned_chars": len(chunk),
+            "truncated": more, "next_cursor": str(end) if more else None}
+
+
+def bound_rows(rows: list[dict[str, Any]], limit: int, max_chars: int) -> dict[str, Any]:
+    """Apply the row cap and a total serialized-size cap; report what was cut so nothing is silent.
+    `rows` may hold one extra row beyond `limit` (the caller's look-ahead), which marks row truncation."""
+    kept: list[dict[str, Any]] = []
+    size = 0
+    reason = "row_limit" if len(rows) > limit else None
+    for r in rows[:limit]:
+        s = len(json.dumps(r, default=str, ensure_ascii=False))
+        if size + s > max_chars and kept:
+            reason = "size_limit"
+            break
+        kept.append(r)
+        size += s
+    truncated = reason is not None or len(rows) > len(kept)
+    return {"rows": kept, "returned": len(kept), "truncated": truncated,
+            "truncated_reason": reason if truncated else None}
 
 
 class LocalQueryEmbedder(Embedder):
@@ -115,12 +173,16 @@ class KGClient:
                                "count": rel_counts.get(k, 0)} for k, v in RELATIONSHIPS.items()],
             "strategies": STRATEGIES,
             "tips": TIPS,
+            "response_rules": RESPONSE_RULES,
+            "hop_hints_format": "standard/detailed: {REL: {count, labels}}; compact: {REL: [count, labels]} (labels trimmed)",
+            "profiles": PROFILES,
         }
 
     # ---- search -----------------------------------------------------------------------------
     def search(self, query: str, mode: str = "hybrid", labels: list[str] | None = None, module: str | None = None,
-               top_k: int = 8) -> dict[str, Any]:
-        top_k = max(1, min(top_k, 30))
+               top_k: int | None = None, prof: str | None = None) -> dict[str, Any]:
+        p = profile(prof)
+        top_k = max(1, min(top_k or p["search_top_k"], 30))
         pool = top_k * (6 if (labels or module) else 2)
         rows: list[dict[str, Any]] = []
         if mode == "fulltext":
@@ -148,10 +210,16 @@ class KGClient:
             if len(out) >= top_k:
                 break
         hints = self.hop_hints([r["id"] for r in out]) if out else {}
-        return {"query": query, "mode": mode, "results": [
-            {"id": r["id"], "label": r.get("kind"), "name": r.get("title") or r.get("name"),
-             "score": round(float(r.get("score") or 0), 4), "summary": _short(r.get("summary")),
-             "status": r.get("status"), "hop_hints": hints.get(r["id"])} for r in out]}
+        results = []
+        for r in out:
+            item = {"id": r["id"], "label": r.get("kind"), "name": r.get("title") or r.get("name"),
+                    "score": round(float(r.get("score") or 0), 4),
+                    "summary": _short(r.get("summary"), p["summary_chars"]),
+                    "hop_hints": shape_hints(hints.get(r["id"]), p)}
+            if r.get("status"):
+                item["status"] = r["status"]
+            results.append(item)
+        return {"query": query, "mode": mode, "profile": prof or DEFAULT_PROFILE, "results": results}
 
     def _fulltext(self, query: str, k: int) -> list[dict[str, Any]]:
         rows = self._read(
@@ -177,12 +245,18 @@ class KGClient:
             rows = [{"id": r["id"], "label": r.get("kind"), "name": r.get("name")} for r in self._fulltext(id_or_name, 5)]
         return None, rows
 
-    def get_node(self, id: str, detail: str = "summary") -> dict[str, Any]:
+    def get_node(self, id: str, detail: str = "summary", prof: str | None = None, cursor: str | None = None,
+                 max_chars: int | None = None) -> dict[str, Any]:
         nid, candidates = self.resolve_id(id)
         if nid is None:
             return {"error": f"no node '{id}'", "candidates": candidates}
         rows = self._read(f"MATCH (n:{BASE_LABEL} {{id: $id}}) RETURN properties(n) AS p", id=nid)
         p = {k: v for k, v in rows[0]["p"].items() if k not in HIDDEN_PROPS}
+        if detail == "code":
+            # Code only, one bounded page per call. No hop hints: the client already chose this node.
+            limit = max(500, min(max_chars or profile(prof)["code_chars"], 60000))
+            meta = {k: p[k] for k in CODE_META_PROPS if k in p}
+            return {"node": meta, **bound_code(str(p.get("code") or ""), cursor, limit)}
         if detail == "summary":
             raw = p
             p = {k: _short(raw[k], 400) for k in SUMMARY_PROPS if k in raw}
@@ -198,13 +272,16 @@ class KGClient:
                 p["has_code"] = True
         elif detail == "full":
             if "code" in p:
+                p["code_chars"] = len(str(p["code"]))
+                p["code_truncated"] = p["code_chars"] > 2500
                 p["code"] = _short(p["code"], 2500)
         return {"node": p, "hop_hints": self.hop_hints([nid])[nid]}
 
     # ---- expand -----------------------------------------------------------------------------
     def expand(self, ids: list[str], rel_types: list[str] | None = None, direction: str = "both",
-               target_labels: list[str] | None = None, limit: int = 25, cursor: str | None = None) -> dict[str, Any]:
-        limit = max(1, min(limit, 100))
+               target_labels: list[str] | None = None, limit: int | None = None, cursor: str | None = None,
+               prof: str | None = None) -> dict[str, Any]:
+        limit = max(1, min(limit or profile(prof)["expand_limit"], 100))
         skip = int(cursor) if cursor and cursor.isdigit() else 0
         resolved = [self.resolve_id(i)[0] or i for i in ids]
         pattern = {"out": "-[r]->", "in": "<-[r]-"}.get(direction, "-[r]-")
@@ -229,7 +306,7 @@ class KGClient:
             if rp:
                 item["edge"] = rp
             grouped.setdefault(r["sid"], {}).setdefault(key, []).append(item)
-        return {"from": resolved, "results": grouped, "returned": len(rows),
+        return {"from": resolved, "results": grouped, "returned": len(rows), "truncated": more,
                 "next_cursor": str(skip + limit) if more else None}
 
     # ---- paths ------------------------------------------------------------------------------
@@ -264,11 +341,12 @@ class KGClient:
         return {"from": a, "to": b, "paths": paths}
 
     # ---- similar ----------------------------------------------------------------------------
-    def similar(self, id: str, labels: list[str] | None = None, top_k: int = 5) -> dict[str, Any]:
+    def similar(self, id: str, labels: list[str] | None = None, top_k: int | None = None,
+                prof: str | None = None) -> dict[str, Any]:
         nid, cands = self.resolve_id(id)
         if not nid:
             return {"error": f"no node '{id}'", "candidates": cands}
-        top_k = max(1, min(top_k, 20))
+        top_k = max(1, min(top_k or profile(prof)["similar_top_k"], 20))
         rows = self._read(
             f"""MATCH (n:{BASE_LABEL} {{id: $id}}) WHERE n.embedding IS NOT NULL
             CALL db.index.vector.queryNodes($index, $pool, n.embedding) YIELD node, score
@@ -282,17 +360,19 @@ class KGClient:
         return {"of": nid, "results": rows}
 
     # ---- cypher -----------------------------------------------------------------------------
-    def run_cypher(self, query: str, params: dict[str, Any] | None = None, limit: int = 200) -> dict[str, Any]:
+    def run_cypher(self, query: str, params: dict[str, Any] | None = None, limit: int | None = None,
+                   prof: str | None = None) -> dict[str, Any]:
         if WRITE_RE.search(re.sub(r"'[^']*'|\"[^\"]*\"", "", query)):
             return {"error": "read-only: write clauses are not allowed"}
-        limit = max(1, min(limit, 1000))
+        p = profile(prof)
+        limit = max(1, min(limit or p["cypher_limit"], 1000))
         with self.driver.session(database=self.settings.neo4j_database, default_access_mode=neo4j.READ_ACCESS) as s:
             @neo4j.unit_of_work(timeout=20)
             def work(tx):
                 res = tx.run(query, **(params or {}))
                 out = []
-                for rec in res:
-                    out.append({k: _plain(v) for k, v in rec.items()})
+                for rec in res:  # look one row past the limit so bound_rows can report truncation
+                    out.append({k: _plain(v, p["cypher_str_chars"]) for k, v in rec.items()})
                     if len(out) > limit:
                         break
                 return out
@@ -300,23 +380,24 @@ class KGClient:
                 rows = s.execute_read(work)
             except neo4j.exceptions.Neo4jError as ex:
                 return {"error": f"{ex.code}: {ex.message}"}
-        return {"rows": rows[:limit], "truncated": len(rows) > limit}
+        return bound_rows(rows, limit, p["cypher_max_chars"])
 
 
-def _plain(v: Any) -> Any:
+def _plain(v: Any, str_chars: int = 2000) -> Any:
+    """Convert driver values to JSON-friendly data. String limits apply at every depth."""
     if isinstance(v, neo4j.graph.Node):
-        return {k: _short(x, 300) for k, x in dict(v).items() if k not in HIDDEN_PROPS} | {"_labels": sorted(v.labels)}
+        return {k: _short(x, min(300, str_chars)) for k, x in dict(v).items() if k not in HIDDEN_PROPS} | {"_labels": sorted(v.labels)}
     if isinstance(v, neo4j.graph.Relationship):
         return {"_type": v.type, "_from": v.start_node.get("id") if v.start_node else None,
                 "_to": v.end_node.get("id") if v.end_node else None, **dict(v)}
     if isinstance(v, neo4j.graph.Path):
-        return {"nodes": [_plain(n) for n in v.nodes], "rels": [_plain(r) for r in v.relationships]}
+        return {"nodes": [_plain(n, str_chars) for n in v.nodes], "rels": [_plain(r, str_chars) for r in v.relationships]}
     if isinstance(v, list):
-        return [_plain(x) for x in v]
+        return [_plain(x, str_chars) for x in v]
     if isinstance(v, dict):
-        return {k: _plain(x) for k, x in v.items() if k not in HIDDEN_PROPS}
+        return {k: _plain(x, str_chars) for k, x in v.items() if k not in HIDDEN_PROPS}
     if isinstance(v, (str, int, float, bool)) or v is None:
-        return _short(v, 2000) if isinstance(v, str) else v
+        return _short(v, str_chars) if isinstance(v, str) else v
     return json.loads(json.dumps(v, default=str))
 
 

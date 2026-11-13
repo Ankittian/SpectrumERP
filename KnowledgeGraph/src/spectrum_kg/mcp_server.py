@@ -6,6 +6,9 @@ chooses which relationships to follow (expand / find_paths / similar / run_cyphe
 from __future__ import annotations
 
 import json
+import logging
+import sys
+import time
 from typing import Annotated, Any, Literal
 
 from mcp.server.mcpserver import MCPServer
@@ -18,6 +21,9 @@ from .schema import instructions_text
 mcp = MCPServer(name="spectrum-kg", instructions=instructions_text())
 _client: KGClient | None = None
 
+# Per-call telemetry on stderr (stdout carries the MCP protocol). Logs sizes and timings only, never content.
+telemetry = logging.getLogger("spectrum_kg.telemetry")
+
 
 def kg() -> KGClient:
     global _client
@@ -26,24 +32,41 @@ def kg() -> KGClient:
     return _client
 
 
-def _safe(fn, *args, **kwargs) -> dict[str, Any]:
+def _safe(tool: str, fn, *args, **kwargs) -> dict[str, Any]:
+    t0 = time.perf_counter()
     try:
-        return fn(*args, **kwargs)
+        out = fn(*args, **kwargs)
     except RuntimeError as ex:  # missing configuration
-        return {"error": str(ex)}
+        out = {"error": str(ex)}
     except Exception as ex:  # connection / query problems surface to the client instead of killing the server
-        return {"error": f"{type(ex).__name__}: {ex}"}
+        out = {"error": f"{type(ex).__name__}: {ex}"}
+    _telemetry(tool, t0, out)
+    return out
 
 
-Labels = Annotated[list[str] | None, Field(description="Restrict to node labels, e.g. ['Form','BusinessProcess']. See describe_graph.")]
+def _telemetry(tool: str, t0: float, out: Any) -> None:
+    if not telemetry.isEnabledFor(logging.INFO):
+        return
+    try:
+        chars = len(json.dumps(out, default=str, ensure_ascii=False))
+    except Exception:
+        chars = -1
+    flags = out if isinstance(out, dict) else {}
+    telemetry.info("tool=%s ms=%.0f chars=%d approx_tokens=%d returned=%s truncated=%s error=%s", tool,
+                   (time.perf_counter() - t0) * 1000, chars, max(chars, 0) // 4, flags.get("returned"),
+                   flags.get("truncated"), "error" in flags)
+
+
+Labels = Annotated[list[str] | None, Field(description="Restrict to node labels, e.g. ['Form','BusinessProcess'].")]
+Profile = Annotated[Literal["compact", "standard", "detailed"] | None,
+                    Field(description="Response size. compact (default): small limits, short hints. standard: previous defaults. detailed: largest.")]
 
 
 @mcp.tool()
 def describe_graph() -> dict[str, Any]:
-    """The map of the graph: every node label and relationship type with meaning, direction, counts and whether
-    it is a derived shortcut, plus id conventions, suggested traversal strategies and tips.
-    Call this first in a session to plan hops."""
-    return _safe(kg().describe_graph)
+    """Full map: labels and relationships (meaning, direction, counts, derived shortcuts), id conventions,
+    strategies, tips, response rules and profile limits. Large output: call only when you need the map."""
+    return _safe("describe_graph", kg().describe_graph)
 
 
 @mcp.tool()
@@ -52,20 +75,25 @@ def search(
     mode: Annotated[Literal["hybrid", "vector", "fulltext"], Field(description="hybrid (default) = vector + keyword")] = "hybrid",
     labels: Labels = None,
     module: Annotated[str | None, Field(description="Module code filter, e.g. 'MM' or 'PM'.")] = None,
-    top_k: Annotated[int, Field(description="Number of entry points (1-30).")] = 8,
+    top_k: Annotated[int | None, Field(description="Entry points (1-30). Default depends on profile (compact: 5).")] = None,
+    profile: Profile = None,
 ) -> dict[str, Any]:
-    """Find entry-point nodes. Returns id, label, name, score, one-line summary and hop_hints (relationship types
-    available from each node with direction, count and neighbour labels). Does not expand: use expand() next."""
-    return _safe(kg().search, query, mode, labels, module, top_k)
+    """Find entry-point nodes: id, label, name, score, summary, hop_hints (relationships from each node with
+    direction, count and neighbour labels). Does not expand: use expand() next."""
+    return _safe("search", kg().search, query, mode, labels, module, top_k, profile)
 
 
 @mcp.tool()
 def get_node(
     id: Annotated[str, Field(description="Node id (e.g. form:fUnitMaster, sp:masterdata.mmumsave) or an exact name/title.")],
-    detail: Annotated[Literal["summary", "full", "code"], Field(description="summary (default), full (all props, code truncated), code (full code)")] = "summary",
+    detail: Annotated[Literal["summary", "full", "code"], Field(description="summary (default); full (all props, code cut at 2500 chars); code (one bounded page of code, plus cursor)")] = "summary",
+    cursor: Annotated[str | None, Field(description="next_cursor from a previous detail='code' call.")] = None,
+    max_chars: Annotated[int | None, Field(description="detail='code' page size in characters (500-60000). Default depends on profile.")] = None,
+    profile: Profile = None,
 ) -> dict[str, Any]:
-    """Properties of one node plus its hop_hints. Ask for detail='code' only when you need to read the code."""
-    return _safe(kg().get_node, id, detail)
+    """Properties of one node plus hop_hints. Use detail='code' only when you must read the code; it returns a
+    bounded page with truncated and next_cursor."""
+    return _safe("get_node", kg().get_node, id, detail, profile, cursor, max_chars)
 
 
 @mcp.tool()
@@ -74,12 +102,13 @@ def expand(
     rel_types: Annotated[list[str] | None, Field(description="Only these relationship types, e.g. ['WRITES','READS'].")] = None,
     direction: Annotated[Literal["out", "in", "both"], Field(description="Relationship direction relative to the given ids.")] = "both",
     target_labels: Labels = None,
-    limit: Annotated[int, Field(description="Max neighbours returned (1-100).")] = 25,
+    limit: Annotated[int | None, Field(description="Max neighbours returned (1-100). Default depends on profile (compact: 10).")] = None,
     cursor: Annotated[str | None, Field(description="next_cursor from a previous call to page further.")] = None,
+    profile: Profile = None,
 ) -> dict[str, Any]:
-    """One hop from a set of nodes. Results grouped per source id and 'REL (dir)', with neighbour id, label, name,
-    summary and edge properties (e.g. ops, result_set, order, tables, write_conflict). Paginated."""
-    return _safe(kg().expand, ids, rel_types, direction, target_labels, limit, cursor)
+    """One hop from a set of nodes, grouped per source id and 'REL (dir)': neighbour id, label, name, summary and
+    edge properties (e.g. ops, result_set, order, tables, write_conflict). Paginated: truncated=true means more."""
+    return _safe("expand", kg().expand, ids, rel_types, direction, target_labels, limit, cursor, profile)
 
 
 @mcp.tool()
@@ -94,33 +123,35 @@ def find_paths(
 ) -> dict[str, Any]:
     """Shortest paths between two nodes (undirected search; each step shows the real direction). Use it to explain
     how two things relate. CATCH-block error-log edges are always ignored."""
-    return _safe(kg().find_paths, from_id, to_id, max_hops, rel_types, k, exclude_derived, avoid_ids)
+    return _safe("find_paths", kg().find_paths, from_id, to_id, max_hops, rel_types, k, exclude_derived, avoid_ids)
 
 
 @mcp.tool()
 def similar(
     id: Annotated[str, Field(description="Node id whose embedding is the query.")],
     labels: Labels = None,
-    top_k: Annotated[int, Field(description="Number of neighbours (1-20).")] = 5,
+    top_k: Annotated[int | None, Field(description="Neighbours (1-20). Default depends on profile (compact: 3).")] = None,
+    profile: Profile = None,
 ) -> dict[str, Any]:
     """Semantic hop: nodes whose embedded text is closest to this node's (e.g. similar SPs or rules in other forms)."""
-    return _safe(kg().similar, id, labels, top_k)
+    return _safe("similar", kg().similar, id, labels, top_k, profile)
 
 
 @mcp.tool()
 def run_cypher(
     query: Annotated[str, Field(description="Read-only Cypher. All graph nodes carry label :Searchable and property kind=<label>.")],
     params: Annotated[dict[str, Any] | None, Field(description="Query parameters.")] = None,
-    limit: Annotated[int, Field(description="Row cap (1-1000).")] = 200,
+    limit: Annotated[int | None, Field(description="Row cap (1-1000). Default depends on profile (compact: 50).")] = None,
+    profile: Profile = None,
 ) -> dict[str, Any]:
-    """Escape hatch for aggregations and ad-hoc patterns. Runs in a READ transaction with a timeout; write clauses
-    are rejected. Embeddings and search text are stripped from returned nodes."""
-    return _safe(kg().run_cypher, query, params, limit)
+    """Escape hatch for aggregations and ad-hoc patterns. Read-only transaction with a timeout; write clauses are
+    rejected. Results are capped by rows and total size: truncated and truncated_reason say what was cut."""
+    return _safe("run_cypher", kg().run_cypher, query, params, limit, profile)
 
 
 @mcp.resource("kg://schema", name="graph-schema", description="Graph labels, relationships, strategies", mime_type="application/json")
 def schema_resource() -> str:
-    return json.dumps(_safe(kg().describe_graph), indent=1)
+    return json.dumps(_safe("kg://schema", kg().describe_graph), indent=1)
 
 
 def _bearer_guard(app, token: str):
@@ -147,6 +178,12 @@ def main() -> None:
     import os
 
     load_settings()  # loads .env so KG_MCP_TOKEN can live there
+    if os.getenv("KG_MCP_TELEMETRY", "1") != "0":  # on by default; KG_MCP_TELEMETRY=0 silences it
+        handler = logging.StreamHandler(sys.stderr)
+        handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
+        telemetry.addHandler(handler)
+        telemetry.setLevel(logging.INFO)
+        telemetry.propagate = False
     p = argparse.ArgumentParser(description="spectrum-kg MCP server")
     p.add_argument("--transport", choices=["stdio", "http"], default="stdio")
     p.add_argument("--host", default="0.0.0.0", help="HTTP bind address (0.0.0.0 = all interfaces / LAN)")

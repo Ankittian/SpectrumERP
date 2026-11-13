@@ -124,14 +124,14 @@ RESPONSE_RULES = [
 
 
 def instructions_text() -> str:
-    lines = [
-        "SpectrumERP knowledge graph (phases 0-13: about 400 forms over 10 modules, plus the report catalogue).",
-        "Agentic RAG: you choose the entry points and hops. Tools are small graph primitives:",
-        "describe_graph (full map), search (entry points), get_node, expand (1 hop, batch), find_paths, similar, run_cypher (read-only).",
-        "Layers: functional (Module, BusinessProcess, BusinessConcept, BusinessRule) -> Form/UserControl -> code (FormMethod, Control, DT*, DA*) -> data (StoredProcedure, Table, Column).",
-        "Strategies:",
-    ]
-    lines += [f"- {s['name']}: {s['path']}" for s in STRATEGIES]
-    lines += ["Tips:"] + [f"- {t}" for t in TIPS]
-    lines += ["Response rules (always follow):"] + [f"{i}. {r}" for i, r in enumerate(RESPONSE_RULES, 1)]
-    return "\n".join(lines)
+    """Always-on operating contract. Kept short: the full strategies, tips and response rules are returned by
+    describe_graph() and kg://schema, so they cost tokens only when a client asks for them."""
+    return "\n".join([
+        "SpectrumERP knowledge graph (~400 forms, 10 modules, report catalogue). Agentic RAG: you choose the route.",
+        "Workflow: search (entry points) -> read hop_hints -> expand only the relationships you need -> get_node for details.",
+        "Use get_node(detail='code') only when you must read code (bounded; page with next_cursor).",
+        "Full map, strategies, tips and response rules: describe_graph or kg://schema. Do not call it at every session start.",
+        "Profiles: compact (default, small limits), standard, detailed. truncated=true or next_cursor means more results exist.",
+        "Derived edges (derived=true) are shortcuts. WRITES with error_handling=true is error logging, not a business write.",
+        "Answer style: plain language, explain what things do in business terms, label each graph object with its type.",
+    ])
