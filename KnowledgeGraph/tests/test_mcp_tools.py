@@ -167,3 +167,15 @@ def test_search_entry_points(live_client):
     ids = [r["id"] for r in res["results"]]
     assert "form:fUnitMaster" in ids or "concept:unit-conversion" in ids
     assert all(r["hop_hints"] is not None for r in res["results"])
+
+
+def test_filtered_search_widens_pool(monkeypatch):
+    """A label filter must not starve: 30 Column hits then a Form deeper in the ranking still gets found."""
+    from spectrum_kg.queries import KGClient
+    ranked = [{"id": f"col:{i}", "kind": "Column", "name": f"c{i}", "score": 1.0} for i in range(100)]
+    ranked += [{"id": f"form:{i}", "kind": "Form", "name": f"f{i}", "score": 0.5} for i in range(3)]
+    c = KGClient(settings=object())
+    monkeypatch.setattr(c, "_fulltext", lambda q, n: ranked[:n])
+    monkeypatch.setattr(c, "hop_hints", lambda ids: {})
+    res = c.search("sales order", mode="fulltext", labels=["Form"], top_k=3)
+    assert [r["id"] for r in res["results"]] == ["form:0", "form:1", "form:2"]

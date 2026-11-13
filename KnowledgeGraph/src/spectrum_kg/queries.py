@@ -9,15 +9,17 @@ import neo4j
 from neo4j_graphrag.embeddings.base import Embedder
 from neo4j_graphrag.retrievers import HybridRetriever, VectorRetriever
 
+from .comments import guess_language, strip_comments
 from .config import Settings
 from .load import BASE_LABEL, FULLTEXT_INDEX, VECTOR_INDEX
 from .schema import LABELS, RELATIONSHIPS, RESPONSE_RULES, STRATEGIES, TIPS
 
-HIDDEN_PROPS = {"embedding", "embedding_hash", "text"}
+HIDDEN_PROPS = {"embedding", "embedding_hash", "text", "comments"}
 SUMMARY_PROPS = ["id", "kind", "name", "title", "summary", "status", "modules"]
 CODE_META_PROPS = ["id", "kind", "name", "title", "owner", "method", "method_kind", "file", "start_line", "status"]
 LUCENE_SPECIAL = re.compile(r'([+\-&|!(){}\[\]^"~*?:\\/])')
 WRITE_RE = re.compile(r"\b(CREATE|MERGE|DELETE|DETACH|SET|REMOVE|DROP|LOAD\s+CSV|FOREACH)\b|\bCALL\s+(apoc\.(create|merge|refactor|periodic)|db\.create|dbms)", re.I)
+MAX_FILTER_POOL = 500
 RETURN_PROPS = ["id", "kind", "name", "title", "summary", "modules", "status"]
 
 # Response-size profiles. "compact" is the default: it keeps the same fields and hints but uses smaller fan-out,
@@ -183,32 +185,44 @@ class KGClient:
                top_k: int | None = None, prof: str | None = None) -> dict[str, Any]:
         p = profile(prof)
         top_k = max(1, min(top_k or p["search_top_k"], 30))
-        pool = top_k * (6 if (labels or module) else 2)
-        rows: list[dict[str, Any]] = []
-        if mode == "fulltext":
-            rows = self._fulltext(query, pool)
-        else:
-            vec = self.embedder.embed_query(query)
+        filtered = bool(labels or module)
+        pool = top_k * (6 if filtered else 2)
+        vec = self.embedder.embed_query(query) if mode != "fulltext" else None
+
+        def fetch(n: int) -> list[dict[str, Any]]:
+            if mode == "fulltext":
+                return self._fulltext(query, n)
             if mode == "vector":
                 r = VectorRetriever(self.driver, VECTOR_INDEX, return_properties=RETURN_PROPS,
                                     neo4j_database=self.settings.neo4j_database)
-                res = r.get_search_results(query_vector=vec, top_k=pool)
+                res = r.get_search_results(query_vector=vec, top_k=n)
             else:
                 r = HybridRetriever(self.driver, VECTOR_INDEX, FULLTEXT_INDEX, return_properties=RETURN_PROPS,
                                     neo4j_database=self.settings.neo4j_database)
-                res = r.get_search_results(query_text=_lucene_escape(query), query_vector=vec, top_k=pool)
-            for rec in res.records:
-                node = dict(rec["node"]) if not isinstance(rec["node"], dict) else rec["node"]
-                rows.append({**node, "score": rec["score"]})
-        out = []
-        for r in rows:
-            if labels and r.get("kind") not in labels:
-                continue
-            if module and module not in (r.get("modules") or []):
-                continue
-            out.append(r)
-            if len(out) >= top_k:
-                break
+                res = r.get_search_results(query_text=_lucene_escape(query), query_vector=vec, top_k=n)
+            return [{**(dict(rec["node"]) if not isinstance(rec["node"], dict) else rec["node"]), "score": rec["score"]}
+                    for rec in res.records]
+
+        def keep(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+            out_ = []
+            for r in rows:
+                if labels and r.get("kind") not in labels:
+                    continue
+                if module and module not in (r.get("modules") or []):
+                    continue
+                out_.append(r)
+                if len(out_) >= top_k:
+                    break
+            return out_
+
+        # Label/module filters are applied after retrieval, so widen the pool until enough rows survive
+        # (a fixed pool starves rare labels: 30 column hits can leave zero Forms).
+        rows = fetch(pool)
+        out = keep(rows)
+        while filtered and len(out) < top_k and len(rows) >= pool and pool < MAX_FILTER_POOL:
+            pool = min(pool * 4, MAX_FILTER_POOL)
+            rows = fetch(pool)
+            out = keep(rows)
         hints = self.hop_hints([r["id"] for r in out]) if out else {}
         results = []
         for r in out:
@@ -252,6 +266,11 @@ class KGClient:
             return {"error": f"no node '{id}'", "candidates": candidates}
         rows = self._read(f"MATCH (n:{BASE_LABEL} {{id: $id}}) RETURN properties(n) AS p", id=nid)
         p = {k: v for k, v in rows[0]["p"].items() if k not in HIDDEN_PROPS}
+        # Source-code comments are never served: drop the SP header "Description:" and strip comments from code.
+        if p.get("kind") == "StoredProcedure":
+            p.pop("description", None)
+        if p.get("code"):
+            p["code"] = strip_comments(str(p["code"]), guess_language(p.get("kind"), p))
         if detail == "code":
             # Code only, one bounded page per call. No hop hints: the client already chose this node.
             limit = max(500, min(max_chars or profile(prof)["code_chars"], 60000))
@@ -353,7 +372,7 @@ class KGClient:
             WITH node, score WHERE node.id <> $id AND ($labels IS NULL OR node.kind IN $labels)
             RETURN node.id AS id, node.kind AS label, coalesce(node.title, node.name) AS name,
                    node.summary AS summary, score LIMIT $k""",
-            id=nid, index=VECTOR_INDEX, pool=top_k * (6 if labels else 2) + 1, labels=labels, k=top_k)
+            id=nid, index=VECTOR_INDEX, pool=top_k * (30 if labels else 2) + 1, labels=labels, k=top_k)
         for r in rows:
             r["summary"] = _short(r["summary"], 200)
             r["score"] = round(r["score"], 4)
